@@ -148,6 +148,13 @@ class TokenTests(unittest.TestCase):
         # Both of the parent's logs add usage, but it is one thread.
         self.assertEqual(result["sessions"], 2)
 
+    def test_token_window_includes_both_ends(self):
+        path = self.home / "sessions/rollout-x.jsonl"
+        write_lines(path, codex_rows(stamp="2033-05-18T00:00:00Z"))
+        until = epoch("2033-05-18T02:00:00Z")
+        report = codex_tokens(self.home, SINCE, until)
+        self.assertEqual(report["totalTokens"], 140)
+
     def test_codex_usage_outside_the_window_is_ignored(self):
         write_lines(
             self.home / "sessions/rollout-old.jsonl",
@@ -440,6 +447,38 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(advise(stale, NOW)["suggestion"], "refresh_or_wait")
         self.assertEqual(advise(full, NOW)["reasons"], ["weekly_limit_reached"])
         self.assertEqual(advise(None, NOW)["suggestion"], "unknown")
+
+    def test_suggestion_limits_are_inclusive(self):
+        def suggestion(used, hours_left, age_hours=0):
+            week = {
+                "slot": "primary",
+                "usedPercent": used,
+                "durationMinutes": 10080,
+                "resetsAt": NOW + hours_left * 3600,
+            }
+            reading = {
+                "source": "test",
+                "observedAt": NOW - age_hours * 3600,
+                "windows": [week],
+                "availableResets": None,
+                "resetExpirations": [],
+            }
+            return advise(reading, NOW)["suggestion"]
+
+        self.assertEqual(suggestion(75, 36), "consider_top_mode")  # exactly 25% left, 36 h
+        self.assertEqual(suggestion(75.5, 36), "nothing_to_do")
+        self.assertEqual(suggestion(75, 36.5), "nothing_to_do")
+        self.assertEqual(suggestion(75, 0), "nothing_to_do")  # renewing now
+        self.assertEqual(suggestion(75, 36, age_hours=6), "consider_top_mode")
+        self.assertEqual(suggestion(75, 36, age_hours=6.5), "refresh_or_wait")
+
+    def test_claude_percentages_outside_0_to_100_are_dropped(self):
+        path = self.home / "status.json"
+        for used, kept in ((0, True), (100, True), (-1, False), (101, False)):
+            limits = {"seven_day": {"used_percentage": used}}
+            path.write_text(json.dumps({"observedAt": NOW, "payload": {"rate_limits": limits}}))
+            with self.subTest(used=used):
+                self.assertEqual(bool(file_quota(path)["windows"]), kept)
 
     def test_expiring_saved_resets_are_suggested(self):
         payload = {

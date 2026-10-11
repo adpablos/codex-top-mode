@@ -717,3 +717,51 @@ class ProfileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ValidationTests(unittest.TestCase):
+    """Each rule that protects the user rejects its own broken field."""
+
+    def test_each_broken_field_is_refused(self):
+        def broken(edit):
+            p = json.loads(EXAMPLE.read_text())
+            edit(p)
+            return p
+
+        cases = {
+            "not an object": [],
+            "version as text": broken(lambda p: p.update(schemaVersion="1")),
+            "expiry equal to approval": broken(
+                lambda p: p["authorization"].update(validUntil=p["authorization"]["approvedAt"])
+            ),
+            "expiry not a time": broken(lambda p: p["authorization"].update(validUntil="soon")),
+            "no backlog sources": broken(lambda p: p["sources"].update(backlog=[])),
+            "project without label": broken(lambda p: p["projects"]["sample-notes"].pop("label")),
+            "exclusions not a list": broken(lambda p: p.update(excludedProjects="client-example")),
+            "unregistered exclusion": broken(lambda p: p.update(excludedProjects=["unknown"])),
+            "no actions": broken(lambda p: p.update(actions={})),
+            "unknown decision": broken(lambda p: p["actions"].update(edit="maybe")),
+            "unknown action": broken(lambda p: p["actions"].update(deploy="allowed")),
+            "zero hours": broken(lambda p: p["limits"].update(maximumHours=0)),
+            "zero threads": broken(lambda p: p["limits"].update(maximumActiveThreads=0)),
+            "threads as text": broken(lambda p: p["limits"].update(maximumActiveThreads="2")),
+            "threads as boolean": broken(lambda p: p["limits"].update(maximumActiveThreads=True)),
+            "missing model tier": broken(lambda p: p["limits"]["modelTiers"].pop("difficult")),
+            "duplicate task": broken(lambda p: p["backlog"].append({**p["backlog"][0]})),
+            "unregistered task project": broken(
+                lambda p: p["backlog"][0].update(project="unknown")
+            ),
+            "unknown status": broken(lambda p: p["backlog"][0].update(status="blocked")),
+            "negative priority": broken(lambda p: p["backlog"][0].update(priority=-1)),
+        }
+        for name, p in cases.items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                validate_profile(p)
+
+    def test_ready_work_fills_exactly_the_free_slots(self):
+        p = json.loads(EXAMPLE.read_text())
+        for number in (2, 3):
+            extra = copy.deepcopy(p["backlog"][0])
+            extra.update(id=f"task-{number}", owner=f"owner-{number}", priority=number)
+            p["backlog"].append(extra)
+        self.assertEqual(ready_work(p), ["document-recovery", "task-2"])
