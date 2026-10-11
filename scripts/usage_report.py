@@ -168,30 +168,38 @@ def summary(provider, buckets, sessions, responses):
 
 
 def codex_quota(home, now):
-    """Latest weekly/5-hour reading that Codex wrote into its local session logs."""
-    for path in recent_files([home / "sessions"], "rollout-*.jsonl", now - 8 * 86400)[:20]:
-        latest = None
+    """Newest weekly/5-hour reading that Codex wrote into its local session logs.
+
+    The most recently modified log can hold only old readings (a long session
+    that keeps logging other events), so readings are compared by their own time.
+    A log last modified before the best reading so far cannot hold a newer one.
+    """
+    best = None
+    for path in recent_files([home / "sessions"], "rollout-*.jsonl", now - 8 * 86400):
+        if best and path.stat().st_mtime < best[0]:
+            break
         for row in lines(path, ('"rate_limits"',)):
             limits = (row.get("payload") or {}).get("rate_limits")
-            if isinstance(limits, dict) and epoch(row.get("timestamp")):
-                latest = (row["timestamp"], limits)
-        if latest:
-            stamp, limits = latest
-            payload = {
-                "rateLimitsByLimitId": {
-                    "codex": {
-                        slot: {
-                            "usedPercent": window.get("used_percent"),
-                            "windowDurationMins": window.get("window_minutes"),
-                            "resetsAt": window.get("resets_at"),
-                        }
-                        for slot in ("primary", "secondary")
-                        if isinstance(window := limits.get(slot), dict)
-                    }
+            stamp = epoch(row.get("timestamp"))
+            if isinstance(limits, dict) and stamp and (best is None or stamp > best[0]):
+                best = (stamp, row["timestamp"], limits)
+    if best is None:
+        return None
+    _, stamp, limits = best
+    payload = {
+        "rateLimitsByLimitId": {
+            "codex": {
+                slot: {
+                    "usedPercent": window.get("used_percent"),
+                    "windowDurationMins": window.get("window_minutes"),
+                    "resetsAt": window.get("resets_at"),
                 }
+                for slot in ("primary", "secondary")
+                if isinstance(window := limits.get(slot), dict)
             }
-            return {"source": "codex_session_log", **snapshot(payload, stamp)}
-    return None
+        }
+    }
+    return {"source": "codex_session_log", **snapshot(payload, stamp)}
 
 
 def file_quota(path, observed_at=None):

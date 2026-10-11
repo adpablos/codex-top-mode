@@ -172,6 +172,24 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(advice["hoursToWeeklyReset"], 19.0)
         self.assertEqual(advise(reading, NOW)["reasons"][0], "reading_is_stale")
 
+    def test_codex_quota_is_the_newest_reading_not_the_newest_file(self):
+        def quota_row(stamp, used):
+            limits = {"primary": {"used_percent": used, "window_minutes": 10080}}
+            return {"timestamp": stamp, "payload": {"rate_limits": limits}}
+
+        # A long session still logging today, whose only reading is days old.
+        old = self.home / "sessions/2033/05/15/rollout-old.jsonl"
+        write_lines(old, [quota_row("2033-05-15T08:00:00Z", 7), {"type": "turn_context"}])
+        fresh = self.home / "sessions/2033/05/18/rollout-new.jsonl"
+        write_lines(fresh, [quota_row("2033-05-18T11:55:00Z", 4)])
+        os.utime(fresh, (NOW - 300, NOW - 300))
+        stale = self.home / "sessions/2033/05/18/rollout-earlier.jsonl"
+        write_lines(stale, [quota_row("2033-05-18T09:00:00Z", 3)])
+        os.utime(stale, (NOW - 3 * 3600, NOW - 3 * 3600))
+        reading = codex_quota(self.home, NOW)
+        self.assertEqual(reading["observedAt"], "2033-05-18T11:55:00Z")
+        self.assertEqual(reading["windows"][0]["usedPercent"], 4.0)
+
     def test_claude_status_line_reading_carries_its_capture_time(self):
         status = {
             "rate_limits": {
