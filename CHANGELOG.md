@@ -19,7 +19,8 @@ not a tagged release or evidence of live installation.
   payload or a saved Claude Code status line, and token totals per agent, model
   and effort from local Codex and Claude Code logs for run reports. It honors
   `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, and a saved reading must carry its
-  capture time (the file's modification time is not trusted).
+  capture time (the file's modification time is not trusted). A reading
+  without a weekly window is `unknown`, never `nothing_to_do`.
 - Added a [fictional run report](examples/report.example.md).
 
 - Added a private profile reference that setup saves and later sessions recover,

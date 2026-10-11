@@ -147,10 +147,15 @@ class TokenTests(unittest.TestCase):
         )
         write_lines(
             self.home / "projects/p/session/subagents/agent.jsonl",
-            [message("m3", "claude-y"), message("m4", stamp="2033-05-17T01:00:00Z")],
+            [
+                {**message("m3", "claude-y"), "agentId": "worker"},
+                message("m4", stamp="2033-05-17T01:00:00Z"),
+            ],
         )
         result = claude_tokens(self.home, SINCE, NOW)
         self.assertEqual(result["responses"], 2)
+        # The subagent keeps its parent's sessionId but is a session of its own.
+        self.assertEqual(result["sessions"], 2)
         self.assertEqual(result["totalTokens"], 232)
         self.assertEqual({m["model"] for m in result["byModel"]}, {"claude-x", "claude-y"})
         self.assertNotIn("private-session", json.dumps(result))
@@ -171,6 +176,34 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(advice["reasons"], ["unused_weekly_quota_before_reset"])
         self.assertEqual(advice["hoursToWeeklyReset"], 19.0)
         self.assertEqual(advise(reading, NOW)["reasons"][0], "reading_is_stale")
+
+    def test_codex_quota_ignores_model_specific_buckets(self):
+        def limits_row(stamp, used, limit_id):
+            window = {"used_percent": used, "window_minutes": 10080, "resets_at": NOW + 3600}
+            limits = {"primary": window}
+            if limit_id:
+                limits["limit_id"] = limit_id
+            payload = {"type": "token_count", "rate_limits": limits}
+            return {"timestamp": stamp, "type": "event_msg", "payload": payload}
+
+        rows = [
+            limits_row("2033-05-18T01:00:00Z", 10, None),  # legacy row without an id
+            limits_row("2033-05-18T02:00:00Z", 20, "codex"),
+            limits_row("2033-05-18T03:00:00Z", 99, "codex_other_model"),
+        ]
+        write_lines(self.home / "sessions/rollout-x.jsonl", rows)
+        reading = codex_quota(self.home, NOW)
+        self.assertEqual(reading["windows"][0]["usedPercent"], 20.0)
+        write_lines(self.home / "sessions/rollout-x.jsonl", rows[:1] + rows[2:])
+        self.assertEqual(codex_quota(self.home, NOW)["windows"][0]["usedPercent"], 10.0)
+
+    def test_a_reading_without_a_weekly_window_is_unknown(self):
+        path = self.home / "five-hour-only.json"
+        limits = {"five_hour": {"used_percentage": 10, "resets_at": NOW + 3600}}
+        path.write_text(json.dumps({"observedAt": NOW, "payload": {"rate_limits": limits}}))
+        advice = advise(file_quota(path), NOW)
+        self.assertEqual(advice["suggestion"], "unknown")
+        self.assertEqual(advice["reasons"], ["weekly_window_unknown"])
 
     def test_codex_quota_is_the_newest_reading_not_the_newest_file(self):
         def quota_row(stamp, used):

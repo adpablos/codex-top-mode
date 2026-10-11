@@ -207,7 +207,9 @@ Without it, ask the user to read `/usage`, or use a clock deadline.
 `usage_report.py quota` only suggests: `consider_top_mode` when at least 25%
 of the weekly allowance is unused within 36 hours of renewal, or when saved
 resets expire within seven days; `refresh_or_wait` for a stale reading or an
-exhausted weekly window; otherwise `nothing_to_do` or `unknown`. Thresholds
+exhausted weekly window; `unknown` with no reading or no weekly window;
+otherwise `nothing_to_do`. Only Codex's account-wide `codex` bucket counts,
+not model-specific ones. Thresholds
 are flags (`--min-unused`, `--within-hours`). It never starts work.
 
 ## Run report

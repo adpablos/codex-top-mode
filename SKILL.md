@@ -36,11 +36,13 @@ Run the scripts from this package's root with `python3 -B scripts/<name>.py`.
 
 ## 1. Set up (first time) or load the saved setup
 
-Start every session with:
+When the user asks to set up, check or run Top Mode, start with:
 
 ```sh
 python3 -B scripts/profile_binding.py locate
 ```
+
+A request that only reviews or changes this package does not need it.
 
 - **Found:** read that profile, check it is approved and still valid, and use it.
   A short request like "start Top Mode for 2 hours" inherits it.

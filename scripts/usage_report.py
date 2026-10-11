@@ -142,7 +142,8 @@ def claude_tokens(home, since, until):
             ):
                 continue
             seen.add(key)
-            sessions.add(row.get("sessionId") or path.stem)
+            # Subagents share their parent's sessionId; each has its own agentId.
+            sessions.add((row.get("sessionId") or path.stem, row.get("agentId")))
             bucket = buckets.setdefault((model, row.get("effort")), {"responses": 0})
             bucket["responses"] += 1
             add(bucket, usage, CLAUDE_FIELDS)
@@ -182,7 +183,13 @@ def codex_quota(home, now):
         for row in lines(path, ('"rate_limits"',)):
             limits = (row.get("payload") or {}).get("rate_limits")
             stamp = epoch(row.get("timestamp"))
-            if isinstance(limits, dict) and stamp and (best is None or stamp > best[0]):
+            if (
+                isinstance(limits, dict)
+                # Model-specific buckets (codex_<model>) are not the account's allowance.
+                and limits.get("limit_id") in (None, "codex")
+                and stamp
+                and (best is None or stamp > best[0])
+            ):
                 best = (stamp, row["timestamp"], limits)
     if best is None:
         return None
@@ -280,6 +287,8 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
         result["suggestion"] = "refresh_or_wait"
     elif good & set(result["reasons"]):
         result["suggestion"] = "consider_top_mode"
+    elif week is None:
+        result["suggestion"] = "unknown"
     else:
         result["suggestion"] = "nothing_to_do"
     return result
