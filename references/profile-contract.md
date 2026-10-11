@@ -226,7 +226,9 @@ tokens, run `python3 -B scripts/usage_report.py tokens --since START_ISO --markd
 at closure. It reads local Codex session logs (`~/.codex/sessions`, or under
 `CODEX_HOME` when set) and Claude Code transcripts (`~/.claude/projects`, or
 under `CLAUDE_CONFIG_DIR`, including subagents), counts each
-response once, and groups usage by agent, model and effort. It covers only this
+response once, and groups usage by agent, model and effort. Older Codex logs
+leave out automatic compactions; `partialSessions` counts the affected sessions,
+whose totals are a lower bound. It covers only this
 machine and every session in that interval, including work outside the run; say
 so in the report. Codex `cached input` is part of `input`; Claude cache reads and
 writes are separate fields and are included in its total. Otherwise the host

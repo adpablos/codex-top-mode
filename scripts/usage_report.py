@@ -78,10 +78,14 @@ def add(bucket, usage, fields):
 def codex_tokens(home, since, until):
     """Sum per-response usage from Codex rollout logs, attributed to model/effort."""
     roots = [home / "sessions", home / "archived_sessions"]
-    buckets, sessions, responses = {}, 0, 0
+    buckets, sessions, responses, partial = {}, 0, 0, 0
     for path in recent_files(roots, "rollout-*.jsonl", since):
         model, effort, seen, used = "unknown", None, set(), False
         records = any(True for _ in lines(path, ('"token_usage_record"',)))
+        # Older logs' cumulative counter leaves out automatic compactions.
+        compacted = not records and any(
+            row.get("type") == "compacted" for row in lines(path, ('"compacted"',))
+        )
         previous = None
         for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
             kind, payload = row.get("type"), row.get("payload") or {}
@@ -118,7 +122,11 @@ def codex_tokens(home, since, until):
             responses += 1
             used = True
         sessions += used
-    return summary("codex", buckets, sessions, responses)
+        if used and compacted:
+            partial += 1
+    result = summary("codex", buckets, sessions, responses)
+    result["partialSessions"] = partial
+    return result
 
 
 def claude_tokens(home, since, until):
@@ -317,6 +325,11 @@ def markdown(report):
             f"- {provider['provider']}: {provider['sessions']} sessions, "
             f"{provider['totalTokens']:,} tokens"
         )
+        if provider.get("partialSessions"):
+            out.append(
+                f"  {provider['partialSessions']} of them use older logs that leave out "
+                "automatic compactions, so this total is a lower bound."
+            )
     return "\n".join(out)
 
 

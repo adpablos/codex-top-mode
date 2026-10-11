@@ -15,6 +15,7 @@ from usage_report import (
     codex_quota,
     codex_tokens,
     file_quota,
+    markdown,
 )
 
 NOW = epoch("2033-05-18T12:00:00Z")
@@ -122,6 +123,29 @@ class TokenTests(unittest.TestCase):
         result = codex_tokens(self.home, SINCE, NOW)
         self.assertEqual(result["totalTokens"], 70)
         self.assertEqual(result["responses"], 2)
+
+    def test_older_codex_logs_with_compactions_are_a_lower_bound(self):
+        def rollout(name, extra):
+            rows = [{"type": "turn_context", "payload": {"model": "model-a"}}, *extra]
+            rows.append(
+                {
+                    "timestamp": "2033-05-18T01:00:00Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "token_count",
+                        "info": {"total_token_usage": usage(50)},
+                    },
+                }
+            )
+            write_lines(self.home / f"sessions/rollout-{name}.jsonl", rows)
+
+        rollout("plain", [])
+        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["partialSessions"], 0)
+        rollout("compacted", [{"type": "compacted", "payload": {"message": "summary"}}])
+        result = codex_tokens(self.home, SINCE, NOW)
+        self.assertEqual((result["sessions"], result["partialSessions"]), (2, 1))
+        report = {"since": "s", "until": "u", "providers": [result]}
+        self.assertIn("1 of them use older logs", markdown(report))
 
     def test_claude_messages_count_once_and_skip_synthetic(self):
         def message(key, model="claude-x", stamp="2033-05-18T01:00:00Z"):
