@@ -70,8 +70,7 @@ spare capacity to use.
 | A usage reset is announced | Optional, experimental ([details](references/announcements.md)) | Not applicable |
 | You simply want to push work forward | Yes | Yes |
 
-The check only suggests. Top Mode only starts when you say so, unless you
-explicitly turned on automatic starts for announced resets.
+The check only suggests. Top Mode only starts when you say so.
 
 ## You stay in control
 
@@ -109,7 +108,8 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [scripts/usage_report.py](scripts/usage_report.py) | Quota details and tokens per model from local logs. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
-| [scripts/capacity_policy.py](scripts/capacity_policy.py), [scripts/public_watch.py](scripts/public_watch.py) | Optional announcement watch and conditional start. |
+| [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, what is ready, what an action needs. |
+| [scripts/public_watch.py](scripts/public_watch.py) | Optional: watches for announced Codex resets and only tells you. |
 | [examples/](examples/) | Fictional setup, watch and report examples. |
 
 ## Limits

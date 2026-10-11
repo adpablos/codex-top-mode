@@ -51,15 +51,13 @@ without babysitting and **without losing control**.
 
 Done: plain-language docs, private setup that later sessions recover, quota
 suggestion and token report from local logs, manual runs with deadlines and
-reports, an experimental watch for announced Codex resets, quality gates in CI
-(Python 3.9+, lint, formatting, coverage floor, documentation links, macOS),
-one-step install for Codex and Claude Code, and a quiet `check` command to
-schedule with the agent's own scheduler.
+reports, an experimental watch for announced Codex resets that only notifies,
+quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
+documentation links, macOS), one-step install for Codex and Claude Code, and a
+quiet `check` command to schedule with the agent's own scheduler.
 
 Next, in small pull requests:
 
-1. **Notify, don't auto-start.** Announced resets only notify; remove the
-   automatic start on announcements and its policy code.
-2. **Guided setup.** The agent discovers projects and pending work from the
+1. **Guided setup.** The agent discovers projects and pending work from the
    workspace; three permission levels with optional detail; the profile points
    to where work lives instead of copying task lists.

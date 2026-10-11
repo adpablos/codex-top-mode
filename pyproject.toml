@@ -23,9 +23,9 @@ src = ["scripts"]
 select = ["E", "F", "W", "B", "UP", "SIM", "I", "RUF", "C90"]
 
 [tool.ruff.lint.mccabe]
-# Existing decision functions (quota observer, preflight, watcher) are dense but
-# fully tested; keep new code below this ceiling.
-max-complexity = 25
+# The quota observer and the watcher's page parser are dense but fully tested;
+# keep new code below this ceiling.
+max-complexity = 23
 
 [tool.coverage.run]
 branch = true

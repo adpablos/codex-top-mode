@@ -6,7 +6,7 @@ with the [README](../README.md) and [agent entry point](../AGENTS.md).
 Every change should fit the [vision and principles](vision.md).
 Keep changes focused and preserve the [skill](../SKILL.md) and
 [profile, quota and report contract](profile-contract.md) as the operating
-sources; the optional announcement flow lives in [announcements](announcements.md).
+sources; the optional announcement watch lives in [announcements](announcements.md).
 Keep review, merge, release and deployment authority separate.
 
 ## Optional maintainer review

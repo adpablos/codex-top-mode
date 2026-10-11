@@ -70,8 +70,10 @@ python3 -B <this folder>/scripts/profile_binding.py locate
 
 A request that only reviews or changes this package does not need it.
 
-- **Found:** read that profile, check it is approved and still valid, and use it.
-  A short request like "start Top Mode for 2 hours" inherits it.
+- **Found:** read that profile and check it with
+  `python3 -B <this folder>/scripts/capacity_policy.py --profile <path>`: it must
+  be valid with `authorizationActive: true`. A short request like "start Top Mode
+  for 2 hours" inherits it.
 - **Not found:** run first-time setup. Ask the user, in plain words, for: projects
   and what to exclude, current priorities and pending work, who owns each task,
   what "done" means, which actions are allowed / ask / deny, which models to use
@@ -104,9 +106,11 @@ payload, which also lists saved resets, goes through
 with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
 scheduled task, not a cloud routine, which cannot see this machine). Use the
 cheapest model, every 4 hours if the announcement watch is set up and daily
-otherwise. The task runs `check.py` by full path, without `--verbose`. Empty output means end
-quietly; otherwise tell the user those lines and offer to start Top Mode. A
-scheduled check never starts work by itself.
+otherwise. The task runs `check.py` by full path, without `--verbose`. Empty
+output means end quietly; otherwise tell the user those lines and offer to start
+Top Mode. For a new announcement, first read the post and say what it announces
+([how](references/announcements.md#when-a-new-announcement-arrives)). A scheduled
+check never starts work by itself, whatever the news.
 
 ## 3. Run
 
@@ -122,9 +126,10 @@ Before the first assignment:
 
 Then, until the deadline or another stop:
 
-- Before each assignment check: time left, `action_decision(profile, project,
-  action)` in [capacity_policy.py](scripts/capacity_policy.py), the owner is free,
-  and active sessions (including yours) stay within `maximumActiveThreads`.
+- Before each assignment check: time left, the action's decision from
+  `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`,
+  the owner is free, and active sessions (including yours) stay within
+  `maximumActiveThreads`.
 - Prefer continuing a session that already owns the task. Delegate only bounded,
   independent work, through your host's supported tools; otherwise work serially.
 - Pick models by task shape: the economical tier for repeatable, easily checked
@@ -132,7 +137,7 @@ Then, until the deadline or another stop:
 - At each checkpoint verify the outcome yourself (tests, diff, file) before
   marking it done; keep blockers and the next owner.
 - On Codex with native quota, feed each fresh reading to the observer described
-  in the [manual-run contract](references/profile-contract.md#manual-run); it
+  in the [run contract](references/profile-contract.md#run); it
   stops the run when the weekly allowance renews early or on schedule.
 
 After an interruption (closed laptop, restarted agent), check the frozen deadline
