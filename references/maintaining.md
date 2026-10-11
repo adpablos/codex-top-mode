@@ -63,14 +63,17 @@ offline, use synthetic fixtures and make no model or account calls:
 python3 -B -m unittest discover -s scripts      # tests, including docs links
 ruff check scripts && ruff format --check scripts
 python3 -m coverage run -m unittest discover -s scripts && python3 -m coverage report
+zizmor --offline .github                        # workflow security audit
 ```
 
 The runtime has no dependencies and supports Python 3.9+ (the version macOS
 ships). `ruff` and `coverage` are only for contributors; their settings live in
 [pyproject.toml](../pyproject.toml). [GitHub Actions](../.github/workflows/tests.yml)
-runs lint and format, the tests on Python 3.9 and 3.13 and on macOS's own
-Python, and a coverage floor of 85%, with pinned actions and read-only
-permissions. Dependabot keeps the pinned actions current.
+runs lint, format and a workflow audit, the tests with an 85% coverage floor on
+Python 3.13, and the tests on macOS's own Python (3.9), with pinned actions and
+read-only permissions. Its `all checks` job fails when any of them fails; it is
+the one check to require before merging. Dependabot proposes action updates
+after a 7-day cooldown.
 Preserve authorization, fixed deadlines, deduplication,
 coverage honesty, private storage and legacy observer behavior. Use supported
 public HTTP only. Do not include keys, cookies, account IDs, real profiles or

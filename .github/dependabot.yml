@@ -4,3 +4,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Let a new release settle for a week before proposing it.
+    cooldown:
+      default-days: 7
