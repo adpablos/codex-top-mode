@@ -168,6 +168,49 @@ class ParserTests(unittest.TestCase):
             with self.assertRaises(SourceError):
                 verify_embed(json.dumps(payload), post())
 
+    def test_embed_accepts_real_publisher_case_and_tracking_parameters(self):
+        p = post()
+        document = embed(p)
+        document["author_url"] = "https://twitter.com/Example_Pub"
+        document["html"] = document["html"].replace(
+            p["sourceUrl"],
+            p["sourceUrl"].replace(SOURCE, "https://twitter.com/Example_Pub")
+            + "?ref_src=synthetic",
+        )
+        verify_embed(json.dumps(document), p)
+        document["html"] = document["html"].replace("Example_Pub", "other_pub")
+        with self.assertRaises(SourceError):
+            verify_embed(json.dumps(document), p)
+
+    def test_incomplete_http_read_is_recorded_without_losing_other_publishers(self):
+        from http.client import IncompleteRead
+
+        from public_watch import fetch
+
+        other = "https://x.com/another_pub"
+        cfg = config()
+        cfg["publishers"].append(other)
+        state, _ = poll(cfg, {}, START, reader([post()]))
+        with patch("public_watch.urllib.request.build_opener") as opener:
+            response = opener.return_value.open.return_value.__enter__.return_value
+            response.read.side_effect = IncompleteRead(b"partial", 100)
+
+            def read(source, now, limit):
+                if source == SOURCE:
+                    fetch(source)
+                return [post()]
+
+            now = START + 4 * 3600
+            state, output = poll(cfg, state, now, read)
+            self.assertEqual(output, [])
+            record = state["publishers"][SOURCE]
+            self.assertEqual(record["coverage"], "unknown")
+            self.assertEqual(record["failureSince"], now)
+            self.assertEqual(record["lastSuccessfulCheckAt"], START)
+            self.assertEqual(state["publishers"][other]["lastSuccessfulCheckAt"], now)
+            state, output = poll(cfg, state, now + 8 * 3600, read)
+            self.assertEqual([entry["kind"] for entry in output], ["coverage_failure"])
+
     def test_public_reader_cross_checks_embed_and_never_classifies_or_authorizes(self):
         calls = []
 
@@ -281,7 +324,7 @@ class WatchTests(unittest.TestCase):
             self.assertEqual(new, state)
             self.assertEqual(output, [])
 
-    def test_utc_slots_prevent_jitter_from_skipping_a_scheduled_cycle(self):
+    def test_bounded_tolerance_prevents_scheduler_jitter_from_skipping_a_cycle(self):
         interval = config()["intervalHours"] * 3600
         slot = (START // interval) * interval
         calls = []
@@ -291,22 +334,26 @@ class WatchTests(unittest.TestCase):
             return [post(at=slot - 1)]
 
         state, _ = poll(config(), {}, slot + 5, read)
-        # Old ledgers used attempt time + interval; derive due slots from lastAttemptAt.
+        # Saved deadlines from older ledgers do not override the actual attempt.
         state["publishers"][SOURCE]["nextCheckAt"] = slot + interval + 5
         state, output = poll(config(), state, slot + interval + 2, read)
         self.assertEqual(calls, [slot + 5, slot + interval + 2])
         self.assertEqual(output, [])
         self.assertEqual(
-            state["publishers"][SOURCE]["nextCheckAt"], slot + 2 * interval
+            state["publishers"][SOURCE]["nextCheckAt"], slot + 2 * interval + 2 - 1800
         )
         saved = copy.deepcopy(state)
-        for now in (slot + interval + 1, slot + interval + 3, slot + 2 * interval - 1):
+        for now in (
+            slot + interval + 1,
+            slot + interval + 3,
+            saved["publishers"][SOURCE]["nextCheckAt"] - 1,
+        ):
             state, output = poll(config(), state, now, read)
             self.assertEqual(state, saved)
             self.assertEqual(output, [])
         self.assertEqual(len(calls), 2)
 
-    def test_delayed_check_uses_current_slot_without_catchup_reads(self):
+    def test_delayed_check_reads_once_without_catchup_requests(self):
         interval = config()["intervalHours"] * 3600
         slot = (START // interval) * interval
         state, _ = poll(config(), {}, slot + 5, reader([post(at=slot - 1)]))
@@ -320,8 +367,29 @@ class WatchTests(unittest.TestCase):
         self.assertEqual(calls, [slot + 3 * interval + 9])
         self.assertEqual(output, [])
         self.assertEqual(
-            state["publishers"][SOURCE]["nextCheckAt"], slot + 4 * interval
+            state["publishers"][SOURCE]["nextCheckAt"], slot + 4 * interval + 9 - 1800
         )
+
+    def test_near_boundary_late_then_early_schedule_does_not_skip(self):
+        interval = config()["intervalHours"] * 3600
+        boundary = (START // interval) * interval
+        times = [boundary + interval + 60, boundary + 2 * interval - 60]
+        calls = []
+
+        def read(source, now, limit):
+            calls.append(now)
+            return [post(at=boundary - 1)]
+
+        state, _ = poll(config(), {}, times[0], read)
+        state, output = poll(config(), state, times[1], read)
+        self.assertEqual(calls, times)
+        self.assertEqual(output, [])
+        self.assertEqual(state["publishers"][SOURCE]["lastAttemptAt"], times[1])
+        saved = copy.deepcopy(state)
+        state, output = poll(config(), state, boundary + 2 * interval + 20, read)
+        self.assertEqual(state, saved)
+        self.assertEqual(output, [])
+        self.assertEqual(calls, times)
 
     def test_old_unseen_posts_after_baseline_cannot_trigger(self):
         state, _ = poll(config(), {}, START, reader([post()]))

@@ -81,10 +81,12 @@ python3 -B scripts/public_watch.py --status --config .local/watch.json --state .
 python3 -B -m unittest discover -s scripts
 ```
 
-`--once` checks at most once per configured UTC interval slot and exits. Four-hour
-slots start at 00:00, 04:00, 08:00, 12:00, 16:00 and 20:00 UTC; `nextCheckAt` is the
-next slot boundary, so small scheduler delays do not shift the cadence. The first
-run and next slot may be closer than four hours. No scheduler is created.
+`--once` reads when the configured interval has elapsed, allowing scheduler
+jitter of one eighth of the interval, capped at 30 minutes. A four-hour schedule
+therefore tolerates runs up to 30 minutes early regardless of their UTC phase;
+`nextCheckAt` is the earliest eligible time after the last actual attempt. Repeated
+or stale calls before that time make no request. Larger delays or clock errors
+remain the scheduler's responsibility. No scheduler is created.
 `--status` reads saved coverage without HTTP. Installation time is fixed before the first read;
 successful reads seed the known IDs. Outputs
 are `needs_interpretation`, `coverage_failure` or `coverage_recovered`; no output

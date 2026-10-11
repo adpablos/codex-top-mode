@@ -4,11 +4,20 @@ import argparse
 import copy
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
-from usage_monitor import epoch, number, observe, snapshot, weekly, write_private
+from usage_monitor import (
+    epoch,
+    number,
+    observe,
+    snapshot,
+    stop_new_work_at,
+    weekly,
+    write_private,
+)
 
 ACTIONS = {
     "read",
@@ -47,7 +56,24 @@ def public_url(value: str) -> str:
         and url.port in (None, 443),
         "Sources must be HTTPS URLs without credentials",
     )
-    return urlunsplit(("https", url.netloc.lower(), url.path.rstrip("/"), "", ""))
+    decoded_path = unquote(url.path)
+    require(
+        "//" not in decoded_path
+        and "\\" not in decoded_path
+        and not any(part in {".", ".."} for part in decoded_path.split("/")),
+        "Source paths must not contain ambiguous segments",
+    )
+    host, path = url.netloc.lower().removesuffix(":443"), url.path.rstrip("/")
+    if url.hostname.lower() in {"x.com", "twitter.com"}:
+        match = re.fullmatch(
+            r"/([A-Za-z0-9_]{1,15})(?:/status/([0-9]+)(?:/(?:photo|video)/[0-9]+)?)?/?",
+            decoded_path,
+        )
+        require(match is not None, "A canonical X profile or post URL is required")
+        host, path = "x.com", "/" + match[1].lower()
+        if match[2] is not None:
+            path += "/status/" + match[2]
+    return urlunsplit(("https", host, path, "", ""))
 
 
 def validate_profile(profile: dict) -> None:
@@ -317,7 +343,7 @@ def preflight(
                 event_status = "duplicate"
                 if not active:
                     decision, reason = "duplicate_announcement", "Event already handled"
-            elif active:
+            elif monitor.get("mode") == "top":
                 seen.append(public["id"])
                 event_status = "recorded_without_extending_window"
             elif (
@@ -348,13 +374,24 @@ def preflight(
             elif (
                 monitor.get("mode") == "normal"
                 and monitor.get("stopReason")
-                == "weekly_quota_replenished_before_expected_reset"
+                in {
+                    "weekly_quota_replenished_before_expected_reset",
+                    "weekly_quota_replenished",
+                }
                 and public["publishedAt"] <= epoch(monitor.get("stoppedAt"))
             ):
                 seen.append(public["id"])
                 decision, reason = (
                     "advisory_only",
                     "Weekly replenishment already confirmed after this publication",
+                )
+            elif epoch(monitor.get("startedAt")) is not None and public[
+                "publishedAt"
+            ] <= epoch(monitor["startedAt"]):
+                seen.append(public["id"])
+                decision, reason = (
+                    "advisory_only",
+                    "Publication predates the latest work window; it cannot restart work",
                 )
             elif not candidates:
                 decision, reason = (
@@ -416,9 +453,7 @@ def preflight(
                     event_status = "consumed"
     monitor = result.get("usageMonitor", {})
     mode = monitor.get("mode", "normal")
-    stop = (
-        monitor.get("stoppedAt") if mode == "normal" else monitor.get("effectiveStopAt")
-    )
+    stop = stop_new_work_at(monitor)
     capacity_available = bool(weekly(current)) and all(
         w["usedPercent"] < 100 for w in current["windows"]
     )

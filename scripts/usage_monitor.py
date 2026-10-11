@@ -119,8 +119,7 @@ def weekly(observation):
 def replenished(anchor, current, detect_low_usage_shift=False):
     decrease = anchor["usedPercent"] - current["usedPercent"]
     strong_decrease = (
-        current["usedPercent"] <= max(2, anchor["usedPercent"] / 4)
-        and decrease >= 5
+        current["usedPercent"] <= max(2, anchor["usedPercent"] / 4) and decrease >= 5
     )
     old_reset, new_reset = epoch(anchor.get("resetsAt")), epoch(current.get("resetsAt"))
     shifted_low_decrease = (
@@ -153,8 +152,12 @@ def observe(monitor, current):
     if result.get("stopOnScheduledWeeklyRenewal") and scheduled_stop is None:
         anchor = weekly(result.get("baseline", result.get("last", {"windows": []})))
         scheduled_stop = epoch(anchor.get("resetsAt")) if anchor else None
-    if (result.get("stopOnScheduledWeeklyRenewal") and scheduled_stop is not None
-            and scheduled_stop <= deadline and now >= scheduled_stop):
+    if (
+        result.get("stopOnScheduledWeeklyRenewal")
+        and scheduled_stop is not None
+        and scheduled_stop <= deadline
+        and now >= scheduled_stop
+    ):
         result["mode"] = "normal"
         result["stopReason"] = "scheduled_weekly_renewal_due"
         result["stoppedAt"] = scheduled_stop
@@ -192,15 +195,22 @@ def observe(monitor, current):
         detect_low_usage_shift = result.get("detectLowUsageRenewalShift", False)
         candidate = result.get("pendingReplenishment")
         if candidate and new:
-            confirmed_drop = replenished(candidate["anchor"], new, detect_low_usage_shift)
+            confirmed_drop = replenished(
+                candidate["anchor"], new, detect_low_usage_shift
+            )
             age = now - candidate["firstSeenAt"]
-            if now >= candidate["anchor"]["resetsAt"] - 60:
+            anchor_reset = candidate["anchor"]["resetsAt"]
+            if anchor_reset is not None and now >= anchor_reset - 60:
                 result["pendingReplenishment"] = None
                 if confirmed_drop:
                     event = "scheduled_weekly_reset"
             elif 20 <= age <= 1800 and confirmed_drop:
                 result["mode"] = "normal"
-                result["stopReason"] = "weekly_quota_replenished_before_expected_reset"
+                result["stopReason"] = (
+                    "weekly_quota_replenished_before_expected_reset"
+                    if anchor_reset is not None
+                    else "weekly_quota_replenished"
+                )
                 result["stoppedAt"] = current["observedAt"]
                 event = "quota_replenishment_confirmed"
             elif not confirmed_drop:
@@ -214,9 +224,8 @@ def observe(monitor, current):
             and old
             and new
             and replenished(old, new, detect_low_usage_shift)
-            and old["resetsAt"] is not None
         ):
-            if now < old["resetsAt"] - 60:
+            if old["resetsAt"] is None or now < old["resetsAt"] - 60:
                 result["pendingReplenishment"] = {"firstSeenAt": now, "anchor": old}
                 event = "confirm_replenishment_with_fresh_read"
             else:
@@ -238,6 +247,26 @@ def observe(monitor, current):
         )
         result["events"] = result["events"][-16:]
     return result, event
+
+
+def stop_new_work_at(monitor):
+    if monitor.get("mode") == "normal":
+        return monitor.get("stoppedAt")
+    stop = monitor.get("effectiveStopAt")
+    if monitor.get("stopOnScheduledWeeklyRenewal"):
+        scheduled = monitor.get("scheduledWeeklyStopAt")
+        if epoch(scheduled) is None:
+            anchor = weekly(
+                monitor.get("baseline", monitor.get("last", {"windows": []}))
+            )
+            scheduled = anchor.get("resetsAt") if anchor else None
+        if (
+            epoch(scheduled) is not None
+            and epoch(stop) is not None
+            and epoch(scheduled) < epoch(stop)
+        ):
+            return scheduled
+    return stop
 
 
 def write_private(path, state):
@@ -262,11 +291,7 @@ def main():
     current = snapshot(payload, args.observed_at)
     monitor, event = observe(state["usageMonitor"], current)
     state["usageMonitor"] = monitor
-    state["stopNewWorkAt"] = (
-        monitor["stoppedAt"]
-        if monitor["mode"] == "normal"
-        else monitor["effectiveStopAt"]
-    )
+    state["stopNewWorkAt"] = stop_new_work_at(monitor)
     state["lastUpdatedAt"] = args.observed_at
     write_private(args.state, state)
     print(
@@ -276,6 +301,7 @@ def main():
                 "mode": monitor["mode"],
                 "stopReason": monitor.get("stopReason"),
                 "effectiveStopAt": monitor["effectiveStopAt"],
+                "stopNewWorkAt": state["stopNewWorkAt"],
                 "availableResets": current["availableResets"],
                 "weeklyUsedPercent": (weekly(current) or {}).get("usedPercent"),
                 "expiryAdvice": expiry_advice(current),

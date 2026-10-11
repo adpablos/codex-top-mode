@@ -4,6 +4,7 @@ import argparse
 import copy
 import hashlib
 import html
+import http.client
 import json
 import re
 import time
@@ -248,7 +249,7 @@ def verify_embed(payload, post):
         for link in parsed.links:
             url = urllib.parse.urlsplit(link)
             if url.scheme == "https" and url.netloc.lower() in {"x.com", "twitter.com"}:
-                links.append("https://x.com" + url.path)
+                links.append(("https://x.com" + url.path).lower())
         created = datetime.fromtimestamp(post["publishedAt"], timezone.utc)
         months = (
             "January",
@@ -266,7 +267,8 @@ def verify_embed(payload, post):
         )
         day = f"{months[created.month - 1]} {created.day}, {created.year}"
         dated = any(
-            "https://x.com" + urllib.parse.urlsplit(link).path == post["sourceUrl"]
+            ("https://x.com" + urllib.parse.urlsplit(link).path).lower()
+            == post["sourceUrl"]
             and text.strip() == day
             for link, text in parsed.dated_links
         )
@@ -318,13 +320,16 @@ def fetch(url):
     request = urllib.request.Request(
         url, headers={"User-Agent": "Mozilla/5.0 (compatible; codex-top-mode/0.1)"}
     )
-    with urllib.request.build_opener(PublicRedirects()).open(
-        request, timeout=15
-    ) as response:
-        data = response.read(MAX_BYTES + 1)
-        if len(data) > MAX_BYTES:
-            raise SourceError("Public response too large")
-        return data.decode("utf-8")
+    try:
+        with urllib.request.build_opener(PublicRedirects()).open(
+            request, timeout=15
+        ) as response:
+            data = response.read(MAX_BYTES + 1)
+            if len(data) > MAX_BYTES:
+                raise SourceError("Public response too large")
+            return data.decode("utf-8")
+    except http.client.HTTPException as error:
+        raise SourceError("Incomplete or invalid public HTTP response") from error
 
 
 def read_public(source, now, limit, getter=fetch):
@@ -409,17 +414,16 @@ def poll(config, state, now, reader=read_public):
     if not config["enabled"]:
         return result, emitted
     interval = config["intervalHours"] * 3600
-    slot = int(now // interval)
+    # Allow bounded scheduler jitter regardless of its phase relative to UTC.
+    grace = min(1800, interval / 8)
     for source in sources:
         record = records.setdefault(source, {})
         last_attempt = record.get("lastAttemptAt")
-        # Use the last real attempt, including ledgers written before UTC slots.
-        if last_attempt is not None and (
-            now <= last_attempt or slot <= int(last_attempt // interval)
-        ):
+        # Derive eligibility from the real attempt, including older saved deadlines.
+        if last_attempt is not None and now < last_attempt + interval - grace:
             continue
         record.setdefault("baselineAt", now)
-        record.update(lastAttemptAt=now, nextCheckAt=(slot + 1) * interval)
+        record.update(lastAttemptAt=now, nextCheckAt=now + interval - grace)
         try:
             posts = reader(source, now, config["maximumPosts"])
             if not posts:

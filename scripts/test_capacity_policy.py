@@ -278,6 +278,77 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(len(state["completedWindows"]), 1)
         self.assertEqual(state["usageMonitor"]["startedAt"], START + 3640)
 
+    def test_new_announcement_when_expired_window_is_observed_is_not_consumed(self):
+        p = profile()
+        p["limits"]["maximumHours"] = 1
+        state, first = start(p)
+        now = first["stopNewWorkAt"] + 180
+        state, advice = preflight(
+            p, state, reading(now=now), event(now - 60, "announcement-2")
+        )
+        self.assertEqual(advice["decision"], "start_window")
+        self.assertEqual(advice["announcementStatus"], "consumed")
+        self.assertEqual(state["usageMonitor"]["startedAt"], now)
+        self.assertEqual(
+            state["completedWindows"][0]["stoppedAt"], first["stopNewWorkAt"]
+        )
+
+    def test_scheduled_renewal_is_advertised_as_the_earliest_stop(self):
+        state, advice = start(current=reading(now=START + 30, reset_at=START + 7200))
+        self.assertEqual(advice["stopNewWorkAt"], START + 7200)
+        self.assertEqual(state["stopNewWorkAt"], START + 7200)
+        self.assertEqual(
+            state["usageMonitor"]["effectiveStopAt"], START + 30 + 8 * 3600
+        )
+
+    def test_unknown_renewal_still_requires_two_fresh_strong_drop_readings(self):
+        p = profile()
+        p["limits"]["stopOnScheduledWeeklyRenewal"] = False
+        state, _ = start(p, current=reading(60, now=START + 30, reset_at=None))
+        state, advice = preflight(p, state, reading(0, now=START + 60, reset_at=None))
+        self.assertEqual(advice["reason"], "confirm_replenishment_with_fresh_read")
+        state, stale = preflight(p, state, reading(0, now=START + 60, reset_at=None))
+        self.assertEqual(stale["reason"], "stale_observation")
+        state, advice = preflight(p, state, reading(1, now=START + 81, reset_at=None))
+        self.assertEqual(advice["decision"], "stop_new_work")
+        self.assertEqual(advice["reason"], "quota_replenishment_confirmed")
+        self.assertEqual(advice["stopNewWorkAt"], START + 81)
+
+    def test_x_media_and_host_aliases_cannot_replay_news(self):
+        p = profile()
+        p["sources"]["announcements"] = ["https://x.com/example_pub"]
+        p["limits"]["maximumHours"] = 1
+        e = event()
+        e["sourceUrl"] = "https://x.com/example_pub/status/123"
+        state, first = start(p, e)
+        e["sourceUrl"] = "https://x.com/Example_Pub/status/123/photo/1?ref_src=fake"
+        e["expectedResetAt"] = None
+        state, advice = preflight(p, state, reading(now=START + 60), e)
+        self.assertEqual(advice["announcementStatus"], "duplicate")
+        state, _ = preflight(p, state, reading(now=first["stopNewWorkAt"]))
+        state, advice = preflight(p, state, reading(now=first["stopNewWorkAt"] + 1), e)
+        self.assertEqual(advice["decision"], "duplicate_announcement")
+        self.assertEqual(state["usageMonitor"]["mode"], "normal")
+
+    def test_ambiguous_source_path_segments_are_rejected(self):
+        for suffix in ("../other/status/1", "%2e%2e/other/status/1", "//status/1"):
+            e = event()
+            e["sourceUrl"] = "https://example.org/official-capacity-news/" + suffix
+            _, advice = start(e=e)
+            self.assertEqual(advice["decision"], "announcement_rejected")
+
+    def test_old_publication_with_a_different_url_cannot_restart(self):
+        p = profile()
+        p["limits"]["maximumHours"] = 1
+        state, first = start(p)
+        state, _ = preflight(p, state, reading(now=first["stopNewWorkAt"]))
+        e = event()
+        e["sourceUrl"] += "/photo/1"
+        e["expectedResetAt"] = None
+        state, advice = preflight(p, state, reading(now=first["stopNewWorkAt"] + 1), e)
+        self.assertEqual(advice["decision"], "advisory_only")
+        self.assertEqual(state["usageMonitor"]["mode"], "normal")
+
     def test_no_event_never_starts_work(self):
         state, advice = preflight(profile(), {}, reading(now=START + 30))
         self.assertEqual(advice["decision"], "no_announcement")

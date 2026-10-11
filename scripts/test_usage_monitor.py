@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from usage_monitor import epoch, expiry_advice, observe, snapshot
@@ -339,6 +340,45 @@ class MonitorTests(unittest.TestCase):
                 self.assertEqual(
                     saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600
                 )
+
+    def test_cli_reports_the_earlier_scheduled_stop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            monitor = policy()
+            monitor.update(
+                stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600
+            )
+            path.write_text(json.dumps({"usageMonitor": monitor}))
+            payload = {
+                "rateLimitsByLimitId": {
+                    "codex": {
+                        "primary": {
+                            "usedPercent": 18,
+                            "windowDurationMins": 10080,
+                            "resetsAt": START + 3600,
+                        }
+                    }
+                }
+            }
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    str(Path(__file__).with_name("usage_monitor.py")),
+                    "--state",
+                    str(path),
+                    "--observed-at",
+                    datetime.fromtimestamp(START + 120, timezone.utc).isoformat(),
+                ],
+                input=json.dumps(payload),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            saved = json.loads(path.read_text())
+            self.assertEqual(saved["stopNewWorkAt"], START + 3600)
+            self.assertEqual(saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600)
 
     def test_original_state_is_not_mutated(self):
         original = policy()
