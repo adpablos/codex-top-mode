@@ -1,5 +1,7 @@
 # Top Mode
 
+[![Checks](https://github.com/adpablos/top-mode/actions/workflows/tests.yml/badge.svg)](https://github.com/adpablos/top-mode/actions/workflows/tests.yml)
+
 **Use the AI subscription you already pay for, on purpose and without losing track.**
 
 Coding-agent subscriptions come with weekly limits. Whatever you don't use before
@@ -94,7 +96,8 @@ Full example: [examples/report.example.md](examples/report.example.md).
 
 ## Limits
 
-- Needs Python 3.11 or newer and an agent that can run commands on your machine.
+- Needs Python 3.9 or newer (the one that comes with macOS works) and an agent
+  that can run commands on your machine.
   Everything runs locally; there is no service, account or dashboard.
 - The agent only works while your machine and agent are running. A closed laptop
   doesn't watch anything.

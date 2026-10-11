@@ -24,9 +24,7 @@ def profile():
     return p
 
 
-def event(
-    now=START + 30, suffix="announcement-1", mechanism="banked_reset", status="upcoming"
-):
+def event(now=START + 30, suffix="announcement-1", mechanism="banked_reset", status="upcoming"):
     return {
         "sourceUrl": "https://example.org/official-capacity-news/" + suffix,
         "publishedAt": now,
@@ -38,9 +36,7 @@ def event(
 
 
 def start(p=None, e=None, current=None):
-    return preflight(
-        p or profile(), {}, current or reading(now=START + 30), e or event()
-    )
+    return preflight(p or profile(), {}, current or reading(now=START + 30), e or event())
 
 
 class ProfileTests(unittest.TestCase):
@@ -140,9 +136,7 @@ class ProfileTests(unittest.TestCase):
                         e["expectedResetAt"] = None
                     state, advice = start(p, e)
                     self.assertEqual(advice["decision"], "start_window")
-                    self.assertIsNone(
-                        state["usageMonitor"]["announcement"]["expectedResetAt"]
-                    )
+                    self.assertIsNone(state["usageMonitor"]["announcement"]["expectedResetAt"])
                     self.assertEqual(advice["stopNewWorkAt"], START + 30 + 8 * 3600)
 
     def test_explicit_reset_time_cannot_contradict_upcoming_news(self):
@@ -259,9 +253,7 @@ class ProfileTests(unittest.TestCase):
             reading(now=START + 60, resets=4, grants=[START + 40]),
             event(START + 50, "announcement-2"),
         )
-        self.assertEqual(
-            advice["announcementStatus"], "recorded_without_extending_window"
-        )
+        self.assertEqual(advice["announcementStatus"], "recorded_without_extending_window")
         self.assertEqual(advice["stopNewWorkAt"], stop)
         self.assertEqual(state["usageMonitor"]["mode"], "top")
 
@@ -283,15 +275,11 @@ class ProfileTests(unittest.TestCase):
         p["limits"]["maximumHours"] = 1
         state, first = start(p)
         now = first["stopNewWorkAt"] + 180
-        state, advice = preflight(
-            p, state, reading(now=now), event(now - 60, "announcement-2")
-        )
+        state, advice = preflight(p, state, reading(now=now), event(now - 60, "announcement-2"))
         self.assertEqual(advice["decision"], "start_window")
         self.assertEqual(advice["announcementStatus"], "consumed")
         self.assertEqual(state["usageMonitor"]["startedAt"], now)
-        self.assertEqual(
-            state["completedWindows"][0]["stoppedAt"], first["stopNewWorkAt"]
-        )
+        self.assertEqual(state["completedWindows"][0]["stoppedAt"], first["stopNewWorkAt"])
 
     def test_busy_owners_do_not_hide_window_end_and_event_can_retry(self):
         p = profile()
@@ -358,9 +346,7 @@ class ProfileTests(unittest.TestCase):
         state, advice = start(current=reading(now=START + 30, reset_at=START + 7200))
         self.assertEqual(advice["stopNewWorkAt"], START + 7200)
         self.assertEqual(state["stopNewWorkAt"], START + 7200)
-        self.assertEqual(
-            state["usageMonitor"]["effectiveStopAt"], START + 30 + 8 * 3600
-        )
+        self.assertEqual(state["usageMonitor"]["effectiveStopAt"], START + 30 + 8 * 3600)
 
     def test_unknown_renewal_still_requires_two_fresh_strong_drop_readings(self):
         p = profile()
@@ -428,9 +414,7 @@ class ProfileTests(unittest.TestCase):
             state, advice = start(current=current)
             self.assertEqual(advice["decision"], "preflight_blocked")
             self.assertNotIn("usageMonitor", state)
-            state, advice = preflight(
-                profile(), state, reading(now=START + 60), event()
-            )
+            state, advice = preflight(profile(), state, reading(now=START + 60), event())
             self.assertEqual(advice["decision"], "start_window")
 
     def test_low_usage_does_not_prove_restoration_or_veto_future_work(self):
@@ -481,19 +465,13 @@ class ProfileTests(unittest.TestCase):
     def test_low_usage_shift_requires_two_fresh_reads_before_stopping(self):
         state, _ = start(current=reading(1, now=START + 30))
         shifted = START + 2 * 86400
-        state, advice = preflight(
-            profile(), state, reading(0, now=START + 60, reset_at=shifted)
-        )
+        state, advice = preflight(profile(), state, reading(0, now=START + 60, reset_at=shifted))
         self.assertEqual(advice["decision"], "continue_window")
         self.assertEqual(advice["reason"], "confirm_replenishment_with_fresh_read")
         self.assertEqual(state["usageMonitor"]["mode"], "top")
-        state, advice = preflight(
-            profile(), state, reading(0, now=START + 70, reset_at=shifted)
-        )
+        state, advice = preflight(profile(), state, reading(0, now=START + 70, reset_at=shifted))
         self.assertEqual(state["usageMonitor"]["mode"], "top")
-        state, advice = preflight(
-            profile(), state, reading(0, now=START + 81, reset_at=shifted)
-        )
+        state, advice = preflight(profile(), state, reading(0, now=START + 81, reset_at=shifted))
         self.assertEqual(advice["decision"], "stop_new_work")
         self.assertEqual(advice["reason"], "quota_replenishment_confirmed")
         self.assertEqual(advice["nextWork"], [])
@@ -520,9 +498,7 @@ class ProfileTests(unittest.TestCase):
         p["limits"]["stopOnScheduledWeeklyRenewal"] = False
         state, _ = start(p, current=reading(1, now=START + 30, reset_at=None))
         for now in (START + 60, START + 81):
-            state, advice = preflight(
-                p, state, reading(0, now=now, reset_at=START + 2 * 86400)
-            )
+            state, advice = preflight(p, state, reading(0, now=now, reset_at=START + 2 * 86400))
             self.assertEqual(advice["decision"], "continue_window")
             self.assertFalse(state["usageMonitor"].get("pendingReplenishment"))
         for reset_at in (None, START + 86400):
@@ -556,9 +532,7 @@ class ProfileTests(unittest.TestCase):
         p["limits"]["maximumHours"] = 10
         state, advice = preflight(p, state, reading(now=START + 60), event())
         self.assertEqual(advice["decision"], "stop_new_work")
-        self.assertEqual(
-            state["usageMonitor"]["stopReason"], "authorization_expired_or_changed"
-        )
+        self.assertEqual(state["usageMonitor"]["stopReason"], "authorization_expired_or_changed")
         _, advice = preflight(p, state, reading(now=START + 61), event())
         self.assertEqual(advice["decision"], "duplicate_announcement")
 
@@ -737,9 +711,7 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["decision"], "start_window")
             self.assertEqual(os.stat(folder / "state.json").st_mode & 0o777, 0o600)
-            self.assertNotIn(
-                "synthetic-forbidden-account", (folder / "state.json").read_text()
-            )
+            self.assertNotIn("synthetic-forbidden-account", (folder / "state.json").read_text())
             self.assertNotIn("accountId", (folder / "state.json").read_text())
 
 

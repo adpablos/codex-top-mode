@@ -91,14 +91,10 @@ def validate_profile(profile: dict) -> None:
         text(auth.get("source"))
         and approved is not None
         and "validUntil" in auth
-        and (
-            auth["validUntil"] is None or (expires is not None and approved < expires)
-        ),
+        and (auth["validUntil"] is None or (expires is not None and approved < expires)),
         "Human authorization needs an explicit expiration policy",
     )
-    require(
-        type(auth.get("conditionalStart")) is bool, "conditionalStart must be boolean"
-    )
+    require(type(auth.get("conditionalStart")) is bool, "conditionalStart must be boolean")
     require(
         type(auth.get("allowUnspecifiedUpcoming", False)) is bool,
         "allowUnspecifiedUpcoming must be boolean",
@@ -147,8 +143,7 @@ def validate_profile(profile: dict) -> None:
         value = number(limits.get(key))
         require(value is not None and value > 0, f"Invalid limit: {key}")
     require(
-        type(limits.get("maximumActiveThreads")) is int
-        and limits["maximumActiveThreads"] > 0,
+        type(limits.get("maximumActiveThreads")) is int and limits["maximumActiveThreads"] > 0,
         "Invalid active-thread limit",
     )
     require(
@@ -294,9 +289,7 @@ def announcement(profile: dict, event: dict, now: float) -> dict:
     }
 
 
-def preflight(
-    profile: dict, state: dict, current: dict, event=None
-) -> tuple[dict, dict]:
+def preflight(profile: dict, state: dict, current: dict, event=None) -> tuple[dict, dict]:
     """Pure transition: no scheduler, dispatcher, network or reset client."""
     validate_profile(profile)
     candidates = ready_work(profile)
@@ -310,16 +303,13 @@ def preflight(
     monitor = result.get("usageMonitor", {})
     require(isinstance(monitor, dict), "Invalid usage monitor")
     seen = result.get("seenAnnouncementIds", [])
-    require(
-        isinstance(seen, list) and all(text(v) for v in seen), "Invalid event ledger"
-    )
+    require(isinstance(seen, list) and all(text(v) for v in seen), "Invalid event ledger")
     active = monitor.get("mode") == "top"
     decision, reason = "no_announcement", "No new public event supplied"
     if active:
         monitor, reason = observe(monitor, current)
         if monitor["mode"] == "top" and (
-            not authorized
-            or fingerprint(profile) != monitor.get("authorizationFingerprint")
+            not authorized or fingerprint(profile) != monitor.get("authorizationFingerprint")
         ):
             monitor.update(
                 mode="normal",
@@ -370,7 +360,8 @@ def preflight(
                 seen.append(public["id"])
                 decision, reason = (
                     "advisory_only",
-                    "Automatic restoration announced as applied; verify the account without starting",
+                    "Automatic restoration announced as applied; "
+                    "verify the account without starting",
                 )
             elif (
                 monitor.get("mode") == "normal"
@@ -386,9 +377,9 @@ def preflight(
                     "advisory_only",
                     "Weekly replenishment already confirmed after this publication",
                 )
-            elif epoch(monitor.get("startedAt")) is not None and public[
-                "publishedAt"
-            ] <= epoch(monitor["startedAt"]):
+            elif epoch(monitor.get("startedAt")) is not None and public["publishedAt"] <= epoch(
+                monitor["startedAt"]
+            ):
                 seen.append(public["id"])
                 decision, reason = (
                     "advisory_only",
@@ -474,9 +465,7 @@ def preflight(
         "announcementStatus": event_status,
         "mode": mode,
         "stopNewWorkAt": stop,
-        "nextWork": candidates
-        if mode == "top" and capacity_available and fresh
-        else [],
+        "nextWork": candidates if mode == "top" and capacity_available and fresh else [],
     }
 
 

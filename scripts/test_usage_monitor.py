@@ -99,9 +99,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["effectiveStopAt"], START + 6 * 3600)
 
     def test_new_grant_can_coincide_with_expiration_and_no_net_count_change(self):
-        state, event = observe(
-            policy(), reading(resets=3, now=START + 30, grants=[START + 10])
-        )
+        state, event = observe(policy(), reading(resets=3, now=START + 30, grants=[START + 10]))
         self.assertEqual(event, "banked_reset_added")
         self.assertEqual(state["mode"], "top")
 
@@ -189,9 +187,7 @@ class MonitorTests(unittest.TestCase):
     def test_explicit_per_limit_map_does_not_mix_with_legacy_bucket(self):
         legacy = {"primary": {"usedPercent": 0, "windowDurationMins": 10080}}
         for buckets in ({}, {"other": legacy}):
-            current = snapshot(
-                {"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30
-            )
+            current = snapshot({"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30)
             state, event = observe(policy(), current)
             self.assertEqual(event, "usage_unavailable")
             self.assertEqual(state["mode"], "top")
@@ -208,9 +204,7 @@ class MonitorTests(unittest.TestCase):
     def test_cli_preserves_envelope_and_writes_only_sanitized_usage(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
-            path.write_text(
-                json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"})
-            )
+            path.write_text(json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"}))
             payload = {"accountId": "synthetic-private-id", "token": "synthetic-secret"}
             run = subprocess.run(
                 [
@@ -260,9 +254,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["baseline"]["observedAt"], START)
 
     def test_zero_authoritative_count_cannot_extend_from_stale_credit_detail(self):
-        state, event = observe(
-            policy(), reading(resets=0, now=START + 30, grants=[START + 5])
-        )
+        state, event = observe(policy(), reading(resets=0, now=START + 30, grants=[START + 5]))
         self.assertEqual(event, "unchanged")
         self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
 
@@ -303,9 +295,7 @@ class MonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             path.write_text(
-                json.dumps(
-                    {"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600}
-                )
+                json.dumps({"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600})
             )
             payload = {
                 "rateLimitsByLimitId": {
@@ -337,17 +327,13 @@ class MonitorTests(unittest.TestCase):
                 saved = json.loads(path.read_text())
                 self.assertEqual(saved["usageMonitor"]["mode"], "normal")
                 self.assertEqual(saved["stopNewWorkAt"], "2033-05-18T03:34:11Z")
-                self.assertEqual(
-                    saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600
-                )
+                self.assertEqual(saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600)
 
     def test_cli_reports_the_earlier_scheduled_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"
             monitor = policy()
-            monitor.update(
-                stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600
-            )
+            monitor.update(stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600)
             path.write_text(json.dumps({"usageMonitor": monitor}))
             payload = {
                 "rateLimitsByLimitId": {

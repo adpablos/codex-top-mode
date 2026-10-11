@@ -116,9 +116,7 @@ def codex_tokens(home, since, until):
                 before, previous = previous, total
                 if stamp is None or not since <= stamp <= until:
                     continue
-                usage = {
-                    f: total.get(f, 0) - (before or {}).get(f, 0) for f in CODEX_FIELDS
-                }
+                usage = {f: total.get(f, 0) - (before or {}).get(f, 0) for f in CODEX_FIELDS}
                 if before and total.get("total_tokens", 0) < before.get("total_tokens", 0):
                     usage = total
                 if usage.get("total_tokens", 0) <= 0:
@@ -350,7 +348,9 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
         result["reasons"].append("weekly_window_renewed_since_reading")
     elif week["usedPercent"] >= 100:
         result["reasons"].append("weekly_limit_reached")
-    elif hours is not None and 0 < hours <= within_hours and 100 - week["usedPercent"] >= min_unused:
+    elif (
+        hours is not None and 0 < hours <= within_hours and 100 - week["usedPercent"] >= min_unused
+    ):
         result["reasons"].append("unused_weekly_quota_before_reset")
     expiring = expiry_advice({**reading, "observedAt": now})
     if expiring["dueExpirations"]:

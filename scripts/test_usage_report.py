@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -7,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import usage_report
 from usage_monitor import epoch
 from usage_report import (
     advise,
@@ -428,7 +431,11 @@ class QuotaTests(unittest.TestCase):
     def test_stale_or_exhausted_readings_do_not_suggest_work(self):
         week = {"slot": "primary", "durationMinutes": 10080, "resetsAt": NOW + 3600}
         base = {"source": "test", "availableResets": None, "resetExpirations": []}
-        stale = {**base, "observedAt": NOW - 7 * 3600, "windows": [{**week, "usedPercent": 10}]}
+        stale = {
+            **base,
+            "observedAt": NOW - 7 * 3600,
+            "windows": [{**week, "usedPercent": 10}],
+        }
         full = {**base, "observedAt": NOW, "windows": [{**week, "usedPercent": 100}]}
         self.assertEqual(advise(stale, NOW)["suggestion"], "refresh_or_wait")
         self.assertEqual(advise(full, NOW)["reasons"], ["weekly_limit_reached"])
@@ -487,6 +494,62 @@ class QuotaTests(unittest.TestCase):
         ).stdout
         self.assertIn("| codex | model-a | high | 1 | 100 |", output)
         self.assertNotIn(str(self.home), output)
+
+
+class MainTests(unittest.TestCase):
+    """Run the CLI in-process so argument handling is covered too."""
+
+    def setUp(self):
+        self.home = Path(tempfile.mkdtemp())
+        write_lines(self.home / "sessions/rollout-x.jsonl", codex_rows())
+
+    def run_main(self, *argv):
+        out = io.StringIO()
+        args = patch.object(sys, "argv", ["usage_report.py", *argv])
+        clock = patch.object(usage_report.time, "time", lambda: NOW)
+        with args, clock, contextlib.redirect_stdout(out):
+            usage_report.main()
+        return out.getvalue()
+
+    def homes(self):
+        return ["--codex-home", str(self.home), "--claude-home", str(self.home / "none")]
+
+    def test_tokens_json_defaults_until_to_now(self):
+        report = json.loads(
+            self.run_main("tokens", "--since", "2033-05-18T00:00:00Z", *self.homes())
+        )
+        self.assertEqual(report["until"], "2033-05-18T12:00:00Z")
+        self.assertEqual(report["providers"][0]["totalTokens"], 140)
+        self.assertEqual(report["providers"][1]["byModel"], [])
+
+    def test_quota_from_codex_logs_and_from_a_file(self):
+        logs = json.loads(self.run_main("quota", *self.homes()))
+        self.assertEqual(logs["source"], "codex_session_log")
+        status = self.home / "status.json"
+        status.write_text(json.dumps({"rate_limits": {"seven_day": {"used_percentage": 10}}}))
+        saved = json.loads(
+            self.run_main(
+                "quota",
+                "--file",
+                str(status),
+                "--observed-at",
+                "2033-05-18T11:00:00Z",
+                *self.homes(),
+            )
+        )
+        self.assertEqual(saved["source"], "claude_status_line")
+        self.assertEqual(saved["weeklyUsedPercent"], 10)
+        missing = json.loads(self.run_main("quota", "--codex-home", str(self.home / "none")))
+        self.assertEqual(missing, {"suggestion": "unknown", "reasons": ["no_quota_reading"]})
+
+    def test_invalid_times_are_rejected(self):
+        for argv in (
+            ("tokens", "--since", "yesterday"),
+            ("tokens", "--since", "2033-05-18T10:00:00Z", "--until", "2033-05-18T09:00:00Z"),
+        ):
+            quiet = contextlib.redirect_stderr(io.StringIO())
+            with self.subTest(argv=argv), self.assertRaises(SystemExit), quiet:
+                self.run_main(*argv)
 
 
 if __name__ == "__main__":

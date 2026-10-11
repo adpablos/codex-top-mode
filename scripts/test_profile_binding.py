@@ -33,8 +33,18 @@ class BindingTests(unittest.TestCase):
         other = self.root / "another-session"
         other.mkdir()
         result = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), "--binding", str(self.binding), "locate"],
-            cwd=other, capture_output=True, text=True, check=True,
+            [
+                sys.executable,
+                "-B",
+                str(SCRIPT),
+                "--binding",
+                str(self.binding),
+                "locate",
+            ],
+            cwd=other,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         self.assertEqual(json.loads(result.stdout)["profilePath"], str(self.profile))
         self.assertEqual(
@@ -45,8 +55,16 @@ class BindingTests(unittest.TestCase):
 
     def test_missing_binding_does_not_create_setup_or_start_work(self):
         result = subprocess.run(
-            [sys.executable, "-B", str(SCRIPT), "--binding", str(self.binding), "locate"],
-            capture_output=True, text=True,
+            [
+                sys.executable,
+                "-B",
+                str(SCRIPT),
+                "--binding",
+                str(self.binding),
+                "locate",
+            ],
+            capture_output=True,
+            text=True,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.binding.parent.exists())
@@ -113,14 +131,14 @@ class BindingTests(unittest.TestCase):
     def test_invalid_profile_and_profile_as_binding_are_rejected(self):
         with self.assertRaises(ValueError):
             bind(self.profile, self.profile)
-        self.profile.write_text('{}')
+        self.profile.write_text("{}")
         with self.assertRaises(ValueError):
             bind(self.binding, self.profile)
         self.assertFalse(self.binding.exists())
 
     def test_explicit_replace_can_repair_a_damaged_binding(self):
         bind(self.binding, self.profile)
-        self.binding.write_text('{}')
+        self.binding.write_text("{}")
         with self.assertRaises(ValueError):
             bind(self.binding, self.profile)
         bind(self.binding, self.profile, replace=True)
