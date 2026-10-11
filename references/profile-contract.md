@@ -14,7 +14,8 @@ establish authority.
 - `authorization`: a human decision reference (`source`), timezone-aware
   `approvedAt`, explicit `validUntil` (a later timestamp or null for consent
   until revocation), and boolean `conditionalStart`. A missing expiry field is
-  not consent. False permits advice only. Optional `allowUnspecifiedUpcoming`
+  not consent. False disables conditional starts; direct manual work follows the
+  [manual-run rules](#manual-run). Optional `allowUnspecifiedUpcoming`
   defaults to false; true permits a verified future reset with an unspecified
   mechanism. It never permits applied or ambiguously classified news. Changing
   authorization or operating policy stops an active window; it does not reopen one.
@@ -171,6 +172,51 @@ coverage; verify each candidate at the primary source. Forecasts cannot trigger
 work. Official incident history feeds concern incidents and do not establish a
 reliable schedule of future reset promotions. No feed or continuous monitoring
 is assumed here, and this package adds no scraper, daemon or transport.
+
+## Public watch operations
+
+Prepare a private `.local/` directory with owner-only access; adapt the disabled examples
+there after human approval. Keep real files out of source control. Watch permission
+is independent from permission to execute top mode.
+
+```sh
+python3 -B scripts/public_watch.py --once --config .local/watch.json --state .local/watch-state.json
+python3 -B scripts/public_watch.py --status --config .local/watch.json --state .local/watch-state.json
+```
+
+`--once` reads when the configured interval has elapsed, allowing scheduler
+jitter of one eighth of the interval, capped at 30 minutes. A four-hour schedule
+therefore tolerates runs up to 30 minutes early regardless of their UTC phase;
+`nextCheckAt` is the earliest eligible time after the last actual attempt. Repeated
+or stale calls before that time make no request. Larger delays or clock errors
+remain the scheduler's responsibility. No scheduler is created.
+`--status` reads saved coverage without HTTP. Installation time is fixed before the first read;
+successful reads seed the known IDs. Outputs
+are `needs_interpretation`, `coverage_failure` or `coverage_recovered`; no output
+means no new **verified visible** signal, not “there are no announcements”. State
+keeps bounded IDs, a replay floor for evicted posts, and the latest 50 receipts.
+Newly visible posts after installation can be received out of order while within
+that retention horizon; older evicted posts cannot replay.
+This is a discovery receipt, not the neutral activation event: the coordinator
+must verify/classify it and remains the sole writer of its own work policy/state.
+
+The watch reads public X profile data and the publisher's official embed using
+standard-library HTTP. It never executes page JavaScript. Author, original post
+identity, publication day and primary text must match. For a primary post with a
+verified quoted-post identity, the embed may append one anchored `t.co` link;
+other additions or changed content remain unknown. The first enabled check fixes
+the installation timestamp; existing posts do not trigger. If that first read
+fails, the timestamp is preserved so later verified posts are not discarded. It outputs only newly verified public
+posts needing interpretation, or one notice after eight hours of failed coverage.
+Unchanged checks are quiet. The agent interprets only new posts, verifies upcoming
+versus applied and mechanism from primary text, then checks permission, freshness,
+ready work and native quota before using the capacity preflight.
+
+The script makes **no model calls**. A scheduler that wakes an agent/model every
+four hours still has that cost; an empty result should end quickly. A receipt
+on stdout or in private state does **not** wake or resume an agent by itself.
+Test the host's scheduling and notification hook before promising that behavior.
+Without a supported scheduler/hook, the explicit alternative is a manual check.
 
 ## Optional cloud mailbox adapter
 
