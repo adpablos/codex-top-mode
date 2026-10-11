@@ -30,8 +30,9 @@ no work, creates no schedule and changes no global agent settings. [MIT license]
    Show progress at checkpoints, then stop new assignments and give me a report.
    ```
 
-Manual mode needs **no announcement and no reset**. Without native quota tools,
-use supervised work with a clock deadline. A URL installs nothing: the agent
+Manual mode needs **no announcement and no reset**. Quota means your usage
+allowance. Without native quota tools, use supervised work with a clock deadline;
+automatic weekly stopping is unavailable. A URL installs nothing: the agent
 must read the linked files. See [AGENTS.md](AGENTS.md).
 
 ## One place to coordinate
@@ -67,6 +68,7 @@ archive state are not evidence. No dashboard, Cloud/Work account or new service 
 | Saved reset reminders | Advises about available credits nearing actual expiry. | Fresh native credit details; recurrence needs a requested, tested host schedule. |
 | Maintainer review | Reviews package changes. | Optional, separately configured. No Claude credential is needed to use Top Mode. |
 
+A saved (banked) reset is a credit to replenish usage allowance, not money.
 Watching announcements and checking saved credits are separate. News grants no
 permission. Reset redemption always needs your current confirmation and an eligible
 supported action.
@@ -90,13 +92,16 @@ These are requests to your agent, not installed shell commands:
 New assignments stop at the fixed deadline, on revoked authority or the applicable
 native-quota stop. News and credits cannot extend it. Closing the host interrupts
 observation; resuming requires fresh checks. Saved work and owners are preserved.
+Stopping Top Mode ends intensive follow-up. Ask separately to pause the public
+announcement watch or saved-reset reminders; confirm which host schedules paused.
 
 **Fictional example:**
 
 > You: “Use the approved 30-minute session to finish the recovery instructions.”
 >
 > Coordinator: “The existing documentation owner is available. I’ll continue that
-> work, verify the steps and checkpoint the result. Publication needs approval.”
+> work, verify the steps and checkpoint the result. This fictional setup reserves
+> publication for your approval.”
 >
 > Report: “Before: recovery steps were missing. After: documented and reproduced
 > in a sample. Pending: publication. Next: documentation owner requests approval.
