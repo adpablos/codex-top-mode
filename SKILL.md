@@ -71,7 +71,8 @@ percentage/duration/reset time, available count, and credit `status`, grant and
 expiry times (Unix seconds). `snapshot(payload, observed_at)` in
 [scripts/usage_monitor.py](scripts/usage_monitor.py) removes identities,
 balances and credentials. Save only sanitized readings and minimal state in a
-private ignored location; use a new baseline if the host/account binding changes.
+private location outside Git worktrees; use a new baseline if the host/account
+binding changes.
 
 ## Manual top mode
 
