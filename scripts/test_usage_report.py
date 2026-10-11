@@ -141,9 +141,12 @@ class TokenTests(unittest.TestCase):
 
         rollout("plain", [])
         self.assertEqual(codex_tokens(self.home, SINCE, NOW)["partialSessions"], 0)
-        rollout("compacted", [{"type": "compacted", "payload": {"message": "summary"}}])
+        compaction = {"type": "compacted", "payload": {"message": "summary"}}
+        rollout("compacted-before", [{**compaction, "timestamp": "2033-05-17T23:00:00Z"}])
+        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["partialSessions"], 0)
+        rollout("compacted", [{**compaction, "timestamp": "2033-05-18T00:30:00Z"}])
         result = codex_tokens(self.home, SINCE, NOW)
-        self.assertEqual((result["sessions"], result["partialSessions"]), (2, 1))
+        self.assertEqual((result["sessions"], result["partialSessions"]), (3, 1))
         report = {"since": "s", "until": "u", "providers": [result]}
         self.assertIn("1 of them use older logs", markdown(report))
 
@@ -220,6 +223,15 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(reading["windows"][0]["usedPercent"], 20.0)
         write_lines(self.home / "sessions/rollout-x.jsonl", rows[:1] + rows[2:])
         self.assertEqual(codex_quota(self.home, NOW)["windows"][0]["usedPercent"], 10.0)
+
+    def test_a_capture_time_in_the_future_is_not_a_fresh_reading(self):
+        path = self.home / "status.json"
+        limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + 10 * 3600}}
+        for ahead, suggestion in ((300, "consider_top_mode"), (301, "refresh_or_wait")):
+            with self.subTest(ahead=ahead):
+                reading = {"observedAt": NOW + ahead, "payload": {"rate_limits": limits}}
+                path.write_text(json.dumps(reading))
+                self.assertEqual(advise(file_quota(path), NOW)["suggestion"], suggestion)
 
     def test_a_reading_without_a_weekly_window_is_unknown(self):
         path = self.home / "five-hour-only.json"

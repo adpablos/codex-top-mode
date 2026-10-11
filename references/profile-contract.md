@@ -207,7 +207,8 @@ Without it, ask the user to read `/usage`, or use a clock deadline.
 `usage_report.py quota` only suggests: `consider_top_mode` when at least 25%
 of the weekly allowance is unused within 36 hours of renewal, or when saved
 resets expire within seven days; `refresh_or_wait` for a stale reading or an
-exhausted weekly window; `unknown` with no reading or no weekly window;
+exhausted weekly window or a capture time more than five minutes in the future;
+`unknown` with no reading or no weekly window;
 otherwise `nothing_to_do`. Only Codex's account-wide `codex` bucket counts,
 not model-specific ones. Thresholds
 are flags (`--min-unused`, `--within-hours`). It never starts work.
@@ -227,8 +228,8 @@ at closure. It reads local Codex session logs (`~/.codex/sessions`, or under
 `CODEX_HOME` when set) and Claude Code transcripts (`~/.claude/projects`, or
 under `CLAUDE_CONFIG_DIR`, including subagents), counts each
 response once, and groups usage by agent, model and effort. Older Codex logs
-leave out automatic compactions; `partialSessions` counts the affected sessions,
-whose totals are a lower bound. It covers only this
+leave out automatic compactions; `partialSessions` counts the sessions with a
+compaction inside the interval, whose totals are a lower bound. It covers only this
 machine and every session in that interval, including work outside the run; say
 so in the report. Codex `cached input` is part of `input`; Claude cache reads and
 writes are separate fields and are included in its total. Otherwise the host

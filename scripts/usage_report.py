@@ -84,7 +84,8 @@ def codex_tokens(home, since, until):
         records = any(True for _ in lines(path, ('"token_usage_record"',)))
         # Older logs' cumulative counter leaves out automatic compactions.
         compacted = not records and any(
-            row.get("type") == "compacted" for row in lines(path, ('"compacted"',))
+            row.get("type") == "compacted" and since <= (epoch(row.get("timestamp")) or 0) <= until
+            for row in lines(path, ('"compacted"',))
         )
         previous = None
         for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
@@ -278,6 +279,9 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
             result["hoursToWeeklyReset"] = round((week["resetsAt"] - now) / 3600, 1)
     if result["readingAgeHours"] > stale_hours:
         result["reasons"].append("reading_is_stale")
+    elif observed > now + 300:
+        # A capture time ahead of the clock is a wrong date, not a fresh reading.
+        result["reasons"].append("reading_time_in_the_future")
     hours = result["hoursToWeeklyReset"]
     if week is None:
         result["reasons"].append("weekly_window_unknown")
@@ -290,7 +294,7 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
         result["reasons"].append("saved_resets_expiring_soon")
         result["expiringResets"] = [iso(t) for t in expiring["dueExpirations"]]
     good = {"unused_weekly_quota_before_reset", "saved_resets_expiring_soon"}
-    blocked = {"weekly_limit_reached", "reading_is_stale"}
+    blocked = {"weekly_limit_reached", "reading_is_stale", "reading_time_in_the_future"}
     if blocked & set(result["reasons"]):
         result["suggestion"] = "refresh_or_wait"
     elif good & set(result["reasons"]):
