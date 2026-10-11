@@ -155,13 +155,24 @@ class CheckTests(unittest.TestCase):
         self.assertIn("Claude: weekly allowance unknown", output)
         self.assertIn("Suggestion: unknown.", output)
 
-    def test_never_follows_a_link_for_its_state(self):
+    def test_never_follows_a_link_for_its_private_files(self):
         self.status(used=40, hours=10)
-        target = self.root / "elsewhere.json"
-        (self.private / "check-state.json").symlink_to(target)
-        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-            self.run_check()
-        self.assertFalse(target.exists())
+        (self.private / "watch.json").write_text("{}")
+        names = ("check-state.json", "watch-state.json", "watch-state.json.lock")
+        for name in (*names, "claude-status.json", "watch.json"):
+            with self.subTest(name=name), patch.object(check.subprocess, "run") as run:
+                path = self.private / name
+                saved = path.read_bytes() if path.is_file() else None
+                path.unlink(missing_ok=True)
+                target = self.root / "elsewhere.json"
+                path.symlink_to(target)
+                with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                    self.run_check()
+                run.assert_not_called()
+                self.assertFalse(target.exists())
+                path.unlink()
+                if saved is not None:
+                    path.write_bytes(saved)
 
     def test_reports_new_announcements_from_the_watch(self):
         (self.private / "watch.json").write_text("{}")

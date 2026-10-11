@@ -139,19 +139,23 @@ def main():
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        # What check and the watch write must stay outside Git and never follow a link.
-        state, config, watch_state = (
+        # Nothing check or the watch reads or writes may sit in Git or behind a link.
+        state, config, watch_state, _, claude_status = (
             private_path(args.private / name, existing=False)
-            for name in ("check-state.json", "watch.json", "watch-state.json")
+            for name in (
+                "check-state.json",
+                "watch.json",
+                "watch-state.json",
+                "watch-state.json.lock",  # created by public_watch.py
+                "claude-status.json",
+            )
         )
     except ValueError as error:
         parser.error(str(error))
     now = time.time()
     advice = [
         (agent, advise(reading, now))
-        for agent, reading in readings(
-            args.codex_home, args.private / "claude-status.json", args.quota_file, now
-        )
+        for agent, reading in readings(args.codex_home, claude_status, args.quota_file, now)
     ]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
     announcements = watch(Path(__file__).with_name("public_watch.py"), config, watch_state)
