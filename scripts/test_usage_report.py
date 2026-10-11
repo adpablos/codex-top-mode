@@ -147,8 +147,13 @@ class TokenTests(unittest.TestCase):
         rollout("compacted", [{**compaction, "timestamp": "2033-05-18T00:30:00Z"}])
         result = codex_tokens(self.home, SINCE, NOW)
         self.assertEqual((result["sessions"], result["partialSessions"]), (3, 1))
+        # A compaction with no other usage in the interval is still partial.
+        late = {**compaction, "timestamp": "2033-05-18T11:00:00Z"}
+        write_lines(self.home / "sessions/rollout-only-compaction.jsonl", [late])
+        result = codex_tokens(self.home, SINCE, NOW)
+        self.assertEqual((result["sessions"], result["partialSessions"]), (4, 2))
         report = {"since": "s", "until": "u", "providers": [result]}
-        self.assertIn("1 of them use older logs", markdown(report))
+        self.assertIn("2 of them use older logs", markdown(report))
 
     def test_claude_messages_count_once_and_skip_synthetic(self):
         def message(key, model="claude-x", stamp="2033-05-18T01:00:00Z"):
@@ -232,6 +237,16 @@ class QuotaTests(unittest.TestCase):
                 reading = {"observedAt": NOW + ahead, "payload": {"rate_limits": limits}}
                 path.write_text(json.dumps(reading))
                 self.assertEqual(advise(file_quota(path), NOW)["suggestion"], suggestion)
+
+    def test_a_reading_from_before_its_weekly_renewal_needs_a_fresh_one(self):
+        path = self.home / "status.json"
+        for resets_in, suggestion in ((3600, "consider_top_mode"), (0, "refresh_or_wait")):
+            with self.subTest(resets_in=resets_in):
+                limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + resets_in}}
+                reading = {"observedAt": NOW - 3600, "payload": {"rate_limits": limits}}
+                path.write_text(json.dumps(reading))
+                advice = advise(file_quota(path), NOW)
+                self.assertEqual(advice["suggestion"], suggestion)
 
     def test_a_reading_without_a_weekly_window_is_unknown(self):
         path = self.home / "five-hour-only.json"

@@ -122,8 +122,9 @@ def codex_tokens(home, since, until):
             add(bucket, usage, CODEX_FIELDS)
             responses += 1
             used = True
-        sessions += used
-        if used and compacted:
+        # A compaction alone still used tokens, which this log does not show.
+        sessions += used or compacted
+        if compacted:
             partial += 1
     result = summary("codex", buckets, sessions, responses)
     result["partialSessions"] = partial
@@ -285,6 +286,9 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
     hours = result["hoursToWeeklyReset"]
     if week is None:
         result["reasons"].append("weekly_window_unknown")
+    elif hours is not None and hours <= 0:
+        # The window this reading describes has already renewed.
+        result["reasons"].append("weekly_window_renewed_since_reading")
     elif week["usedPercent"] >= 100:
         result["reasons"].append("weekly_limit_reached")
     elif hours is not None and 0 < hours <= within_hours and 100 - week["usedPercent"] >= min_unused:
@@ -294,7 +298,12 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
         result["reasons"].append("saved_resets_expiring_soon")
         result["expiringResets"] = [iso(t) for t in expiring["dueExpirations"]]
     good = {"unused_weekly_quota_before_reset", "saved_resets_expiring_soon"}
-    blocked = {"weekly_limit_reached", "reading_is_stale", "reading_time_in_the_future"}
+    blocked = {
+        "weekly_limit_reached",
+        "weekly_window_renewed_since_reading",
+        "reading_is_stale",
+        "reading_time_in_the_future",
+    }
     if blocked & set(result["reasons"]):
         result["suggestion"] = "refresh_or_wait"
     elif good & set(result["reasons"]):
