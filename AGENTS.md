@@ -21,7 +21,8 @@ review does not start Top Mode, run account-backed tests, edit files or publish.
 
 ## Changing the package
 
-Read [the maintenance guide](references/maintaining.md), keep the change small
+Read [the vision and principles](references/vision.md) and
+[the maintenance guide](references/maintaining.md), keep the change small
 and complete, run the offline tests, and keep the skill and contract consistent.
 Update links and [CHANGELOG.md](CHANGELOG.md) for visible changes. Review, merge
 and release need their own authorization.

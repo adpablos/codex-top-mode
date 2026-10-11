@@ -5,6 +5,7 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Added the [vision and principles](references/vision.md) that guide every change.
 - Renamed the project to Top Mode (repository `adpablos/top-mode`, skill
   `top-mode`). The private folder stays `~/.codex-top-mode` so saved setups
   keep working.

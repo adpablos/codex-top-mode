@@ -104,5 +104,5 @@ Full example: [examples/report.example.md](examples/report.example.md).
 - These are instructions for an agent, not a sandbox. Your agent's own permission
   settings still apply.
 
-Contributing: see the [maintenance guide](references/maintaining.md) and the
-[changelog](CHANGELOG.md).
+Contributing: start with the [vision and principles](references/vision.md), then
+the [maintenance guide](references/maintaining.md) and the [changelog](CHANGELOG.md).
