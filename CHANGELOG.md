@@ -5,6 +5,9 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Renamed the project to Top Mode (repository `adpablos/top-mode`, skill
+  `top-mode`). The private folder stays `~/.codex-top-mode` so saved setups
+  keep working.
 - Rewrote the README, AGENTS.md and skill in plain language around four jobs:
   set up, check, run and report. Top Mode now targets Codex, Claude Code and
   similar agents; announced Codex resets are an optional add-on with their own

@@ -1,5 +1,5 @@
 ---
-name: codex-top-mode
+name: top-mode
 description: Check whether spare subscription quota is worth using, set up a private profile, run a bounded Top Mode on the user's priorities, and close with a clear report. Works with Codex, Claude Code and similar agents.
 ---
 

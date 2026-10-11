@@ -57,6 +57,9 @@ it cannot authenticate consent, reserve worker slots or judge task complexity.
 
 ## Private profile binding
 
+The private folder keeps its original name, `~/.codex-top-mode`, so existing
+setups keep working after the project was renamed to Top Mode.
+
 Use one local reference, `~/.codex-top-mode/binding.json`, to recover a setup in
 later sessions on the same host and user account. `~` means the user home directory
 on macOS, Linux or Windows. The agent prepares the real profile in private storage
