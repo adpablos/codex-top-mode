@@ -28,6 +28,11 @@ CLAUDE_FIELDS = (
 )
 
 
+def agent_home(variable, folder):
+    """Where an agent keeps its data: its environment override, else ~/<folder>."""
+    return Path(os.environ.get(variable) or Path.home() / folder).expanduser()
+
+
 def iso(seconds):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
 
@@ -189,9 +194,18 @@ def codex_quota(home, now):
     return None
 
 
-def file_quota(path, observed_at):
-    """A saved Claude Code status-line JSON or a native Codex usage payload."""
+def file_quota(path, observed_at=None):
+    """A saved Claude Code status-line JSON or a native Codex usage payload.
+
+    The capture time is observed_at or the file's own {"observedAt", "payload"}
+    wrapper, never the file's modification time, which copies and restores change.
+    """
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(data, dict) and "payload" in data:
+        observed_at = observed_at or data.get("observedAt")
+        data = data["payload"]
+    if epoch(observed_at) is None:
+        raise ValueError("The reading has no capture time; pass --observed-at")
     limits = data.get("rate_limits") if isinstance(data, dict) else None
     if isinstance(limits, dict) and ("seven_day" in limits or "five_hour" in limits):
         windows = []
@@ -297,12 +311,14 @@ def main():
     tokens.add_argument("--markdown", action="store_true")
     quota = commands.add_parser("quota", help="Latest quota reading and a suggestion")
     quota.add_argument("--file", help="Saved Claude status-line JSON or Codex payload")
-    quota.add_argument("--observed-at", help="When --file was captured (default: file time)")
+    quota.add_argument("--observed-at", help="When --file was captured, if it doesn't say")
     quota.add_argument("--min-unused", type=float, default=25)
     quota.add_argument("--within-hours", type=float, default=36)
     for command in (tokens, quota):
-        command.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
-        command.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
+        command.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
+        command.add_argument(
+            "--claude-home", type=Path, default=agent_home("CLAUDE_CONFIG_DIR", ".claude")
+        )
     args = parser.parse_args()
     now = time.time()
     if args.command == "tokens":
@@ -321,10 +337,12 @@ def main():
         print(markdown(report) if args.markdown else json.dumps(report, indent=2))
         return
     if args.file:
-        observed = args.observed_at or iso(os.path.getmtime(args.file))
-        if epoch(observed) is None:
+        if args.observed_at and epoch(args.observed_at) is None:
             parser.error("--observed-at needs an ISO time with a timezone")
-        reading = file_quota(args.file, observed)
+        try:
+            reading = file_quota(args.file, args.observed_at)
+        except (OSError, ValueError) as error:
+            parser.error(f"Cannot use {args.file}: {error}")
     else:
         reading = codex_quota(args.codex_home, now)
     json.dump(advise(reading, now, args.min_unused, args.within_hours), sys.stdout, indent=2)

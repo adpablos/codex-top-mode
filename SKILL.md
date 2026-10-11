@@ -61,7 +61,8 @@ When the user asks, or before suggesting a run:
 
 ```sh
 python3 -B scripts/usage_report.py quota            # Codex: local logs
-python3 -B scripts/usage_report.py quota --file F   # native Codex payload or saved Claude status line
+python3 -B scripts/usage_report.py quota --file F   # saved Claude status line, or a native
+                                                    # Codex payload with --observed-at TIME
 ```
 
 Explain the answer in one or two sentences: how much of the weekly allowance is

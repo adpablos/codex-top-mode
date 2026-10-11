@@ -165,7 +165,7 @@ and say which one you used:
 
 | Host | Source | Command |
 | --- | --- | --- |
-| Codex with a native usage tool (`get_usage_limits`) | Fresh native payload, including saved resets | Pass it to `usage_report.py quota --file` or `usage_monitor.py` |
+| Codex with a native usage tool (`get_usage_limits`) | Fresh native payload, including saved resets | Save it and run `usage_report.py quota --file F --observed-at TIME`, or pass it to `usage_monitor.py` |
 | Codex without that tool | The latest reading Codex wrote into its local session logs | `python3 -B scripts/usage_report.py quota` |
 | Claude Code (Pro/Max) | The status-line JSON, if the user opted in to save it | `python3 -B scripts/usage_report.py quota --file ~/.codex-top-mode/claude-status.json` |
 | Anything else | None | Ask the user, or use only a clock deadline |
@@ -187,12 +187,19 @@ as stale. They do not include saved resets.
 
 Claude Code exposes `rate_limits.five_hour` and `rate_limits.seven_day` only to
 a [status-line command](https://code.claude.com/docs/en/statusline). With the
-user's approval, the status-line script can save its input before printing,
-for example by starting with:
+user's approval, the status-line script can save its input, with the time it was
+taken, before printing. For example, start it with:
 
 ```sh
-input=$(cat); printf '%s' "$input" > "$HOME/.codex-top-mode/claude-status.json"
+input=$(cat)
+printf '{"observedAt":%s,"payload":%s}\n' "$(date +%s)" "$input" \
+  > "$HOME/.codex-top-mode/claude-status.json"
 ```
+
+and use `$input` instead of reading stdin again. A saved reading needs its
+capture time, either in that wrapper or as `--observed-at`; `usage_report.py`
+refuses one without it rather than trust the file's modification time, which
+copying or restoring the file changes.
 
 That changes the user's Claude Code settings, so it needs their explicit OK.
 Without it, ask the user to read `/usage`, or use a clock deadline.
@@ -214,8 +221,9 @@ artifact or check; do not call a pending integration completed.
 
 Use existing approved observations and execution/checkpoint records. For
 tokens, run `python3 -B scripts/usage_report.py tokens --since START_ISO --markdown`
-at closure. It reads local Codex session logs (`~/.codex/sessions`) and Claude
-Code transcripts (`~/.claude/projects`, including subagents), counts each
+at closure. It reads local Codex session logs (`~/.codex/sessions`, or under
+`CODEX_HOME` when set) and Claude Code transcripts (`~/.claude/projects`, or
+under `CLAUDE_CONFIG_DIR`, including subagents), counts each
 response once, and groups usage by agent, model and effort. It covers only this
 machine and every session in that interval, including work outside the run; say
 so in the report. Codex `cached input` is part of `input`; Claude cache reads and

@@ -5,9 +5,17 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from usage_monitor import epoch
-from usage_report import advise, claude_tokens, codex_quota, codex_tokens, file_quota
+from usage_report import (
+    advise,
+    agent_home,
+    claude_tokens,
+    codex_quota,
+    codex_tokens,
+    file_quota,
+)
 
 NOW = epoch("2033-05-18T12:00:00Z")
 SINCE = epoch("2033-05-18T00:00:00Z")
@@ -164,22 +172,26 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(advice["hoursToWeeklyReset"], 19.0)
         self.assertEqual(advise(reading, NOW)["reasons"][0], "reading_is_stale")
 
-    def test_claude_status_line_reading(self):
+    def test_claude_status_line_reading_carries_its_capture_time(self):
+        status = {
+            "rate_limits": {
+                "five_hour": {"used_percentage": 20, "resets_at": NOW + 3600},
+                "seven_day": {"used_percentage": 90, "resets_at": NOW + 3600},
+            }
+        }
         path = self.home / "status.json"
-        path.write_text(
-            json.dumps(
-                {
-                    "rate_limits": {
-                        "five_hour": {"used_percentage": 20, "resets_at": NOW + 3600},
-                        "seven_day": {"used_percentage": 90, "resets_at": NOW + 3600},
-                    }
-                }
-            )
-        )
-        reading = file_quota(path, "2033-05-18T11:00:00Z")
-        advice = advise(reading, NOW)
+        path.write_text(json.dumps({"observedAt": NOW - 3600, "payload": status}))
+        advice = advise(file_quota(path), NOW)
         self.assertEqual(advice["weeklyUsedPercent"], 90)
+        self.assertEqual(advice["readingAgeHours"], 1.0)
         self.assertEqual(advice["suggestion"], "nothing_to_do")
+        # A bare reading says nothing about when it was taken; the file time is
+        # not evidence because copying or restoring the file changes it.
+        path.write_text(json.dumps(status))
+        with self.assertRaises(ValueError):
+            file_quota(path)
+        reading = file_quota(path, "2033-05-18T11:00:00Z")
+        self.assertEqual(epoch(reading["observedAt"]), NOW - 3600)
 
     def test_stale_or_exhausted_readings_do_not_suggest_work(self):
         week = {"slot": "primary", "durationMinutes": 10080, "resetsAt": NOW + 3600}
@@ -211,6 +223,12 @@ class QuotaTests(unittest.TestCase):
         advice = advise(file_quota(path, "2033-05-18T12:00:00Z"), NOW)
         self.assertEqual(advice["reasons"], ["saved_resets_expiring_soon"])
         self.assertEqual(advice["suggestion"], "consider_top_mode")
+
+    def test_agent_folders_follow_their_environment_overrides(self):
+        with patch.dict(os.environ, {"CODEX_HOME": str(self.home)}):
+            self.assertEqual(agent_home("CODEX_HOME", ".codex"), self.home)
+        with patch.dict(os.environ, {"CODEX_HOME": ""}):
+            self.assertEqual(agent_home("CODEX_HOME", ".codex"), Path.home() / ".codex")
 
     def test_cli_prints_counts_without_private_text(self):
         write_lines(self.home / "sessions/rollout-x.jsonl", codex_rows())
