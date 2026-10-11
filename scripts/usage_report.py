@@ -1,0 +1,335 @@
+"""Read local agent logs: token totals per model and a quota-based suggestion.
+
+Read-only. Prints counts only: no prompts, paths, session or account IDs.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+from usage_monitor import epoch, expiry_advice, snapshot, weekly
+
+WEEK_MINUTES = 10080
+CODEX_FIELDS = (
+    "input_tokens",
+    "cached_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+    "total_tokens",
+)
+CLAUDE_FIELDS = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
+)
+
+
+def iso(seconds):
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
+
+
+def lines(path, markers):
+    """Yield parsed JSON lines that contain one of the markers."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                if any(marker in line for marker in markers):
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(row, dict):
+                        yield row
+    except OSError:
+        return
+
+
+def recent_files(roots, pattern, since):
+    """Session files modified at or after `since`, newest first."""
+    found = []
+    for root in roots:
+        if root.is_dir():
+            for path in root.rglob(pattern):
+                try:
+                    modified = path.stat().st_mtime
+                except OSError:
+                    continue
+                if modified >= since:
+                    found.append((modified, path))
+    return [path for _, path in sorted(found, reverse=True)]
+
+
+def add(bucket, usage, fields):
+    for field in fields:
+        value = usage.get(field)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            bucket[field] = bucket.get(field, 0) + int(value)
+
+
+def codex_tokens(home, since, until):
+    """Sum per-response usage from Codex rollout logs, attributed to model/effort."""
+    roots = [home / "sessions", home / "archived_sessions"]
+    buckets, sessions, responses = {}, 0, 0
+    for path in recent_files(roots, "rollout-*.jsonl", since):
+        model, effort, seen, used = "unknown", None, set(), False
+        records = any(True for _ in lines(path, ('"token_usage_record"',)))
+        previous = None
+        for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
+            kind, payload = row.get("type"), row.get("payload") or {}
+            if kind == "turn_context":
+                model = payload.get("model") or model
+                effort = payload.get("effort") or effort
+                continue
+            stamp = epoch(row.get("timestamp"))
+            if records and kind == "token_usage_record":
+                usage, key = payload.get("usage") or {}, payload.get("response_id")
+                if key in seen or stamp is None or not since <= stamp <= until:
+                    continue
+                seen.add(key)
+            elif not records and payload.get("type") == "token_count":
+                # Older logs: derive per-event usage from the cumulative counter.
+                total = (payload.get("info") or {}).get("total_token_usage")
+                if not isinstance(total, dict):
+                    continue
+                before, previous = previous, total
+                if stamp is None or not since <= stamp <= until:
+                    continue
+                usage = {
+                    f: total.get(f, 0) - (before or {}).get(f, 0) for f in CODEX_FIELDS
+                }
+                if before and total.get("total_tokens", 0) < before.get("total_tokens", 0):
+                    usage = total
+                if usage.get("total_tokens", 0) <= 0:
+                    continue
+            else:
+                continue
+            bucket = buckets.setdefault((model, effort), {"responses": 0})
+            bucket["responses"] += 1
+            add(bucket, usage, CODEX_FIELDS)
+            responses += 1
+            used = True
+        sessions += used
+    return summary("codex", buckets, sessions, responses)
+
+
+def claude_tokens(home, since, until):
+    """Sum assistant message usage from Claude Code transcripts, once per message."""
+    buckets, sessions, seen = {}, set(), set()
+    for path in recent_files([home / "projects"], "*.jsonl", since):
+        for row in lines(path, ('"usage"',)):
+            message = row.get("message")
+            if row.get("type") != "assistant" or not isinstance(message, dict):
+                continue
+            usage, model = message.get("usage"), message.get("model")
+            stamp = epoch(row.get("timestamp"))
+            key = message.get("id") or row.get("requestId") or row.get("uuid")
+            if (
+                not isinstance(usage, dict)
+                or not model
+                or model.startswith("<")
+                or key in seen
+                or stamp is None
+                or not since <= stamp <= until
+            ):
+                continue
+            seen.add(key)
+            sessions.add(row.get("sessionId") or path.stem)
+            bucket = buckets.setdefault((model, row.get("effort")), {"responses": 0})
+            bucket["responses"] += 1
+            add(bucket, usage, CLAUDE_FIELDS)
+    for bucket in buckets.values():
+        bucket["total_tokens"] = sum(bucket.get(f, 0) for f in CLAUDE_FIELDS)
+    return summary("claude", buckets, len(sessions), len(seen))
+
+
+def summary(provider, buckets, sessions, responses):
+    models = [
+        {"model": model, "effort": effort, **values}
+        for (model, effort), values in sorted(
+            buckets.items(), key=lambda item: -item[1].get("total_tokens", 0)
+        )
+    ]
+    return {
+        "provider": provider,
+        "sessions": sessions,
+        "responses": responses,
+        "totalTokens": sum(m.get("total_tokens", 0) for m in models),
+        "byModel": models,
+    }
+
+
+def codex_quota(home, now):
+    """Latest weekly/5-hour reading that Codex wrote into its local session logs."""
+    for path in recent_files([home / "sessions"], "rollout-*.jsonl", now - 8 * 86400)[:20]:
+        latest = None
+        for row in lines(path, ('"rate_limits"',)):
+            limits = (row.get("payload") or {}).get("rate_limits")
+            if isinstance(limits, dict) and epoch(row.get("timestamp")):
+                latest = (row["timestamp"], limits)
+        if latest:
+            stamp, limits = latest
+            payload = {
+                "rateLimitsByLimitId": {
+                    "codex": {
+                        slot: {
+                            "usedPercent": window.get("used_percent"),
+                            "windowDurationMins": window.get("window_minutes"),
+                            "resetsAt": window.get("resets_at"),
+                        }
+                        for slot in ("primary", "secondary")
+                        if isinstance(window := limits.get(slot), dict)
+                    }
+                }
+            }
+            return {"source": "codex_session_log", **snapshot(payload, stamp)}
+    return None
+
+
+def file_quota(path, observed_at):
+    """A saved Claude Code status-line JSON or a native Codex usage payload."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    limits = data.get("rate_limits") if isinstance(data, dict) else None
+    if isinstance(limits, dict) and ("seven_day" in limits or "five_hour" in limits):
+        windows = []
+        for name, minutes in (("five_hour", 300), ("seven_day", WEEK_MINUTES)):
+            window = limits.get(name)
+            used = window.get("used_percentage") if isinstance(window, dict) else None
+            if isinstance(used, (int, float)) and 0 <= used <= 100:
+                windows.append(
+                    {
+                        "slot": name,
+                        "usedPercent": float(used),
+                        "durationMinutes": minutes,
+                        "resetsAt": epoch(window.get("resets_at")),
+                    }
+                )
+        return {
+            "source": "claude_status_line",
+            "observedAt": observed_at,
+            "windows": windows,
+            "availableResets": None,
+            "grantTimes": [],
+            "resetExpirations": [],
+        }
+    return {"source": "codex_usage_payload", **snapshot(data, observed_at)}
+
+
+def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
+    """Suggest, never start: unused weekly quota near renewal or expiring resets."""
+    if reading is None:
+        return {"suggestion": "unknown", "reasons": ["no_quota_reading"]}
+    observed = epoch(reading["observedAt"])
+    result = {
+        "source": reading["source"],
+        "observedAt": iso(observed),
+        "readingAgeHours": round((now - observed) / 3600, 1),
+        "weeklyUsedPercent": None,
+        "weeklyResetsAt": None,
+        "hoursToWeeklyReset": None,
+        "reasons": [],
+    }
+    week = weekly(reading)
+    if week:
+        result["weeklyUsedPercent"] = week["usedPercent"]
+        if week["resetsAt"] is not None:
+            result["weeklyResetsAt"] = iso(week["resetsAt"])
+            result["hoursToWeeklyReset"] = round((week["resetsAt"] - now) / 3600, 1)
+    if result["readingAgeHours"] > stale_hours:
+        result["reasons"].append("reading_is_stale")
+    hours = result["hoursToWeeklyReset"]
+    if week is None:
+        result["reasons"].append("weekly_window_unknown")
+    elif week["usedPercent"] >= 100:
+        result["reasons"].append("weekly_limit_reached")
+    elif hours is not None and 0 < hours <= within_hours and 100 - week["usedPercent"] >= min_unused:
+        result["reasons"].append("unused_weekly_quota_before_reset")
+    expiring = expiry_advice({**reading, "observedAt": now})
+    if expiring["dueExpirations"]:
+        result["reasons"].append("saved_resets_expiring_soon")
+        result["expiringResets"] = [iso(t) for t in expiring["dueExpirations"]]
+    good = {"unused_weekly_quota_before_reset", "saved_resets_expiring_soon"}
+    blocked = {"weekly_limit_reached", "reading_is_stale"}
+    if blocked & set(result["reasons"]):
+        result["suggestion"] = "refresh_or_wait"
+    elif good & set(result["reasons"]):
+        result["suggestion"] = "consider_top_mode"
+    else:
+        result["suggestion"] = "nothing_to_do"
+    return result
+
+
+def markdown(report):
+    out = [f"Tokens from {report['since']} to {report['until']} (local logs)", ""]
+    out.append("| Agent | Model | Effort | Responses | Total tokens | Detail |")
+    out.append("| --- | --- | --- | ---: | ---: | --- |")
+    for provider in report["providers"]:
+        for row in provider["byModel"]:
+            detail = ", ".join(
+                f"{k.replace('_tokens', '').replace('_', ' ')} {v:,}"
+                for k, v in row.items()
+                if k.endswith("_tokens") and k != "total_tokens"
+            )
+            out.append(
+                f"| {provider['provider']} | {row['model']} | {row['effort'] or '-'} "
+                f"| {row['responses']:,} | {row.get('total_tokens', 0):,} | {detail} |"
+            )
+        if not provider["byModel"]:
+            out.append(f"| {provider['provider']} | none found | - | 0 | 0 | |")
+    out.append("")
+    for provider in report["providers"]:
+        out.append(
+            f"- {provider['provider']}: {provider['sessions']} sessions, "
+            f"{provider['totalTokens']:,} tokens"
+        )
+    return "\n".join(out)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    tokens = commands.add_parser("tokens", help="Token totals per agent and model")
+    tokens.add_argument("--since", required=True, help="ISO time with timezone")
+    tokens.add_argument("--until", help="ISO time with timezone (default: now)")
+    tokens.add_argument("--markdown", action="store_true")
+    quota = commands.add_parser("quota", help="Latest quota reading and a suggestion")
+    quota.add_argument("--file", help="Saved Claude status-line JSON or Codex payload")
+    quota.add_argument("--observed-at", help="When --file was captured (default: file time)")
+    quota.add_argument("--min-unused", type=float, default=25)
+    quota.add_argument("--within-hours", type=float, default=36)
+    for command in (tokens, quota):
+        command.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
+        command.add_argument("--claude-home", type=Path, default=Path.home() / ".claude")
+    args = parser.parse_args()
+    now = time.time()
+    if args.command == "tokens":
+        since = epoch(args.since)
+        until = epoch(args.until) if args.until else now
+        if since is None or until is None or since > until:
+            parser.error("Use ISO times with a timezone, --since before --until")
+        report = {
+            "since": iso(since),
+            "until": iso(until),
+            "providers": [
+                codex_tokens(args.codex_home, since, until),
+                claude_tokens(args.claude_home, since, until),
+            ],
+        }
+        print(markdown(report) if args.markdown else json.dumps(report, indent=2))
+        return
+    if args.file:
+        observed = args.observed_at or iso(os.path.getmtime(args.file))
+        if epoch(observed) is None:
+            parser.error("--observed-at needs an ISO time with a timezone")
+        reading = file_quota(args.file, observed)
+    else:
+        reading = codex_quota(args.codex_home, now)
+    json.dump(advise(reading, now, args.min_unused, args.within_hours), sys.stdout, indent=2)
+    print()
+
+
+if __name__ == "__main__":
+    main()

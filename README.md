@@ -1,148 +1,108 @@
-# Codex Top Mode
+# Top Mode
 
-**Turn available AI capacity into finished work, with one coordinator and a clear stopping time.**
+**Use the AI subscription you already pay for, on purpose and without losing track.**
 
-Your existing agent checks pending work, priorities, owners and permissions,
-then uses suitable available models and reports verified outcomes. Quality comes first.
+Coding-agent subscriptions come with weekly limits. Whatever you don't use before
+the limit renews is gone. Top Mode is a skill for your agent (Codex, Claude Code
+or any agent that can read files and run Python) that turns that spare capacity
+into work you actually care about:
 
-This package contains a skill and small Python helpers. Downloading it starts
-no work, creates no schedule and changes no global agent settings. [MIT license](LICENSE).
+- **It tells you when it's worth it.** Your weekly allowance renews soon and a
+  lot is still unused, saved resets are about to expire, or a reset was announced.
+- **It works on your priorities, with your rules.** You decide the projects, what
+  to leave out, and what the agent may do alone or must ask first.
+- **It stops on time.** Every run has a deadline that nothing can extend.
+- **It tells you what happened.** Each run ends with a short report: what changed,
+  what is pending, and what it used (quota before and after, tokens per model).
 
-## Start in three steps
+Downloading it starts nothing and changes no settings. It is a set of instructions
+plus small Python scripts with no dependencies. [MIT license](LICENSE).
 
-1. **Give your agent this README URL or the local package folder**, then paste:
+## Get started
 
-   ```text
-   Read this README and the linked AGENTS.md and SKILL.md explicitly.
-   Tell me what you actually loaded and can do on this host.
-   Prepare my private setup: projects and exclusions, priorities, current owners,
-   useful finish criteria, allowed actions, available models and a time limit.
-   Explain it in my language. Wait for my approval before starting work.
-   ```
+**1. Give your agent this repository** (its URL or a local copy) and paste:
 
-2. **Approve the setup:** projects, actions and limits. The agent prepares private
-   files outside Git and saves their location for future sessions; you need not
-   edit JSON. Disabled fictional examples grant no permission.
-3. **Start a manual session**, after approving that setup. For example:
-
-   ```text
-   Start Top Mode for 30 minutes using my saved setup.
-   ```
-
-Manual mode needs **no announcement and no reset**. Quota means your usage
-allowance. Without native quota tools, use supervised work with a clock deadline;
-automatic weekly stopping is unavailable. A URL installs nothing: the agent
-must read the linked files. See [AGENTS.md](AGENTS.md).
-
-## Your setup stays private
-
-The shared skill explains **how to work**. Your private profile defines **your
-projects, exclusions, priorities, permissions, models and limits**. Private run
-state records progress. Updating this package does not replace your profile.
-
-At first setup, the agent saves a small reference at
-`~/.codex-top-mode/binding.json` in your user home directory. It contains only
-the absolute location of your profile, never a copy of your settings. Both files
-must stay outside Git worktrees, including ignored folders. On later sessions,
-ask your agent to read this package and use your saved setup; it retrieves that
-reference before preparing work. You do not need to repeat your rules.
-
-A missing or invalid reference needs setup or repair, not guessed permissions.
-Changing to a different profile needs your explicit choice. The reference does
-not start work or grant authority; your approved scope and current host permissions
-still apply. It works on the same user account and host; it is not cloud sync or
-automatic installation into every agent. See the
-[private binding instructions](references/profile-contract.md#private-profile-binding).
-
-## One place to coordinate
-
-Your current agent coordinates priorities and owners, continues permitted existing
-sessions, verifies results and updates private state. Use subagents only for useful
-independent work when supported; otherwise work serially. These are instructions
-for your agent, not an executor or automatic model router.
-
-```mermaid
-flowchart TD
-    accTitle: One coordinator for bounded work
-    accDescr: The user approves scope and limits. The coordinator checks priorities and owners, uses existing sessions or bounded workers, verifies results, updates private state and reports back.
-    U["You: goal, limits and permission"] --> C["Your current agent: coordinator"]
-    C --> P["Approved priorities and current owners"]
-    P --> W["Existing sessions or bounded workers"]
-    W --> V["Verify outcomes and update private state"]
-    V --> C
-    C --> R["Status, checkpoints and final report"]
+```text
+Read the README, AGENTS.md and SKILL.md of this repository.
+Tell me what you loaded and what you can do on this machine.
+Then help me set up Top Mode: ask me about my projects and priorities,
+what to leave out, what you may do without asking, and a default time limit.
+Show me the setup in plain words and wait for my approval.
 ```
 
-Choose economical models for easily verified work and stronger ones for ambiguity
-or failed checks, within client capabilities. Verify completion; chat badges and
-archive state are not evidence. No dashboard, Cloud/Work account or new service is needed.
+**2. Approve the setup.** The agent writes it to a private file outside any Git
+repository and remembers where it is. You never need to edit JSON.
 
-## What is available, and what is active?
+**3. Use it.** From then on, short sentences are enough:
 
-| Feature | What it does | When it operates |
-| --- | --- | --- |
-| Manual Top Mode | Bounded work on approved tasks. | Your explicit start. |
-| Public announcement watch | Finds new verified visible posts. | Separate permission, configuration and tested host scheduling/notification; typically every four hours. |
-| Conditional start | Checks verified upcoming news, ready work and fresh native quota. | Prior conditional permission. Applied or ambiguous news stays advisory. |
-| Saved reset reminders | Advises about available credits nearing actual expiry. | Fresh native credit details; recurrence needs a requested, tested host schedule. |
-| Maintainer review | Reviews package changes. | Optional, separately configured. No Claude credential is needed to use Top Mode. |
-
-A saved (banked) reset is a credit to replenish usage allowance, not money.
-Watching announcements and checking saved credits are separate. News grants no
-permission. Reset redemption always needs your current confirmation and an eligible
-supported action.
-
-Ask **“Show setup and status: what is loaded, configured, running and scheduled?”**
-Expect separate answers for files present, instructions read, approved setup,
-active work/deadline and tested schedules/notifications. A saved receipt cannot
-wake an agent by itself.
-
-## Check, pause and finish
-
-These are requests to your agent, not installed shell commands:
-
-| Say | Expect |
+| You say | What happens |
 | --- | --- |
-| “Show status.” | Active mode/deadline, task owners, verified progress, blockers and latest available quota. |
-| “Give me a checkpoint.” | What is saved, what remains and who can resume each task. |
-| “Stop Top Mode.” | No new assignments; bounded checkpoints from active owners and a private closing report. |
-| “Explain the final report.” | Before / after / pending / next step by project, with sourced metrics and explicit unknowns. |
+| "Is it worth running Top Mode now?" | It checks your quota and says yes, no or unknown, and why. |
+| "Start Top Mode for 2 hours." | It picks the most valuable ready work from your setup and gets going. |
+| "Status." | What is done and checked, what is in progress, blockers, time left. |
+| "Stop Top Mode." | No new work; running tasks save a checkpoint; you get the report. |
+| "Explain the report." | Before, after, pending and next step, per project. |
 
-New assignments stop at the fixed deadline, on revoked authority or the applicable
-native-quota stop. News and credits cannot extend it. Closing the host interrupts
-observation; resuming requires fresh checks. Saved work and owners are preserved.
-Stopping Top Mode ends intensive follow-up. Ask separately to pause the public
-announcement watch or saved-reset reminders; confirm which host schedules paused.
+## When is it worth it?
 
-**Fictional example:**
+| Signal | Codex | Claude Code |
+| --- | --- | --- |
+| Weekly allowance renews soon and plenty is unused | Yes, from Codex's local logs | Yes, if you let the agent save your status line ([how](references/profile-contract.md#quota-readings)); otherwise it asks you |
+| Saved resets are about to expire | Yes, when the Codex app exposes them | Not applicable |
+| A usage reset is announced | Optional, experimental ([details](references/announcements.md)) | Not applicable |
+| You simply want to push work forward | Yes | Yes |
 
-> You: “Use the approved 30-minute session to finish the recovery instructions.”
+The check is a suggestion. Top Mode only starts when you say so, unless you
+explicitly turned on automatic starts for announced resets.
+
+## You stay in control
+
+- **Nothing runs without your approval.** Examples and news never count as permission.
+- **Every action has a rule:** `allowed`, `ask` or `deny`. Editing, opening a pull
+  request, reviewing and merging are separate; installing, access to accounts,
+  money and deleting things are denied or asked by default.
+- **Fixed deadline.** It stops at the time limit, if you revoke permission, or
+  (when the agent can see your quota) when your weekly allowance renews.
+- **One coordinator.** One conversation keeps track of everything. It reuses
+  sessions that already own a task instead of piling up new ones.
+- **Saved resets are never spent for you.** Each one needs your confirmation.
+- **Your setup stays private.** It lives outside Git; updating this package keeps it.
+
+## What a report looks like
+
+> **Notes app.** Before: the import could duplicate entries. After: fixed, tested
+> and merged. Pending: release (needs your OK). Next: you approve the release.
 >
-> Coordinator: “The existing documentation owner is available. I’ll continue that
-> work, verify the steps and checkpoint the result. This fictional setup reserves
-> publication for your approval.”
->
-> Report: “Before: recovery steps were missing. After: documented and reproduced
-> in a sample. Pending: publication. Next: documentation owner requests approval.
-> Elapsed: 12 of 30 minutes; quota and tokens unknown on this host.”
+> **Run:** 1 h 52 min of 2 h, stopped at the deadline. Weekly quota 38% → 71%.
+> Tokens: 4.1 M on the strong model, 0.6 M on the cheap one, across 3 sessions.
 
-See the [report contract](references/profile-contract.md#run-report). Account-wide
-quota changes do not measure task cost or savings.
+Full example: [examples/report.example.md](examples/report.example.md).
 
-## Limits and further reading
+## What's inside
 
-- Python 3.11+; no third-party runtime dependencies. The public watcher supports
-  macOS/Linux file locking and fails closed on Windows.
-- Automation depends on a reachable host and its tested scheduler, notifications,
-  delegation and quota capabilities. The helpers run only when called.
-- Public X discovery is partial. Failed or uncertain reads mean unknown coverage.
-  The script makes no model calls; a scheduler waking a model can still consume quota.
-- Profiles and reports stay private. Project permissions, review, merge and
-  sensitive actions retain their separate approval rules. Markdown instructions
-  guide an agent; they are not a sandbox or a universal security guarantee.
+| File | What it is for |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Entry point for agents. |
+| [SKILL.md](SKILL.md) | How the agent sets up, runs, stops and reports. |
+| [references/profile-contract.md](references/profile-contract.md) | The setup file, quota sources and report rules. |
+| [references/announcements.md](references/announcements.md) | Optional: watching for announced Codex resets. |
+| [scripts/usage_report.py](scripts/usage_report.py) | Quota suggestion and tokens per model from local logs. |
+| [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
+| [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
+| [scripts/capacity_policy.py](scripts/capacity_policy.py), [scripts/public_watch.py](scripts/public_watch.py) | Optional announcement watch and conditional start. |
+| [examples/](examples/) | Fictional setup, watch and report examples. |
 
-**For agents:** [AGENTS.md](AGENTS.md) → [SKILL.md](SKILL.md) →
-[profile, watch commands and state contract](references/profile-contract.md).
+## Limits
 
-**For contributors:** [maintenance and review guide](references/maintaining.md).
-User-visible changes are in the [changelog](CHANGELOG.md).
+- Needs Python 3.11 or newer and an agent that can run commands on your machine.
+  Everything runs locally; there is no service, account or dashboard.
+- The agent only works while your machine and agent are running. A closed laptop
+  doesn't watch anything.
+- Token counts come from local logs on this machine. Work done elsewhere isn't counted.
+- Quota is shared by everything on your account, so before/after numbers include
+  any other work you did meanwhile. The report says so.
+- These are instructions for an agent, not a sandbox. Your agent's own permission
+  settings still apply.
+
+Contributing: see the [maintenance guide](references/maintaining.md) and the
+[changelog](CHANGELOG.md).

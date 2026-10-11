@@ -4,7 +4,8 @@ This guide is for changing the package. To use it for your own work, start
 with the [README](../README.md) and [agent entry point](../AGENTS.md).
 
 Keep changes focused and preserve the [skill](../SKILL.md) and
-[profile/event contract](profile-contract.md) as the operating sources.
+[profile, quota and report contract](profile-contract.md) as the operating
+sources; the optional announcement flow lives in [announcements](announcements.md).
 Keep review, merge, release and deployment authority separate.
 
 ## Optional maintainer review

@@ -5,6 +5,17 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Rewrote the README, AGENTS.md and skill in plain language around four jobs:
+  set up, check, run and report. Top Mode now targets Codex, Claude Code and
+  similar agents; announced Codex resets are an optional add-on with their own
+  [guide](references/announcements.md). Removed the unimplemented cloud mailbox
+  description.
+- Added `scripts/usage_report.py`: a quota suggestion (unused weekly allowance
+  near renewal, expiring saved resets) from Codex local logs, a native Codex
+  payload or a saved Claude Code status line, and token totals per agent, model
+  and effort from local Codex and Claude Code logs for run reports.
+- Added a [fictional run report](examples/report.example.md).
+
 - Added a private profile reference that setup saves and later sessions recover,
   with a short activation request, explicit profile replacement and refusal of
   Git worktree locations. Package updates preserve personal settings.

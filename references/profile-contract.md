@@ -1,4 +1,8 @@
-# Capacity profile and public-event contract
+# Profile, quota and report contract
+
+Technical reference for agents. People can start with the [README](../README.md);
+the operating workflow is in the [skill](../SKILL.md). Optional Codex reset
+announcements are in [announcements](announcements.md).
 
 ## Human profile
 
@@ -150,212 +154,51 @@ claim reliable weekly stopping. A closed or paused host cannot observe resets.
 This alternative is ordinary bounded work, not simulated conditional activation.
 Neither path needs a cloud mailbox, a new service or an account client.
 
-## Neutral event
+## Quota readings
 
-A verified event contains no prompt, instructions or account data:
+Quota means the subscription's usage allowance, shown as a percentage of each
+window (weekly and, when present, five-hour). Use the best source the host offers
+and say which one you used:
 
-```json
-{
-  "sourceUrl": "https://example.org/official-capacity-news/new-announcement",
-  "publishedAt": "2033-05-18T01:00:00Z",
-  "mechanism": "banked_reset",
-  "announcementStatus": "upcoming",
-  "expectedResetAt": null,
-  "verification": {
-    "method": "primary_source_read",
-    "verifiedAt": "2033-05-18T01:05:00Z"
-  }
-}
-```
+| Host | Source | Command |
+| --- | --- | --- |
+| Codex with a native usage tool (`get_usage_limits`) | Fresh native payload, including saved resets | Pass it to `usage_report.py quota --file` or `usage_monitor.py` |
+| Codex without that tool | The latest reading Codex wrote into its local session logs | `python3 -B scripts/usage_report.py quota` |
+| Claude Code (Pro/Max) | The status-line JSON, if the user opted in to save it | `python3 -B scripts/usage_report.py quota --file ~/.codex-top-mode/claude-status.json` |
+| Anything else | None | Ask the user, or use only a clock deadline |
 
-Mechanisms are `banked_reset`, `automatic_restoration`, `mixed`, `unspecified`.
-The publisher must be in the human-approved sources. The operator must read the
-actual primary post, verify author, publication time and mechanism, and label
-whether its text unambiguously announces a future event or says it has applied.
-Do not infer `upcoming` from a title such as “Day 6 / Reset”, surrounding
-context or a secondary forecast. A public post is
-not proof of eligibility or replenishment for the local account. Unknown
-mechanisms stay advisory unless the human profile explicitly allows verified
-upcoming unspecified events. `expectedResetAt` is optional: omit it or leave it
-null when the primary source gives no exact reset time. Verified upcoming news
-can still activate a fixed window. If a timestamp is supplied, it must be valid,
-future and verified from the primary announcement; contradictory or invalid
-timestamps are rejected, never repaired by guessing. The precise publication
-time and freshness still need verification. Applied automatic or
-mixed announcements stay advisory too; check the actual account rather than
-launching work after a restoration that may already have happened. A banked credit alone is not
-replenished weekly quota.
+For native Codex payloads prefer `rateLimitsByLimitId.codex`; use the legacy
+`rateLimits` bucket only when the map is absent. `usedPercent` is consumed quota;
+remaining is `100 - usedPercent`. Identify weekly (10080 minutes) and five-hour
+(300 minutes) windows by duration; missing windows are unknown. Use
+`rateLimitResetCredits.availableCount` as the authoritative count of saved
+resets (detail rows may be partial) and actual expiry timestamps, never a
+presumed lifetime. `snapshot(payload, observed_at)` in
+[usage_monitor.py](../scripts/usage_monitor.py) keeps only window percentages,
+durations and renewal times, the saved-reset count and credit grant/expiry
+times. Do not read authentication files or add an account client.
 
-Only publication after human approval and within the configured freshness
-limit can trigger conditional work. Use at most eight hours of freshness for
-an eight-hour policy. Verification must follow publication and cannot be in
-the future. Canonical publisher URLs ignore query/fragment variants and are
-recorded monotonically: a duplicate cannot restart a finished window or extend
-an active one. X/Twitter post URLs also normalize media suffixes and account case;
-ambiguous path segments are rejected. Publications at or before the latest window
-start stay advisory even under a different URL. New announcements seen during an
-active window are consumed without extending it. An event supplied when an old
-window ends is evaluated against the resulting inactive state. If that event
-does not start a new window, the stop decision and its reason remain visible;
-`announcementStatus` reports the event outcome separately. Temporary missing
-telemetry or unavailable work may be retried against the same still-fresh event
-before any window starts.
+Codex log readings are as fresh as the last Codex response on that machine;
+`usage_report.py` reports their age and treats readings older than six hours
+as stale. They do not include saved resets.
 
-The script validates the envelope; it does not independently verify a post or
-its author. Never set `primary_source_read` from a snippet, secondary summary,
-failed retrieval or unknown coverage. A forged verified flag is not authority.
-
-## Public reading and discovery
-
-For a known primary URL, use permitted host tools to read the public page. For
-X, an alternative public publisher-owned route is the official oEmbed endpoint
-at `https://publish.twitter.com/oembed`, with the canonical post URL in its
-URL-encoded `url` parameter and `omit_script=true`. Read the returned text and
-metadata without executing embedded scripts. Use public unauthenticated reads;
-do not import cookies or introduce an account client.
-
-Verify the publisher/author URL and post identity against the approved source.
-Keep the original canonical post URL as `sourceUrl` for source checks and
-deduplication, not the embed endpoint URL. HTML metadata or an embed containing
-only a calendar date cannot establish a precise `publishedAt`, freshness or
-publication after human approval; do not substitute midnight or retrieval time.
-A known-URL reading route is not a guarantee of future availability. Failed
-reads, including 403s, stay unknown unless another permitted primary route
-succeeds. Ambiguous publication time or upcoming/applied classification remains
-advisory or leads to an explicitly requested manual run. An unspecified reset
-hour alone does not make clearly future primary news ambiguous.
-
-Visible public timeline entries and third-party histories may discover candidate
-links. Treat them as partial discovery, not verified events or full timeline
-coverage; verify each candidate at the primary source. Forecasts cannot trigger
-work. Official incident history feeds concern incidents and do not establish a
-reliable schedule of future reset promotions. No feed or continuous monitoring
-is assumed here, and this package adds no scraper, daemon or transport.
-
-## Public watch operations
-
-Prepare private storage outside Git worktrees, such as `~/.codex-top-mode/`,
-with owner-only access. After human approval, adapt the disabled watch example
-there; preserve any existing configuration and journal. Watch permission is
-independent from permission to execute top mode. Run from the package root:
+Claude Code exposes `rate_limits.five_hour` and `rate_limits.seven_day` only to
+a [status-line command](https://code.claude.com/docs/en/statusline). With the
+user's approval, the status-line script can save its input before printing,
+for example by starting with:
 
 ```sh
-python3 -B scripts/public_watch.py --once \
-  --config "$HOME/.codex-top-mode/watch.json" --state "$HOME/.codex-top-mode/watch-state.json"
-python3 -B scripts/public_watch.py --status \
-  --config "$HOME/.codex-top-mode/watch.json" --state "$HOME/.codex-top-mode/watch-state.json"
+input=$(cat); printf '%s' "$input" > "$HOME/.codex-top-mode/claude-status.json"
 ```
 
-`--once` reads when the configured interval has elapsed, allowing scheduler
-jitter of one eighth of the interval, capped at 30 minutes. A four-hour schedule
-therefore tolerates runs up to 30 minutes early regardless of their UTC phase;
-`nextCheckAt` is the earliest eligible time after the last actual attempt. Repeated
-or stale calls before that time make no request. Larger delays or clock errors
-remain the scheduler's responsibility. No scheduler is created.
-`--status` reads saved coverage without HTTP. Installation time is fixed before the first read;
-successful reads seed the known IDs. Outputs
-are `needs_interpretation`, `coverage_failure` or `coverage_recovered`; no output
-means no new **verified visible** signal, not “there are no announcements”. State
-keeps bounded IDs, a replay floor for evicted posts, and the latest 50 receipts.
-Newly visible posts after installation can be received out of order while within
-that retention horizon; older evicted posts cannot replay.
-This is a discovery receipt, not the neutral activation event: the coordinator
-must verify/classify it and remains the sole writer of its own work policy/state.
+That changes the user's Claude Code settings, so it needs their explicit OK.
+Without it, ask the user to read `/usage`, or use a clock deadline.
 
-The watch reads public X profile data and the publisher's official embed using
-standard-library HTTP. It never executes page JavaScript. Author, original post
-identity, publication day and primary text must match. For a primary post with a
-verified quoted-post identity, the embed may append one anchored `t.co` link;
-other additions or changed content remain unknown. The first enabled check fixes
-the installation timestamp; existing posts do not trigger. If that first read
-fails, the timestamp is preserved so later verified posts are not discarded. It outputs only newly verified public
-posts needing interpretation, or one notice after eight hours of failed coverage.
-Unchanged checks are quiet. The agent interprets only new posts, verifies upcoming
-versus applied and mechanism from primary text, then checks permission, freshness,
-ready work and native quota before using the capacity preflight.
-
-The script makes **no model calls**. A scheduler that wakes an agent/model every
-four hours still has that cost; an empty result should end quickly. A receipt
-on stdout or in private state does **not** wake or resume an agent by itself.
-Test the host's scheduling and notification hook before promising that behavior.
-Without a supported scheduler/hook, the explicit alternative is a manual check.
-
-## Optional cloud mailbox adapter
-
-A cheap cloud checker may read public primary posts and write only public
-signals. A separate local receiver reads the inbox, verifies the approved
-profile, refreshes backlog/owners and obtains native account telemetry. No
-scheduler, mailbox service, cloud usage client or transport is implemented here.
-Host availability, credentials and source access remain adapter dependencies.
-A PCC, Page or file inbox is optional; none is required by this skill.
-
-For an external mailbox v1 with `version`, `coverage`,
-`lastSuccessfulCheckAt` and `events`, require `version: 1`, `coverage: verified`
-and a successful primary-source read before constructing the neutral event.
-Each mailbox event may contain `sourceUrl`, `author`, `publishedAt`,
-`observedAt`, `mechanism` and `announcementStatus`. Verify `author` against the
-configured publisher, map `automatic` to `automatic_restoration` and `banked`
-to `banked_reset`, and retain `unspecified`; its activation needs the explicit
-profile option above. Preserve the verified upcoming/applied classification
-from primary text. Derive optional `expectedResetAt` only from the verified
-primary announcement or a verified explicit mailbox field; otherwise leave it
-unknown. Never guess that time from discovery, publication or the account's
-scheduled renewal. Use the actual
-verified primary-read time for `verification.verifiedAt`; retrieval of the
-inbox is not verification. Reject future/stale check times and never relabel an old post's
-publication time as its discovery time. Unknown coverage or a primary-read
-failure produces no activation event. Deduplication remains local even if the
-mailbox repeats a signal. A configured mailbox is not evidence that delivery,
-continuous coverage or local wakeup works.
-
-## Local preflight
-
-```sh
-python3 -B scripts/capacity_policy.py \
-  --profile /chosen/private/profile.json \
-  --state /chosen/private/state.json \
-  --event /chosen/private/public-event.json \
-  --observed-at ACTUAL_ISO_UTC
-```
-
-Provide the sanitized native usage payload through stdin. Omit `--event` for
-subsequent polls. The state file can be absent; its parent must already exist.
-Writes are atomic and private. The caller must enforce one writer for a state
-file and bind readings to the same host/account; change of binding requires a
-new baseline. Never relabel saved telemetry as a fresh native reading.
-
-A start requires applicable human conditional authority, fresh verified news,
-ready work and available weekly telemetry. Known exhausted windows block a
-start. Low weekly usage alone neither proves replenishment nor blocks useful
-work on a valid future announcement. Already confirmed native replenishment
-prevents activation from news published before that confirmation.
-The deadline is start plus `maximumHours`, clamped to an explicit authorization
-expiry when present. Consent until revocation still creates a fixed-duration
-window on every activation. Grants and duplicate news cannot extend it.
-The preflight returns task IDs and a decision, not running workers or approval
-for their actions. Exhausted or missing telemetry and stale observations suppress
-new candidates during an active window without extending its deadline. Before
-dispatch, refresh owners, all available thread slots, model availability and
-the action-specific gates.
-
-Off-schedule weekly replenishment requires two native readings 20 seconds to
-30 minutes apart through the existing observer. New profile windows also detect
-a positive decrease smaller than five points toward at most 2% usage when both
-weekly reset timestamps are known and the new timestamp moves forward. Both
-fresh readings must retain that decrease and timestamp advancement against the
-original anchor. A low reading alone, a missing or unchanged reset timestamp,
-or a timestamp change without a decrease is insufficient. Legacy monitors
-without the explicit `detectLowUsageRenewalShift` flag retain their existing
-strong-decrease requirement. If scheduled renewal stopping is enabled, the initial known weekly renewal also stops new assignments when
-due, even with missing later telemetry. This is a conservative time stop, not
-an assertion that account replenishment was observed. Preserve the earlier
-fixed deadline if it comes first. Stop new assignments, ask active owners for
-a bounded checkpoint, and report the actual stop reason.
-
-Legacy callers may keep using `usage_monitor.py` and its explicit normal/
-conditional deadlines. Do not adopt a legacy active window into a new profile;
-close or checkpoint its owner first. The new preflight creates no conditional
-extension and defaults to no automatic redemption.
+`usage_report.py quota` only suggests: `consider_top_mode` when at least 25%
+of the weekly allowance is unused within 36 hours of renewal, or when saved
+resets expire within seven days; `refresh_or_wait` for a stale reading or an
+exhausted weekly window; otherwise `nothing_to_do` or `unknown`. Thresholds
+are flags (`--min-unused`, `--within-hours`). It never starts work.
 
 ## Run report
 
@@ -366,9 +209,15 @@ separately from delivered or integrated outcomes. A passing test, independent
 review, merge and observed real use are distinct evidence. Link the applicable
 artifact or check; do not call a pending integration completed.
 
-Use existing approved observations and execution/checkpoint records. This package
-collects no model tokens, dispatch history or reports automatically; the host
-operator supplies that evidence. Do not add an account client or read credential
+Use existing approved observations and execution/checkpoint records. For
+tokens, run `python3 -B scripts/usage_report.py tokens --since START_ISO --markdown`
+at closure. It reads local Codex session logs (`~/.codex/sessions`) and Claude
+Code transcripts (`~/.claude/projects`, including subagents), counts each
+response once, and groups usage by agent, model and effort. It covers only this
+machine and every session in that interval, including work outside the run; say
+so in the report. Codex `cached input` is part of `input`; Claude cache reads and
+writes are separate fields and are included in its total. Otherwise the host
+operator supplies the evidence. Do not add an account client or read credential
 stores to fill a gap. Write `unknown` with the reason when a source is missing,
 partial, stale or cannot be attributed. Preserve sanitized report evidence in
 private storage outside Git worktrees; exclude credentials, account IDs,
