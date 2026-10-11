@@ -16,3 +16,5 @@ not a tagged release or evidence of live installation.
 - Defined a [portable run report](references/profile-contract.md#run-report)
   linking useful outcomes with sourced time, quota, model/effort, execution
   counts and tokens or explicit unknowns. No telemetry collector was added.
+- Documented how a maintainer configures, dispatches and verifies the optional
+  review workflow, including human credential entry and separate merge authority.
