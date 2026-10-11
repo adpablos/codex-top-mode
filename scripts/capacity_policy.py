@@ -329,6 +329,7 @@ def preflight(
             reason = monitor["stopReason"]
         result["usageMonitor"] = monitor
         decision = "continue_window" if monitor["mode"] == "top" else "stop_new_work"
+    stopped_reason = reason if decision == "stop_new_work" else None
     event_status = "absent"
     if event is not None:
         try:
@@ -451,6 +452,10 @@ def preflight(
                         "Previously authorized fresh reset announcement",
                     )
                     event_status = "consumed"
+        if event_status == "absent":
+            event_status = decision
+    if stopped_reason is not None and decision != "start_window":
+        decision, reason = "stop_new_work", stopped_reason
     monitor = result.get("usageMonitor", {})
     mode = monitor.get("mode", "normal")
     stop = stop_new_work_at(monitor)

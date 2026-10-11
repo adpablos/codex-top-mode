@@ -135,9 +135,11 @@ an active one. X/Twitter post URLs also normalize media suffixes and account cas
 ambiguous path segments are rejected. Publications at or before the latest window
 start stay advisory even under a different URL. New announcements seen during an
 active window are consumed without extending it. An event supplied when an old
-window ends is evaluated against the resulting inactive state. Temporary missing
-telemetry or unavailable work may be
-retried against the same still-fresh event before any window starts.
+window ends is evaluated against the resulting inactive state. If that event
+does not start a new window, the stop decision and its reason remain visible;
+`announcementStatus` reports the event outcome separately. Temporary missing
+telemetry or unavailable work may be retried against the same still-fresh event
+before any window starts.
 
 The script validates the envelope; it does not independently verify a post or
 its author. Never set `primary_source_read` from a snippet, secondary summary,

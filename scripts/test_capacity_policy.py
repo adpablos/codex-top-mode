@@ -293,6 +293,67 @@ class ProfileTests(unittest.TestCase):
             state["completedWindows"][0]["stoppedAt"], first["stopNewWorkAt"]
         )
 
+    def test_busy_owners_do_not_hide_window_end_and_event_can_retry(self):
+        p = profile()
+        p["limits"]["maximumHours"] = 1
+        state, first = start(p)
+        for task in p["backlog"]:
+            task["status"] = "in_progress"
+        now = first["stopNewWorkAt"] + 180
+        e = event(now - 60, "busy-window-end")
+        state, advice = preflight(p, state, reading(now=now), e)
+        self.assertEqual(advice["decision"], "stop_new_work")
+        self.assertEqual(advice["reason"], "time_window_ended")
+        self.assertEqual(advice["announcementStatus"], "preflight_blocked")
+        self.assertEqual(advice["nextWork"], [])
+        self.assertEqual(advice["mode"], "normal")
+        self.assertEqual(advice["stopNewWorkAt"], first["stopNewWorkAt"])
+        self.assertEqual(len(state["seenAnnouncementIds"]), 1)
+        for task in p["backlog"]:
+            task["status"] = "pending"
+        state, advice = preflight(p, state, reading(now=now + 1), e)
+        self.assertEqual(advice["decision"], "start_window")
+        self.assertEqual(advice["announcementStatus"], "consumed")
+
+    def test_revocation_stop_survives_an_advisory_event(self):
+        p = profile()
+        state, _ = start(p)
+        p["authorization"]["conditionalStart"] = False
+        state, advice = preflight(
+            p, state, reading(now=START + 60), event(START + 50, "revoked-news")
+        )
+        self.assertEqual(advice["decision"], "stop_new_work")
+        self.assertEqual(advice["reason"], "authorization_expired_or_changed")
+        self.assertEqual(advice["announcementStatus"], "advisory_only")
+        self.assertEqual(advice["nextWork"], [])
+        self.assertEqual(state["usageMonitor"]["mode"], "normal")
+
+    def test_replenishment_stop_survives_earlier_unhandled_news(self):
+        p = profile()
+        state, _ = start(p)
+        state, _ = preflight(p, state, reading(0, now=START + 60))
+        state, advice = preflight(
+            p, state, reading(1, now=START + 81), event(START + 50, "earlier-news")
+        )
+        self.assertEqual(advice["decision"], "stop_new_work")
+        self.assertEqual(advice["reason"], "quota_replenishment_confirmed")
+        self.assertEqual(advice["announcementStatus"], "advisory_only")
+        self.assertEqual(advice["nextWork"], [])
+        self.assertEqual(state["usageMonitor"]["mode"], "normal")
+
+    def test_window_end_survives_the_publication_replay_guard(self):
+        p = profile()
+        p["limits"]["maximumHours"] = 1
+        state, first = start(p)
+        e = event()
+        e["sourceUrl"] += "/photo/1"
+        e["expectedResetAt"] = None
+        _, advice = preflight(p, state, reading(now=first["stopNewWorkAt"]), e)
+        self.assertEqual(advice["decision"], "stop_new_work")
+        self.assertEqual(advice["reason"], "time_window_ended")
+        self.assertEqual(advice["announcementStatus"], "advisory_only")
+        self.assertEqual(advice["nextWork"], [])
+
     def test_scheduled_renewal_is_advertised_as_the_earliest_stop(self):
         state, advice = start(current=reading(now=START + 30, reset_at=START + 7200))
         self.assertEqual(advice["stopNewWorkAt"], START + 7200)
