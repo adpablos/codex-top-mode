@@ -36,7 +36,9 @@ python3 ~/.top-mode/scripts/install.py
 ```
 
 This makes Top Mode available as a skill in every new Codex and Claude Code
-session. Update with `git -C ~/.top-mode pull`; undo with `install.py --remove`.
+session. Your agent may ask you to approve running the install script; that is
+expected. Update with `git -C ~/.top-mode pull`; undo with
+`python3 ~/.top-mode/scripts/install.py --remove`.
 
 **2. Set up, once.** In a new session, say *"Help me set up Top Mode."* The agent
 asks about your projects and priorities, what to leave out, what it may do

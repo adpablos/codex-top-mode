@@ -67,10 +67,11 @@ class CheckTests(unittest.TestCase):
         self.private.mkdir()
         self.now = epoch("2033-05-18T12:00:00Z")
 
-    def status(self, used, hours):
+    def status(self, used, hours, age=0):
         path = self.private / "claude-status.json"
         limits = {"seven_day": {"used_percentage": used, "resets_at": self.now + hours * 3600}}
-        path.write_text(json.dumps({"observedAt": self.now, "payload": {"rate_limits": limits}}))
+        reading = {"observedAt": self.now - age * 3600, "payload": {"rate_limits": limits}}
+        path.write_text(json.dumps(reading))
 
     def run_check(self, *argv):
         out = io.StringIO()
@@ -113,11 +114,40 @@ class CheckTests(unittest.TestCase):
         path.write_text(json.dumps({"rate_limits": limits}))
         os.utime(path, (self.now, self.now))
         self.assertEqual(self.run_check(), "")
-        self.assertIn("Claude: no quota reading.", self.run_check("--verbose"))
+        self.assertIn("Claude: no quota reading (", self.run_check("--verbose"))
+
+    def test_a_stale_reading_asks_for_a_fresh_one_instead_of_a_run(self):
+        self.status(used=40, hours=10, age=7)
+        self.assertEqual(self.run_check(), "")
+        output = self.run_check("--verbose")
+        self.assertIn("Suggestion: refresh_or_wait.", output)
+        self.assertNotIn("Worth a Top Mode run", output)
 
     def test_no_reading_is_quiet_unless_verbose(self):
         self.assertEqual(self.run_check(), "")
-        self.assertEqual(self.run_check("--verbose"), "No quota reading found.\n")
+        self.assertEqual(
+            self.run_check("--verbose"),
+            "Codex: no quota reading (it appears once a Codex session reports its limits).\n"
+            "Claude: no quota reading (save its status line as "
+            "references/profile-contract.md shows).\n"
+            "Announcements: watch not set up (optional).\n",
+        )
+
+    def test_never_writes_its_state_inside_a_git_worktree(self):
+        self.status(used=40, hours=10)
+        (self.root / ".git").mkdir()
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()) as err:
+            self.run_check()
+        self.assertIn("outside Git worktrees", err.getvalue())
+        self.assertFalse((self.private / "check-state.json").exists())
+
+    def test_never_follows_a_link_for_its_state(self):
+        self.status(used=40, hours=10)
+        target = self.root / "elsewhere.json"
+        (self.private / "check-state.json").symlink_to(target)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self.run_check()
+        self.assertFalse(target.exists())
 
     def test_reports_new_announcements_from_the_watch(self):
         (self.private / "watch.json").write_text("{}")

@@ -12,11 +12,17 @@ import sys
 import time
 from pathlib import Path
 
+from profile_binding import private_path
 from usage_monitor import write_private
 from usage_report import advise, agent_home, codex_quota, file_quota
 
 PRIVATE = Path.home() / ".codex-top-mode"
 QUIET_SECONDS = 20 * 3600
+# What to do when an agent has no reading, for --verbose.
+NO_READING = {
+    "Codex": "it appears once a Codex session reports its limits",
+    "Claude": "save its status line as references/profile-contract.md shows",
+}
 
 
 def saved(path):
@@ -28,20 +34,18 @@ def saved(path):
 
 
 def readings(codex_home, claude_status, quota_file, now):
-    """(agent, reading) pairs for every quota source found."""
+    """(agent, reading or None) for each quota source."""
     if quota_file:
         return [("quota file", saved(quota_file))]
-    found = []
-    codex = codex_quota(codex_home, now)
-    if codex:
-        found.append(("Codex", codex))
-    if claude_status.is_file():
-        found.append(("Claude", saved(claude_status)))
-    return found
+    claude = saved(claude_status) if claude_status.is_file() else None
+    return [("Codex", codex_quota(codex_home, now)), ("Claude", claude)]
 
 
 def quota_lines(agent, advice):
     """(key, message) pairs; the key identifies the same news across checks."""
+    # A stale reading or a reached limit needs a fresh reading first, not a run.
+    if advice["suggestion"] != "consider_top_mode":
+        return []
     lines = []
     reasons = advice["reasons"]
     if "unused_weekly_quota_before_reset" in reasons:
@@ -74,6 +78,7 @@ def unseen(lines, path, now):
     fresh = [(key, line) for key, line in lines if now - told.get(key, 0) >= QUIET_SECONDS]
     if fresh:
         told.update({key: now for key, _ in fresh})
+        path = private_path(path, existing=False)
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         write_private(path, told)
     return [line for _, line in fresh]
@@ -81,7 +86,8 @@ def unseen(lines, path, now):
 
 def summary_line(agent, advice):
     if advice["suggestion"] == "unknown":
-        return f"{agent}: no quota reading."
+        hint = NO_READING.get(agent)
+        return f"{agent}: no quota reading" + (f" ({hint})." if hint else ".")
     used = advice["weeklyUsedPercent"]
     week = "weekly allowance unknown" if used is None else f"{used:g}% of the weekly allowance used"
     if advice["hoursToWeeklyReset"] is not None:
@@ -151,11 +157,16 @@ def main():
         print(json.dumps({"messages": lines, "quota": dict(advice)}, indent=2))
         return
     if args.verbose:
-        status = [summary_line(agent, item) for agent, item in advice]
-        lines = (status or ["No quota reading found."]) + [line for _, line in news]
+        lines = [summary_line(agent, item) for agent, item in advice]
+        if not (args.private / "watch.json").is_file():
+            lines.append("Announcements: watch not set up (optional).")
+        lines += [line for _, line in news]
     else:
         # Scheduled checks repeat; tell each piece of news at most once a day.
-        lines = unseen(news, args.private / "check-state.json", now)
+        try:
+            lines = unseen(news, args.private / "check-state.json", now)
+        except ValueError as error:
+            parser.error(str(error))
     lines += announcements
     if lines:
         print("\n".join(lines))
