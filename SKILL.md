@@ -147,7 +147,10 @@ user request and a supported scheduler; disclose host availability requirements.
 
 Close in plain language, normally 350–450 words grouped by project: before,
 what improved and why it matters, what remains blocked, and the next concrete
-step/owner. Explain what each component does. Distinguish tested code, reviewed
-merge, and observed real use; state missing source coverage or transport plainly.
-Keep quota/account details private and never describe consumed credits as
-redeemed unless the supported action actually succeeded.
+step/owner. Explain what each component does; state missing source coverage or
+transport plainly. Follow the [run-report contract](references/profile-contract.md#run-report)
+for time, before/after quota, actual models/effort, execution counts, sourced tokens
+or explicit unknowns, stop cause and evidence. Metrics support the outcome; they
+are not a consumption target. Keep reports private, omit account/conversation
+identifiers, and distinguish tested code, reviewed merge and observed real use.
+Never describe consumed credits as redeemed unless the supported action succeeded.

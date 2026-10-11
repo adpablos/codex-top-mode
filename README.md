@@ -22,8 +22,11 @@ hours stay unknown. Applied automatic or ambiguous news does not start work.
 
 The agent observes native quota and the fixed deadline, stops new assignments
 when weekly replenishment or the agreed stop is reached, and gathers bounded
-worker checkpoints. Its report is **before / after / pending / next step**, by
-project. Publication, review, merge and sensitive actions keep their permissions.
+worker checkpoints. Its [run report](references/profile-contract.md#run-report)
+explains **before / after / pending / next step**, by project, with sourced time,
+quota and execution metrics; unavailable data stays unknown. Publication,
+review, merge and sensitive actions keep their permissions. See the
+[changelog](CHANGELOG.md) for user-visible changes.
 
 ## Optional four-hour public watch
 
