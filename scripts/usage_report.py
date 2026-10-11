@@ -175,7 +175,8 @@ def codex_quota(home, now):
     A log last modified before the best reading so far cannot hold a newer one.
     """
     best = None
-    for path in recent_files([home / "sessions"], "rollout-*.jsonl", now - 8 * 86400):
+    roots = [home / "sessions", home / "archived_sessions"]
+    for path in recent_files(roots, "rollout-*.jsonl", now - 8 * 86400):
         if best and path.stat().st_mtime < best[0]:
             break
         for row in lines(path, ('"rate_limits"',)):

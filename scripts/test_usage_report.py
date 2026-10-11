@@ -180,7 +180,8 @@ class QuotaTests(unittest.TestCase):
         # A long session still logging today, whose only reading is days old.
         old = self.home / "sessions/2033/05/15/rollout-old.jsonl"
         write_lines(old, [quota_row("2033-05-15T08:00:00Z", 7), {"type": "turn_context"}])
-        fresh = self.home / "sessions/2033/05/18/rollout-new.jsonl"
+        # The newest reading's session was archived meanwhile.
+        fresh = self.home / "archived_sessions/rollout-new.jsonl"
         write_lines(fresh, [quota_row("2033-05-18T11:55:00Z", 4)])
         os.utime(fresh, (NOW - 300, NOW - 300))
         stale = self.home / "sessions/2033/05/18/rollout-earlier.jsonl"
