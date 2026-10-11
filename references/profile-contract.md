@@ -248,3 +248,85 @@ Legacy callers may keep using `usage_monitor.py` and its explicit normal/
 conditional deadlines. Do not adopt a legacy active window into a new profile;
 close or checkpoint its owner first. The new preflight creates no conditional
 extension and defaults to no automatic redemption.
+
+## Run report
+
+The coordinator closes a run with a private, portable Markdown report. Lead with
+what improved and why it matters, grouped by project: before, verified after,
+pending/blocker, and next step with an owner. Include attempted or blocked work
+separately from delivered or integrated outcomes. A passing test, independent
+review, merge and observed real use are distinct evidence. Link the applicable
+artifact or check; do not call a pending integration completed.
+
+Use existing approved observations and execution/checkpoint records. This package
+collects no model tokens, dispatch history or reports automatically; the host
+operator supplies that evidence. Do not add an account client or read credential
+stores to fill a gap. Write `unknown` with the reason when a source is missing,
+partial, stale or cannot be attributed. Preserve sanitized report evidence in
+private ignored storage, not this repository; exclude credentials, account IDs,
+private thread/session/agent IDs and conversation text. Counts and role labels
+are enough. A private report is not permission to publish it.
+
+Capture native quota immediately before starting or activating work and again
+at closure. If the baseline was obtained later, record that delay and its actual
+coverage; the pre-start value is unknown, not the later baseline relabelled.
+
+Include these observations, even when some values are unknown:
+
+| Observation | Required context |
+| --- | --- |
+| Time and stop | Actual UTC start, frozen deadline, time new assignments stopped, checkpoint/report end, elapsed wall time and actual stop cause from the owner/state. Wall time is not active processing time; label processing time unknown unless measured. A planned deadline alone does not prove the stop happened. |
+| Quota before/after | Provider/host source, each reading's observation time, window duration, used percentage and renewal time when available. Compare the same account binding and window; do not include its identifier. Missing windows stay unknown. |
+| Actual execution | Role (coordinator, worker, reviewer), provider, model and effort actually used, sourced from the host's execution record. Separate a proposed model from one started; unavailable effort/model stays unknown. |
+| Sessions/agents | Assigned, started and completed counts by role/provider from execution records, with interval and complete/partial coverage. Define completion as the assigned work/checkpoint finishing, not a read badge or archived chat. Report blocked/failed attempts separately; preserve overlap rather than inventing a disjoint total across roles. A session is not evidence of a distinct model. |
+| Tokens | Native input/output/cached counts, provider, source, interval and execution coverage, or unknown. Known worker usage is not total run usage when coordinator/reviewer usage is missing. |
+| Outcome and continuation | Completed/delivered/integrated versus attempted/blocked work, verification level, stop cause, what closed, what remains and the next concrete action/owner. |
+
+Quota is account-wide capacity, not task-specific tokens or monetary cost. State
+any known reset/replenishment or credit redemption between readings separately;
+only a supported confirmed redemption is redeemed. After a renewal, missing
+reading, changed binding or other work on the account, do not present the
+percentage difference as this run's consumption. Never convert quota percentages
+to tokens, subtract across a reset to attribute consumption, or invent savings.
+
+Preserve each client's token semantics. Cached input may already be a subset of
+input; do not add it again. Sum only disjoint usage events with compatible units
+and coverage, deduplicating repeated reads of the same event. A real retry is a
+separate event if the source reports its usage. For cumulative counters, a delta
+requires the same counter, scope and coverage without a counter reset; snapshots
+of a cumulative counter must not also be summed as events. Keep unknown parts
+visible and label any partial total with its exact coverage. If semantics or
+attribution cannot be verified, retain the reported fields without deriving a
+total. Nominal model cost is not demonstrated subscription spend or savings.
+
+### Fictional report example
+
+All providers, models, records and values below are invented; this is a format
+example, not collected telemetry or authorization.
+
+> **Project Cedar:** before, imports could be duplicated; after, the fix is
+> tested, independently reviewed and merged. Real production use is unverified.
+> **Attempted:** deployment was blocked by missing approval and did not happen.
+> **Pending/next:** project owner confirms deployment approval, then verifies
+> one real import. The coding task closed; deployment remains open.
+>
+> **Time/stop:** manual top mode, start 2033-05-18T01:00:00Z; frozen deadline and
+> observed stop of new assignments 02:00:00Z; bounded checkpoints/report end
+> 02:04:00Z (all UTC on the same day). Wall time 64 minutes; active processing
+> time unknown. Owner/state reports `time_window_ended`.
+>
+> **Quota:** Provider A native readings at start/report end: weekly (10080 min)
+> 17% → 21% used, unchanged renewal time 2033-05-21T00:00:00Z. Five-hour window
+> unknown (not returned). Other account activity is unknown, so the 4-point
+> account change is not attributed to this task. No redemption was attempted.
+>
+> **Execution:** local run records cover assigned/started/completed work:
+> coordinator Provider A / Model A / high: 1/1/1; worker Provider B / Model B /
+> medium: 1/1/1; reviewer Provider C / Model C / effort unknown: 1/1/1. The
+> deployment action was blocked before execution; it is not another session.
+>
+> **Tokens:** one disjoint worker event from Provider B's client record, interval
+> 01:05–01:35 UTC: input 12000, output 800, cached input 4000 (documented subset
+> of input). Worker subtotal 12800; cached input is not added again. Coordinator
+> and reviewer tokens unknown (not exposed): total run tokens unknown. These
+> records do not establish monetary spend or savings.

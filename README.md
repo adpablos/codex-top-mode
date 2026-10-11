@@ -22,8 +22,11 @@ hours stay unknown. Applied automatic or ambiguous news does not start work.
 
 The agent observes native quota and the fixed deadline, stops new assignments
 when weekly replenishment or the agreed stop is reached, and gathers bounded
-worker checkpoints. Its report is **before / after / pending / next step**, by
-project. Publication, review, merge and sensitive actions keep their permissions.
+worker checkpoints. Its [run report](references/profile-contract.md#run-report)
+explains **before / after / pending / next step**, by project, with sourced time,
+quota and execution metrics; unavailable data stays unknown. Publication,
+review, merge and sensitive actions keep their permissions. See the
+[changelog](CHANGELOG.md) for user-visible changes.
 
 ## Optional four-hour public watch
 
@@ -98,6 +101,9 @@ This is a discovery receipt, not the neutral activation event: the coordinator
 must verify/classify it and remains the sole writer of its own work policy/state.
 
 ## Contributing and security
+
+Record user-visible package changes in the [changelog](CHANGELOG.md). Keep real
+run reports and metrics in private storage.
 
 Keep changes small; run the tests above with synthetic fixtures and no real
 model/account calls. [GitHub Actions](.github/workflows/tests.yml) runs the same
