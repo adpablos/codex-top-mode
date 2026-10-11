@@ -49,6 +49,55 @@ state-bound approvals for authentication, access, installation, private data,
 finance and destruction still apply at action time. The code classifies work;
 it cannot authenticate consent, reserve worker slots or judge task complexity.
 
+## Private profile binding
+
+Use one local reference, `~/.codex-top-mode/binding.json`, to recover a setup in
+later sessions on the same host and user account. `~` means the user home directory
+on macOS, Linux or Windows. The agent prepares the real profile in private storage
+outside every Git worktree, verifies human approval, and saves its location:
+
+```sh
+python3 -B scripts/profile_binding.py bind --profile /chosen/private/profile.json
+```
+
+Run commands from the package root, or use the script's absolute path. Later
+sessions start with:
+
+```sh
+python3 -B scripts/profile_binding.py locate
+```
+
+The output gives `bindingPath` and `profilePath`. Resolve this before asking the
+user to set up again; load the returned profile only for the authorized purpose,
+verify its approval/validity and refresh its backlog. Pass that absolute profile
+path to the existing preflight helper. Lookup does not read profile contents,
+authenticate consent, create a schedule or start work. A short manual request
+inherits the approved profile with the requested duration capped by its limits.
+
+The reference has only `schemaVersion: 1` and absolute `profilePath`. No profile
+contents, credentials or conversation are copied. Both files must be regular,
+non-symlink files outside Git worktrees; `.gitignore` is not a privacy boundary.
+Prepare owner-only profile permissions. The helper creates a private binding
+directory/file (0700/0600) on POSIX and refuses group/world-readable files; on
+Windows verify access with native ACLs because POSIX modes do not provide that
+guarantee. Keep exported run state and reports outside Git too.
+
+Missing files, unsupported bindings, unsafe locations and permission failures
+stop recovery. Explain the specific dependency and repair it within human scope;
+do not create a fallback profile or expand authority. Repeating setup for the same
+profile is idempotent. A different profile needs an explicit human choice and
+`bind --profile /chosen/private/other.json --replace`. Do not overwrite a binding
+simply because the working directory or package version changed.
+
+An explicitly chosen alternative reference is supported with
+`--binding /chosen/private/binding.json` **before** `bind` or `locate`. Preserve
+that choice in the user's private coordinator/scheduler context; do not search
+the disk or try unrelated profiles. The default reference works without that
+extra configuration and survives package updates. Reading a supplied URL still
+installs nothing: the agent must explicitly load these instructions and use a
+local copy to run the helper. Never commit a local binding or user-specific path
+to this shared package.
+
 ## Manual run
 
 A direct human “top mode” instruction authorizes only the stated tasks, actions
