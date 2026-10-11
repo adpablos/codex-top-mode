@@ -21,7 +21,7 @@ class InstallTests(unittest.TestCase):
 
     def test_links_into_each_installed_agent_and_skips_missing_ones(self):
         (self.home / ".codex").mkdir()
-        results = install.install(self.home)
+        results = install.install(self.home, {})
         link = self.home / ".codex/skills/top-mode"
         self.assertTrue(link.is_symlink())
         self.assertEqual(link.resolve(), install.PACKAGE)
@@ -33,8 +33,8 @@ class InstallTests(unittest.TestCase):
         (self.home / ".codex").mkdir()
         other = self.home / ".claude/skills/top-mode"
         other.mkdir(parents=True)
-        install.install(self.home)
-        again = install.install(self.home)
+        install.install(self.home, {})
+        again = install.install(self.home, {})
         self.assertTrue(again["Codex"].startswith("already installed"))
         self.assertTrue(again["Claude Code"].startswith("not changed"))
         self.assertTrue(other.is_dir() and not other.is_symlink())
@@ -43,11 +43,19 @@ class InstallTests(unittest.TestCase):
         (self.home / ".codex").mkdir()
         (self.home / ".claude/skills").mkdir(parents=True)
         (self.home / ".claude/skills/top-mode").symlink_to(self.home)
-        install.install(self.home)
-        results = install.remove(self.home)
+        install.install(self.home, {})
+        results = install.remove(self.home, {})
         self.assertFalse((self.home / ".codex/skills/top-mode").exists())
         self.assertEqual(results["Claude Code"], "nothing to remove")
         self.assertTrue((self.home / ".claude/skills/top-mode").is_symlink())
+
+    def test_follows_codex_home_and_claude_config_dir(self):
+        env = {"CODEX_HOME": str(self.home / "codex"), "CLAUDE_CONFIG_DIR": ""}
+        (self.home / "codex").mkdir()
+        (self.home / ".codex").mkdir()
+        install.install(self.home, env)
+        self.assertTrue((self.home / "codex/skills/top-mode").is_symlink())
+        self.assertFalse((self.home / ".codex/skills").exists())
 
 
 class CheckTests(unittest.TestCase):
@@ -62,8 +70,7 @@ class CheckTests(unittest.TestCase):
     def status(self, used, hours):
         path = self.private / "claude-status.json"
         limits = {"seven_day": {"used_percentage": used, "resets_at": self.now + hours * 3600}}
-        path.write_text(json.dumps({"rate_limits": limits}))
-        os.utime(path, (self.now, self.now))
+        path.write_text(json.dumps({"observedAt": self.now, "payload": {"rate_limits": limits}}))
 
     def run_check(self, *argv):
         out = io.StringIO()
@@ -99,6 +106,14 @@ class CheckTests(unittest.TestCase):
         state = self.private / "check-state.json"
         if os.name == "posix":
             self.assertEqual(state.stat().st_mode & 0o077, 0)
+
+    def test_a_saved_reading_needs_its_own_capture_time(self):
+        path = self.private / "claude-status.json"
+        limits = {"seven_day": {"used_percentage": 40, "resets_at": self.now + 3600}}
+        path.write_text(json.dumps({"rate_limits": limits}))
+        os.utime(path, (self.now, self.now))
+        self.assertEqual(self.run_check(), "")
+        self.assertIn("Claude: no quota reading.", self.run_check("--verbose"))
 
     def test_no_reading_is_quiet_unless_verbose(self):
         self.assertEqual(self.run_check(), "")

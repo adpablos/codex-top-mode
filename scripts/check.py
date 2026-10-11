@@ -13,23 +13,30 @@ import time
 from pathlib import Path
 
 from usage_monitor import write_private
-from usage_report import advise, codex_quota, file_quota, iso
+from usage_report import advise, agent_home, codex_quota, file_quota
 
 PRIVATE = Path.home() / ".codex-top-mode"
 QUIET_SECONDS = 20 * 3600
 
 
+def saved(path):
+    """A saved reading that carries its capture time; anything else counts as none."""
+    try:
+        return file_quota(path)
+    except (OSError, ValueError):
+        return None
+
+
 def readings(codex_home, claude_status, quota_file, now):
     """(agent, reading) pairs for every quota source found."""
-    found = []
     if quota_file:
-        found.append(("quota file", file_quota(quota_file, iso(quota_file.stat().st_mtime))))
-        return found
+        return [("quota file", saved(quota_file))]
+    found = []
     codex = codex_quota(codex_home, now)
     if codex:
         found.append(("Codex", codex))
     if claude_status.is_file():
-        found.append(("Claude", file_quota(claude_status, iso(claude_status.stat().st_mtime))))
+        found.append(("Claude", saved(claude_status)))
     return found
 
 
@@ -122,8 +129,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verbose", action="store_true", help="Also print the full status")
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
-    parser.add_argument("--quota-file", type=Path, help="A specific saved quota reading")
-    parser.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
+    parser.add_argument("--quota-file", type=Path, help="A saved reading with its capture time")
+    parser.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
     args = parser.parse_args()
     now = time.time()

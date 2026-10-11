@@ -18,8 +18,9 @@ The scripts live next to this file: run them as `python3 -B <this folder>/script
 "Install Top Mode from <url>": clone it to `~/.top-mode` (or `git -C ~/.top-mode
 pull` if it is already there), then run `python3 -B ~/.top-mode/scripts/install.py`
 and relay its output. It links the package into `~/.codex/skills/top-mode` and
-`~/.claude/skills/top-mode` for the agents that exist and never replaces anything
-else. Tell the user to open a new session and ask to set up Top Mode.
+`~/.claude/skills/top-mode` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when set)
+for the agents that exist and never replaces anything else. Tell the user to open
+a new session and ask to set up Top Mode.
 
 ## Rules that always apply
 
