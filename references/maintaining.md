@@ -11,8 +11,8 @@ Keep review, merge, release and deployment authority separate.
 
 The [Claude workflow](../.github/workflows/claude.yml) reviews maintenance PRs for
 this repository. It is not a requirement for installing or using Top Mode.
-The model reads frozen PR files; it cannot execute PR code, edit files or write
-to GitHub. Trusted workflow code verifies and publishes its result.
+Claude can only read files; it cannot run PR code, edit files or write to GitHub.
+Trusted workflow code checks the PR and publishes the result.
 
 A maintainer using this integration needs a personal Claude subscription
 credential. Use Anthropic's [official token setup](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token),
@@ -25,7 +25,7 @@ credential-entry step to the human.
 Only the repository owner may dispatch or rerun it, from the default branch
 (`main` here). First verify the PR is open, ready for review and non-draft, its
 checks pass, and its head is the exact full 40-character SHA you intend to review.
-Replace both placeholders below; leave the default economical runner unchanged:
+Replace both placeholders below:
 
 ```sh
 gh workflow run .github/workflows/claude.yml --repo adpablos/codex-top-mode --ref main \
@@ -34,20 +34,11 @@ gh workflow run .github/workflows/claude.yml --repo adpablos/codex-top-mode --re
 
 Use repository **Actions → Claude final review** to find that dispatch. Accept
 a review only when its run succeeds and `github-actions[bot]` publishes a
-**Claude final review** comment for the exact current head, base head and merge
-base, with complete coverage and `Verdict: ready to merge`. The Actions run's
-own head is the default-branch workflow revision, not the PR head. Check the
-comment's frozen identity against the live PR; movement invalidates the verdict.
+**Claude final review** comment whose `Reviewed head:` is the PR's current head
+and whose verdict is `ready to merge`. A new push invalidates the verdict.
 Merge remains a separate authorized action; the workflow never auto-merges.
-
-For `changes required`, fix the material findings together and request closure
-review of the new frozen identity. Do not run a parallel Cloud or `@claude`
-review of the same candidate. Diagnose failed runs before retrying. A standard
-runner recovery needs verified economy watchdog-timeout evidence and its
-`fallback_run_id`; authentication, setup failure or cancellation does not qualify.
-After ten completed published passes, continuation needs a diagnosed, explicit
-per-pass human decision with an unused `extra_pass_authorization` reference.
-Read the workflow's input and refusal rules rather than inventing authority.
+For `changes required`, fix the material findings together and dispatch again
+for the new head. Diagnose failed runs before retrying.
 
 ## Contributing and security
 

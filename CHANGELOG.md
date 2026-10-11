@@ -5,6 +5,11 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Simplified the optional maintainer review workflow from 1,106 to about 200
+  lines. It keeps owner-only dispatch, read-only review, trusted instructions
+  from `main`, a pinned CLI and head checks, and drops the unused timeout
+  recovery, pass budget and incremental re-review.
+
 - Added a private profile reference that setup saves and later sessions recover,
   with a short activation request, explicit profile replacement and refusal of
   Git worktree locations. Package updates preserve personal settings.
