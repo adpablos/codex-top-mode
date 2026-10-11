@@ -102,6 +102,9 @@ must verify/classify it and remains the sole writer of its own work policy/state
 
 ## Contributing and security
 
+Record user-visible package changes in the [changelog](CHANGELOG.md). Keep real
+run reports and metrics in private storage.
+
 Keep changes small; run the tests above with synthetic fixtures and no real
 model/account calls. [GitHub Actions](.github/workflows/tests.yml) runs the same
 offline suite on pull requests and pushes to `main`, with Python 3.13, pinned

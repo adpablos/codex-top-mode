@@ -267,6 +267,10 @@ private ignored storage, not this repository; exclude credentials, account IDs,
 private thread/session/agent IDs and conversation text. Counts and role labels
 are enough. A private report is not permission to publish it.
 
+Capture native quota immediately before starting or activating work and again
+at closure. If the baseline was obtained later, record that delay and its actual
+coverage; the pre-start value is unknown, not the later baseline relabelled.
+
 Include these observations, even when some values are unknown:
 
 | Observation | Required context |
