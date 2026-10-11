@@ -81,8 +81,11 @@ python3 -B scripts/public_watch.py --status --config .local/watch.json --state .
 python3 -B -m unittest discover -s scripts
 ```
 
-`--once` checks only when due and exits; no scheduler is created. `--status` reads
-saved coverage without HTTP. Installation time is fixed before the first read;
+`--once` checks at most once per configured UTC interval slot and exits. Four-hour
+slots start at 00:00, 04:00, 08:00, 12:00, 16:00 and 20:00 UTC; `nextCheckAt` is the
+next slot boundary, so small scheduler delays do not shift the cadence. The first
+run and next slot may be closer than four hours. No scheduler is created.
+`--status` reads saved coverage without HTTP. Installation time is fixed before the first read;
 successful reads seed the known IDs. Outputs
 are `needs_interpretation`, `coverage_failure` or `coverage_recovered`; no output
 means no new **verified visible** signal, not “there are no announcements”. State

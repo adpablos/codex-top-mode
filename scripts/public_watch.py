@@ -408,16 +408,18 @@ def poll(config, state, now, reader=read_public):
     emitted = []
     if not config["enabled"]:
         return result, emitted
+    interval = config["intervalHours"] * 3600
+    slot = int(now // interval)
     for source in sources:
         record = records.setdefault(source, {})
-        if now < record.get("nextCheckAt", 0):
-            continue
-        if now <= record.get("lastAttemptAt", 0):
+        last_attempt = record.get("lastAttemptAt")
+        # Use the last real attempt, including ledgers written before UTC slots.
+        if last_attempt is not None and (
+            now <= last_attempt or slot <= int(last_attempt // interval)
+        ):
             continue
         record.setdefault("baselineAt", now)
-        record.update(
-            lastAttemptAt=now, nextCheckAt=now + config["intervalHours"] * 3600
-        )
+        record.update(lastAttemptAt=now, nextCheckAt=(slot + 1) * interval)
         try:
             posts = reader(source, now, config["maximumPosts"])
             if not posts:

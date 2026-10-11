@@ -273,12 +273,55 @@ class WatchTests(unittest.TestCase):
 
     def test_not_due_or_stale_read_makes_no_request_and_cannot_rewind_state(self):
         state, _ = poll(config(), {}, START, reader([post()]))
-        for now in (START - 1, START, START + 14399):
+        next_check = state["publishers"][SOURCE]["nextCheckAt"]
+        for now in (START - 1, START, next_check - 1):
             new, output = poll(
                 config(), state, now, lambda *args: self.fail("Unexpected HTTP")
             )
             self.assertEqual(new, state)
             self.assertEqual(output, [])
+
+    def test_utc_slots_prevent_jitter_from_skipping_a_scheduled_cycle(self):
+        interval = config()["intervalHours"] * 3600
+        slot = (START // interval) * interval
+        calls = []
+
+        def read(source, now, limit):
+            calls.append(now)
+            return [post(at=slot - 1)]
+
+        state, _ = poll(config(), {}, slot + 5, read)
+        # Old ledgers used attempt time + interval; derive due slots from lastAttemptAt.
+        state["publishers"][SOURCE]["nextCheckAt"] = slot + interval + 5
+        state, output = poll(config(), state, slot + interval + 2, read)
+        self.assertEqual(calls, [slot + 5, slot + interval + 2])
+        self.assertEqual(output, [])
+        self.assertEqual(
+            state["publishers"][SOURCE]["nextCheckAt"], slot + 2 * interval
+        )
+        saved = copy.deepcopy(state)
+        for now in (slot + interval + 1, slot + interval + 3, slot + 2 * interval - 1):
+            state, output = poll(config(), state, now, read)
+            self.assertEqual(state, saved)
+            self.assertEqual(output, [])
+        self.assertEqual(len(calls), 2)
+
+    def test_delayed_check_uses_current_slot_without_catchup_reads(self):
+        interval = config()["intervalHours"] * 3600
+        slot = (START // interval) * interval
+        state, _ = poll(config(), {}, slot + 5, reader([post(at=slot - 1)]))
+        calls = []
+
+        def read(source, now, limit):
+            calls.append(now)
+            return [post(at=slot - 1)]
+
+        state, output = poll(config(), state, slot + 3 * interval + 9, read)
+        self.assertEqual(calls, [slot + 3 * interval + 9])
+        self.assertEqual(output, [])
+        self.assertEqual(
+            state["publishers"][SOURCE]["nextCheckAt"], slot + 4 * interval
+        )
 
     def test_old_unseen_posts_after_baseline_cannot_trigger(self):
         state, _ = poll(config(), {}, START, reader([post()]))
