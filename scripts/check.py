@@ -78,14 +78,13 @@ def unseen(lines, path, now):
     fresh = [(key, line) for key, line in lines if now - told.get(key, 0) >= QUIET_SECONDS]
     if fresh:
         told.update({key: now for key, _ in fresh})
-        path = private_path(path, existing=False)
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         write_private(path, told)
     return [line for _, line in fresh]
 
 
 def summary_line(agent, advice):
-    if advice["suggestion"] == "unknown":
+    if "no_quota_reading" in advice["reasons"]:
         hint = NO_READING.get(agent)
         return f"{agent}: no quota reading" + (f" ({hint})." if hint else ".")
     used = advice["weeklyUsedPercent"]
@@ -139,6 +138,14 @@ def main():
     parser.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    try:
+        # What check and the watch write must stay outside Git and never follow a link.
+        state, config, watch_state = (
+            private_path(args.private / name, existing=False)
+            for name in ("check-state.json", "watch.json", "watch-state.json")
+        )
+    except ValueError as error:
+        parser.error(str(error))
     now = time.time()
     advice = [
         (agent, advise(reading, now))
@@ -147,26 +154,19 @@ def main():
         )
     ]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
-    announcements = watch(
-        Path(__file__).with_name("public_watch.py"),
-        args.private / "watch.json",
-        args.private / "watch-state.json",
-    )
+    announcements = watch(Path(__file__).with_name("public_watch.py"), config, watch_state)
     if args.json:
         lines = [line for _, line in news] + announcements
         print(json.dumps({"messages": lines, "quota": dict(advice)}, indent=2))
         return
     if args.verbose:
         lines = [summary_line(agent, item) for agent, item in advice]
-        if not (args.private / "watch.json").is_file():
+        if not config.is_file():
             lines.append("Announcements: watch not set up (optional).")
         lines += [line for _, line in news]
     else:
         # Scheduled checks repeat; tell each piece of news at most once a day.
-        try:
-            lines = unseen(news, args.private / "check-state.json", now)
-        except ValueError as error:
-            parser.error(str(error))
+        lines = unseen(news, state, now)
     lines += announcements
     if lines:
         print("\n".join(lines))

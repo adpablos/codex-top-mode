@@ -135,11 +135,25 @@ class CheckTests(unittest.TestCase):
 
     def test_never_writes_its_state_inside_a_git_worktree(self):
         self.status(used=40, hours=10)
+        (self.private / "watch.json").write_text("{}")
         (self.root / ".git").mkdir()
-        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()) as err:
-            self.run_check()
-        self.assertIn("outside Git worktrees", err.getvalue())
-        self.assertFalse((self.private / "check-state.json").exists())
+        for argv in ((), ("--verbose",), ("--json",)):
+            err = io.StringIO()
+            with self.subTest(argv=argv), patch.object(check.subprocess, "run") as run:
+                with self.assertRaises(SystemExit), contextlib.redirect_stderr(err):
+                    self.run_check(*argv)
+                self.assertIn("outside Git worktrees", err.getvalue())
+                run.assert_not_called()  # the watch would write its lock and state there
+        written = {p.name for p in self.private.iterdir()}
+        self.assertEqual(written, {"claude-status.json", "watch.json"})
+
+    def test_a_reading_without_a_weekly_window_is_not_a_missing_reading(self):
+        path = self.private / "claude-status.json"
+        limits = {"five_hour": {"used_percentage": 10, "resets_at": self.now + 3600}}
+        path.write_text(json.dumps({"observedAt": self.now, "payload": {"rate_limits": limits}}))
+        output = self.run_check("--verbose")
+        self.assertIn("Claude: weekly allowance unknown", output)
+        self.assertIn("Suggestion: unknown.", output)
 
     def test_never_follows_a_link_for_its_state(self):
         self.status(used=40, hours=10)
