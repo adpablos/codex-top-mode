@@ -218,6 +218,23 @@ otherwise `nothing_to_do`. Only Codex's account-wide `codex` bucket counts,
 not model-specific ones. Thresholds
 are flags (`--min-unused`, `--within-hours`). It never starts work.
 
+## Proactive check
+
+`python3 -B scripts/check.py` combines every signal available on this machine:
+the Codex local-log reading, a saved Claude Code status line
+(`~/.codex-top-mode/claude-status.json`), and the optional announcement watch
+when `~/.codex-top-mode/watch.json` exists. It prints one line per piece of news
+and nothing otherwise. Without `--verbose` it tells the same news at most once
+every 20 hours, remembered in `~/.codex-top-mode/check-state.json` (keys and
+times only). `--verbose` always prints the full status and `--json` gives the
+same for agents. It never starts work.
+
+Schedule it with the host's own scheduler, which wakes a model on every run even
+when the script is silent, so choose the cheapest model: a Codex automation, or
+a local Claude Code Desktop scheduled task (a cloud routine cannot see this
+machine). Every 4 hours suits the announcement watch; daily is enough otherwise.
+Runs only happen while the machine is awake and the agent app is running.
+
 ## Run report
 
 The coordinator closes a run with a private, portable Markdown report. Lead with

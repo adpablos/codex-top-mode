@@ -1,0 +1,158 @@
+"""One quiet check: is there spare capacity worth a Top Mode run?
+
+Looks at every source available on this machine and prints one line per thing
+worth telling the user. Prints nothing when there is nothing to say, so it can
+run on a schedule. Never starts work.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from usage_monitor import write_private
+from usage_report import advise, codex_quota, file_quota, iso
+
+PRIVATE = Path.home() / ".codex-top-mode"
+QUIET_SECONDS = 20 * 3600
+
+
+def readings(codex_home, claude_status, quota_file, now):
+    """(agent, reading) pairs for every quota source found."""
+    found = []
+    if quota_file:
+        found.append(("quota file", file_quota(quota_file, iso(quota_file.stat().st_mtime))))
+        return found
+    codex = codex_quota(codex_home, now)
+    if codex:
+        found.append(("Codex", codex))
+    if claude_status.is_file():
+        found.append(("Claude", file_quota(claude_status, iso(claude_status.stat().st_mtime))))
+    return found
+
+
+def quota_lines(agent, advice):
+    """(key, message) pairs; the key identifies the same news across checks."""
+    lines = []
+    reasons = advice["reasons"]
+    if "unused_weekly_quota_before_reset" in reasons:
+        unused = round(100 - advice["weeklyUsedPercent"])
+        lines.append(
+            (
+                f"{agent}:unused:{advice['weeklyResetsAt']}",
+                f"{agent}: {unused}% of the weekly allowance is unused and it renews in "
+                f"{advice['hoursToWeeklyReset']:g} h. Worth a Top Mode run.",
+            )
+        )
+    if "saved_resets_expiring_soon" in reasons:
+        dates = ", ".join(advice["expiringResets"])
+        lines.append(
+            (
+                f"{agent}:expiring:{dates}",
+                f"{agent}: saved resets expire soon ({dates}). Use or redeem them first.",
+            )
+        )
+    return lines
+
+
+def unseen(lines, path, now):
+    """Drop news already told in the last day; remember what is told now."""
+    try:
+        told = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        told = {}
+    told = {k: t for k, t in told.items() if isinstance(t, (int, float)) and now - t < 8 * 86400}
+    fresh = [(key, line) for key, line in lines if now - told.get(key, 0) >= QUIET_SECONDS]
+    if fresh:
+        told.update({key: now for key, _ in fresh})
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_private(path, told)
+    return [line for _, line in fresh]
+
+
+def summary_line(agent, advice):
+    if advice["suggestion"] == "unknown":
+        return f"{agent}: no quota reading."
+    used = advice["weeklyUsedPercent"]
+    week = "weekly allowance unknown" if used is None else f"{used:g}% of the weekly allowance used"
+    if advice["hoursToWeeklyReset"] is not None:
+        week += f", renews in {advice['hoursToWeeklyReset']:g} h"
+    age = f"reading {advice['readingAgeHours']:g} h old"
+    return f"{agent}: {week} ({age}). Suggestion: {advice['suggestion']}."
+
+
+def watch(script, config, state):
+    """Run the optional announcement watch once; it decides whether a read is due."""
+    if not config.is_file():
+        return []
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(script),
+            "--once",
+            "--config",
+            str(config),
+            "--state",
+            str(state),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return ["Announcement watch failed to run: " + (result.stderr.strip() or "no details")]
+    lines = []
+    for signal in json.loads(result.stdout or "{}").get("signals", []):
+        if signal["kind"] == "needs_interpretation":
+            text = " ".join(str(signal.get("text", "")).split())[:140]
+            lines.append(f"New announcement to read: {signal['sourceUrl']} ({text})")
+        elif signal["kind"] == "coverage_failure":
+            lines.append(
+                f"Could not read {signal['source']} for a while; announcements may be missed."
+            )
+        elif signal["kind"] == "coverage_recovered":
+            lines.append(f"Reading {signal['source']} works again.")
+    return lines
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--verbose", action="store_true", help="Also print the full status")
+    parser.add_argument("--json", action="store_true", help="Machine-readable output")
+    parser.add_argument("--quota-file", type=Path, help="A specific saved quota reading")
+    parser.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
+    parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    now = time.time()
+    advice = [
+        (agent, advise(reading, now))
+        for agent, reading in readings(
+            args.codex_home, args.private / "claude-status.json", args.quota_file, now
+        )
+    ]
+    news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
+    announcements = watch(
+        Path(__file__).with_name("public_watch.py"),
+        args.private / "watch.json",
+        args.private / "watch-state.json",
+    )
+    if args.json:
+        lines = [line for _, line in news] + announcements
+        print(json.dumps({"messages": lines, "quota": dict(advice)}, indent=2))
+        return
+    if args.verbose:
+        status = [summary_line(agent, item) for agent, item in advice]
+        lines = (status or ["No quota reading found."]) + [line for _, line in news]
+    else:
+        # Scheduled checks repeat; tell each piece of news at most once a day.
+        lines = unseen(news, args.private / "check-state.json", now)
+    lines += announcements
+    if lines:
+        print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main()

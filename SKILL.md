@@ -6,11 +6,20 @@ description: Check whether spare subscription quota is worth using, set up a pri
 # Top Mode
 
 Top Mode helps the user spend spare subscription capacity on useful work without
-losing control. You have four jobs: **set up**, **check**, **run** and **report**.
+losing control. You have four jobs: **set up**, **check**, **run** and **report**,
+plus installing the package when asked.
 The [README](README.md) shows how to explain this to people. Field and command
 details live in the [profile, quota and report contract](references/profile-contract.md).
 
-Run the scripts from this package's root with `python3 -B scripts/<name>.py`.
+The scripts live next to this file: run them as `python3 -B <this folder>/scripts/<name>.py`.
+
+## 0. Install (when asked)
+
+"Install Top Mode from <url>": clone it to `~/.top-mode` (or `git -C ~/.top-mode
+pull` if it is already there), then run `python3 -B ~/.top-mode/scripts/install.py`
+and relay its output. It links the package into `~/.codex/skills/top-mode` and
+`~/.claude/skills/top-mode` for the agents that exist and never replaces anything
+else. Tell the user to open a new session and ask to set up Top Mode.
 
 ## Rules that always apply
 
@@ -59,23 +68,28 @@ A request that only reviews or changes this package does not need it.
 
 ## 2. Check whether it's worth it
 
-When the user asks, or before suggesting a run:
+When the user asks, run:
 
 ```sh
-python3 -B scripts/usage_report.py quota            # Codex: local logs
-python3 -B scripts/usage_report.py quota --file F   # saved Claude status line, or a native
-                                                    # Codex payload with --observed-at TIME
+python3 -B scripts/check.py --verbose
 ```
 
-Explain the answer in one or two sentences: how much of the weekly allowance is
-used, when it renews, and the suggestion (`consider_top_mode`, `nothing_to_do`,
-`refresh_or_wait` or `unknown`). Which source to use per agent is in
-[quota readings](references/profile-contract.md#quota-readings). If no reading is
-possible, say so and offer a run with a clock deadline only.
+It reads every quota source on this machine (Codex local logs, a saved Claude
+Code status line) plus the optional announcement watch. Explain the answer in one
+or two sentences: how much of the weekly allowance is used, when it renews, and
+whether a run is worth it. If there is no reading, say so and offer a run with a
+clock deadline only. Details per source are in
+[quota readings](references/profile-contract.md#quota-readings); a native Codex
+payload, which also lists saved resets, goes through
+`usage_report.py quota --file F --observed-at TIME`.
 
-Expiring saved resets come from a native Codex payload: alert once per expiry
-date, then at most once a day while still available. Announced resets are an
-optional add-on described in [announcements](references/announcements.md).
+**Proactive check.** When the user wants to be told, schedule a recurring task
+with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
+scheduled task, not a cloud routine, which cannot see this machine). Use the
+cheapest model, every 4 hours if the announcement watch is set up and daily
+otherwise. The task runs `check.py` without `--verbose`. Empty output means end
+quietly; otherwise tell the user those lines and offer to start Top Mode. A
+scheduled check never starts work by itself.
 
 ## 3. Run
 

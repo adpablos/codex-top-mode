@@ -5,6 +5,10 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Added one-step install (`scripts/install.py`) that makes Top Mode a skill in
+  Codex and Claude Code, and `scripts/check.py`, a quiet check that combines
+  quota, expiring saved resets and announcements, speaks only when there is
+  something new and is meant to run on the agent's own scheduler.
 - Lowered the minimum to Python 3.9, so the Python that ships with macOS works.
   CI now checks lint, format and workflow security, runs the tests on Python
   3.13 and on macOS's own Python 3.9, enforces 85% coverage, verifies
