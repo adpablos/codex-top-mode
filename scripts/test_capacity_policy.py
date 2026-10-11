@@ -117,6 +117,15 @@ class MainTests(unittest.TestCase):
         p["authorization"].update(approvedAt=now, validUntil=None)
         self.assertTrue(self.run_main(p)["authorizationActive"])
 
+    def test_approval_is_active_from_approval_until_just_before_expiry(self):
+        p = profile()
+        start = capacity_policy.epoch(p["authorization"]["approvedAt"])
+        end = capacity_policy.epoch(p["authorization"]["validUntil"])
+        for now, active in ((start - 1, False), (start, True), (end - 1, True), (end, False)):
+            clock = patch.object(capacity_policy.time, "time", return_value=now)
+            with self.subTest(now=now), clock:
+                self.assertEqual(self.run_main(p)["authorizationActive"], active)
+
     def test_refuses_an_invalid_profile_or_half_a_question(self):
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
@@ -126,10 +135,6 @@ class MainTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 self.run_main(profile(), "--action", "merge")
         self.assertIn("Profile refused", stderr.getvalue())
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ValidationTests(unittest.TestCase):
@@ -178,3 +183,7 @@ class ValidationTests(unittest.TestCase):
             extra.update(id=f"task-{number}", owner=f"owner-{number}", priority=number)
             p["backlog"].append(extra)
         self.assertEqual(ready_work(p), ["document-recovery", "task-2"])
+
+
+if __name__ == "__main__":
+    unittest.main()
