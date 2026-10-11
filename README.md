@@ -21,19 +21,38 @@ no work, creates no schedule and changes no global agent settings. [MIT license]
    ```
 
 2. **Approve the setup:** projects, actions and limits. The agent prepares private
-   files; you need not edit JSON. Disabled fictional examples grant no permission.
+   files outside Git and saves their location for future sessions; you need not
+   edit JSON. Disabled fictional examples grant no permission.
 3. **Start a manual session**, after approving that setup. For example:
 
    ```text
-   Start manual Top Mode for 30 minutes on the approved pending documentation
-   tasks. Keep existing owners and stay within my approved actions and limits.
-   Show progress at checkpoints, then stop new assignments and give me a report.
+   Start Top Mode for 30 minutes using my saved setup.
    ```
 
 Manual mode needs **no announcement and no reset**. Quota means your usage
 allowance. Without native quota tools, use supervised work with a clock deadline;
 automatic weekly stopping is unavailable. A URL installs nothing: the agent
 must read the linked files. See [AGENTS.md](AGENTS.md).
+
+## Your setup stays private
+
+The shared skill explains **how to work**. Your private profile defines **your
+projects, exclusions, priorities, permissions, models and limits**. Private run
+state records progress. Updating this package does not replace your profile.
+
+At first setup, the agent saves a small reference at
+`~/.codex-top-mode/binding.json` in your user home directory. It contains only
+the absolute location of your profile, never a copy of your settings. Both files
+must stay outside Git worktrees, including ignored folders. On later sessions,
+ask your agent to read this package and use your saved setup; it retrieves that
+reference before preparing work. You do not need to repeat your rules.
+
+A missing or invalid reference needs setup or repair, not guessed permissions.
+Changing to a different profile needs your explicit choice. The reference does
+not start work or grant authority; your approved scope and current host permissions
+still apply. It works on the same user account and host; it is not cloud sync or
+automatic installation into every agent. See the
+[private binding instructions](references/profile-contract.md#private-profile-binding).
 
 ## One place to coordinate
 

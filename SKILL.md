@@ -22,6 +22,15 @@ sample authorization are not permission. No personal path, dashboard, project
 manager or cloud service is required. Copy/export only the versioned skill
 folder; keep real profiles, observations and state outside it.
 
+Before preparing a new setup or executing a later session, recover the user's
+profile with `python3 -B scripts/profile_binding.py locate` from this package.
+At approved first setup, save the binding as described in the
+[private binding contract](references/profile-contract.md#private-profile-binding).
+Read the located profile and check its approved scope, validity and current
+host/action gates. A short start request inherits that setup; it does not widen
+permissions. Missing, invalid or conflicting bindings require focused setup or
+repair; never silently use an example, another profile or conversation memory.
+
 Refresh backlog objectives, benefit, completion criteria, current owner,
 readiness and blockers from approved local sources. Prioritize existing pending
 closures. Count all active threads, preserve active owners, and check each
@@ -62,7 +71,8 @@ percentage/duration/reset time, available count, and credit `status`, grant and
 expiry times (Unix seconds). `snapshot(payload, observed_at)` in
 [scripts/usage_monitor.py](scripts/usage_monitor.py) removes identities,
 balances and credentials. Save only sanitized readings and minimal state in a
-private ignored location; use a new baseline if the host/account binding changes.
+private location outside Git worktrees; use a new baseline if the host/account
+binding changes.
 
 ## Manual top mode
 

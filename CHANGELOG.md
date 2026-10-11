@@ -5,6 +5,10 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Added a private profile reference that setup saves and later sessions recover,
+  with a short activation request, explicit profile replacement and refusal of
+  Git worktree locations. Package updates preserve personal settings.
+
 - Simplified first-time setup and the coordinator/status/stop explanation with
   an accessible diagram and fictional conversation. Distinguished included files,
   active work, announcement watch and saved reset reminders. Added a short agent
