@@ -542,10 +542,14 @@ class MainTests(unittest.TestCase):
         missing = json.loads(self.run_main("quota", "--codex-home", str(self.home / "none")))
         self.assertEqual(missing, {"suggestion": "unknown", "reasons": ["no_quota_reading"]})
 
-    def test_invalid_times_are_rejected(self):
+    def test_invalid_or_missing_times_are_rejected(self):
+        bare = self.home / "bare.json"
+        bare.write_text(json.dumps({"rate_limits": {"seven_day": {"used_percentage": 10}}}))
         for argv in (
             ("tokens", "--since", "yesterday"),
             ("tokens", "--since", "2033-05-18T10:00:00Z", "--until", "2033-05-18T09:00:00Z"),
+            ("quota", "--file", str(bare)),
+            ("quota", "--file", str(bare), "--observed-at", "noon"),
         ):
             quiet = contextlib.redirect_stderr(io.StringIO())
             with self.subTest(argv=argv), self.assertRaises(SystemExit), quiet:
