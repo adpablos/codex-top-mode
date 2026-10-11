@@ -468,7 +468,7 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(suggestion(75, 36), "consider_top_mode")  # exactly 25% left, 36 h
         self.assertEqual(suggestion(75.5, 36), "nothing_to_do")
         self.assertEqual(suggestion(75, 36.5), "nothing_to_do")
-        self.assertEqual(suggestion(75, 0), "nothing_to_do")  # renewing now
+        self.assertEqual(suggestion(75, 0), "refresh_or_wait")  # renewed: read again
         self.assertEqual(suggestion(75, 36, age_hours=6), "consider_top_mode")
         self.assertEqual(suggestion(75, 36, age_hours=6.5), "refresh_or_wait")
 
