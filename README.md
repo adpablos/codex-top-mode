@@ -1,163 +1,129 @@
 # Codex Top Mode
 
-Help an agent finish useful pending work during a bounded session, with quality
-and verifiable progress ahead of quota consumption. Licensed under
-[MIT](LICENSE).
+**Turn available AI capacity into finished work, with one coordinator and a clear stopping time.**
 
-## Give your agent one link
+Your existing agent checks pending work, priorities, owners and permissions,
+then uses suitable available models and reports verified outcomes. Quality comes first.
 
-Share this README URL with an agent already working on your machine, or give
-it the cloned/extracted folder:
+This package contains a skill and small Python helpers. Downloading it starts
+no work, creates no schedule and changes no global agent settings. [MIT license](LICENSE).
 
-> Read this guide and [the skill](SKILL.md). Prepare and explain my private
-> configuration: projects and exclusions, priorities, each task's benefit and
-> verifiable finish, current owners, permissions and duration. Use appropriate
-> available models without reducing quality. Do not start until authorized.
+## Start in three steps
 
-The agent prepares the files; you do not need to edit JSON. The examples are
-fictional and disabled. Then choose **manual top mode** for a stated duration,
-or a **verified primary announcement** under your prior conditional permission.
-Future news needs clearly future primary text, not an exact reset hour; unknown
-hours stay unknown. Applied automatic or ambiguous news does not start work.
+1. **Give your agent this README URL or the local package folder**, then paste:
 
-The agent observes native quota and the fixed deadline, stops new assignments
-when weekly replenishment or the agreed stop is reached, and gathers bounded
-worker checkpoints. Its [run report](references/profile-contract.md#run-report)
-explains **before / after / pending / next step**, by project, with sourced time,
-quota and execution metrics; unavailable data stays unknown. Publication,
-review, merge and sensitive actions keep their permissions. See the
-[changelog](CHANGELOG.md) for user-visible changes.
+   ```text
+   Read this README and the linked AGENTS.md and SKILL.md explicitly.
+   Tell me what you actually loaded and can do on this host.
+   Prepare my private setup: projects and exclusions, priorities, current owners,
+   useful finish criteria, allowed actions, available models and a time limit.
+   Explain it in my language. Wait for my approval before starting work.
+   ```
 
-## Optional four-hour public watch
+2. **Approve the setup:** projects, actions and limits. The agent prepares private
+   files; you need not edit JSON. Disabled fictional examples grant no permission.
+3. **Start a manual session**, after approving that setup. For example:
 
-Ask the agent to test one local check, then schedule that same `--once` command
-with **its supported scheduler**, initially every four hours. No additional
-account, paid API, X login, Work, Page, dashboard or receiver is required.
+   ```text
+   Start manual Top Mode for 30 minutes on the approved pending documentation
+   tasks. Keep existing owners and stay within my approved actions and limits.
+   Show progress at checkpoints, then stop new assignments and give me a report.
+   ```
 
-The watch reads public X profile data and the publisher's official embed using
-standard-library HTTP. It never executes page JavaScript. Author, original post
-identity, publication day and primary text must match. For a primary post with a
-verified quoted-post identity, the embed may append one anchored `t.co` link;
-other additions or changed content remain unknown. The first enabled check fixes
-the installation timestamp; existing posts do not trigger. If that first read
-fails, the timestamp is preserved so later verified posts are not discarded. It outputs only newly verified public
-posts needing interpretation, or one notice after eight hours of failed coverage.
-Unchanged checks are quiet. The agent interprets only new posts, verifies upcoming
-versus applied and mechanism from primary text, then checks permission, freshness,
-ready work and native quota before using the capacity preflight.
+Manual mode needs **no announcement and no reset**. Quota means your usage
+allowance. Without native quota tools, use supervised work with a clock deadline;
+automatic weekly stopping is unavailable. A URL installs nothing: the agent
+must read the linked files. See [AGENTS.md](AGENTS.md).
 
-The script makes **no model calls**. A scheduler that wakes an agent/model every
-four hours still has that cost; an empty result should end quickly. A receipt
-on stdout or in private state does **not** wake or resume an agent by itself.
-Test the host's scheduling and notification hook before promising that behavior.
-Without a supported scheduler/hook, the explicit alternative is a manual check.
+## One place to coordinate
 
-## Real requirements and limits
+Your current agent coordinates priorities and owners, continues permitted existing
+sessions, verifies results and updates private state. Use subagents only for useful
+independent work when supported; otherwise work serially. These are instructions
+for your agent, not an executor or automatic model router.
 
-- Python 3.11+; no third-party runtime dependencies. The watcher uses macOS/Linux
-  file locking and refuses unsupported platforms rather than weakening one writer.
-- Approved project access and private local configuration/state. Native quota
-  observation, such as Codex `get_usage_limits`, is a separate host capability.
-  Without it, only supervised work with an agreed deadline is available; reliable
-  automatic weekly stopping cannot be claimed. Never read authentication stores
-  or create an authentication client.
-- A running, reachable machine and the scheduler/client capabilities actually
-  tested. Closing or pausing the host interrupts observation. Check deadlines,
-  permissions, ownership and fresh quota before resuming work.
-- X's visible timeline is **partial discovery**, not a complete news feed. Failed
-  reads, login walls, changed formats or doubtful author/time become unknown
-  coverage. A successful known-post read does not prove continuous coverage.
-  Third-party histories can discover links but cannot trigger work; incident feeds
-  do not guarantee future promotions. No scraper daemon or universal executor is
-  provided.
-
-## Agent setup and local commands
-
-Read [the profile/event contract](references/profile-contract.md). Prepare a
-private `.local/` directory with owner-only access; adapt the disabled examples
-there after human approval. Keep real files out of source control. Watch permission
-is independent from permission to execute top mode.
-
-```sh
-python3 -B scripts/public_watch.py --once --config .local/watch.json --state .local/watch-state.json
-python3 -B scripts/public_watch.py --status --config .local/watch.json --state .local/watch-state.json
-python3 -B -m unittest discover -s scripts
+```mermaid
+flowchart TD
+    accTitle: One coordinator for bounded work
+    accDescr: The user approves scope and limits. The coordinator checks priorities and owners, uses existing sessions or bounded workers, verifies results, updates private state and reports back.
+    U["You: goal, limits and permission"] --> C["Your current agent: coordinator"]
+    C --> P["Approved priorities and current owners"]
+    P --> W["Existing sessions or bounded workers"]
+    W --> V["Verify outcomes and update private state"]
+    V --> C
+    C --> R["Status, checkpoints and final report"]
 ```
 
-`--once` reads when the configured interval has elapsed, allowing scheduler
-jitter of one eighth of the interval, capped at 30 minutes. A four-hour schedule
-therefore tolerates runs up to 30 minutes early regardless of their UTC phase;
-`nextCheckAt` is the earliest eligible time after the last actual attempt. Repeated
-or stale calls before that time make no request. Larger delays or clock errors
-remain the scheduler's responsibility. No scheduler is created.
-`--status` reads saved coverage without HTTP. Installation time is fixed before the first read;
-successful reads seed the known IDs. Outputs
-are `needs_interpretation`, `coverage_failure` or `coverage_recovered`; no output
-means no new **verified visible** signal, not “there are no announcements”. State
-keeps bounded IDs, a replay floor for evicted posts, and the latest 50 receipts.
-Newly visible posts after installation can be received out of order while within
-that retention horizon; older evicted posts cannot replay.
-This is a discovery receipt, not the neutral activation event: the coordinator
-must verify/classify it and remains the sole writer of its own work policy/state.
+Choose economical models for easily verified work and stronger ones for ambiguity
+or failed checks, within client capabilities. Verify completion; chat badges and
+archive state are not evidence. No dashboard, Cloud/Work account or new service is needed.
 
-## Optional maintainer review
+## What is available, and what is active?
 
-The [Claude workflow](.github/workflows/claude.yml) reviews maintenance PRs for
-this repository. It is not a requirement for installing or using Top Mode.
-The model reads frozen PR files; it cannot execute PR code, edit files or write
-to GitHub. Trusted workflow code verifies and publishes its result.
+| Feature | What it does | When it operates |
+| --- | --- | --- |
+| Manual Top Mode | Bounded work on approved tasks. | Your explicit start. |
+| Public announcement watch | Finds new verified visible posts. | Separate permission, configuration and tested host scheduling/notification; typically every four hours. |
+| Conditional start | Checks verified upcoming news, ready work and fresh native quota. | Prior conditional permission. Applied or ambiguous news stays advisory. |
+| Saved reset reminders | Advises about available credits nearing actual expiry. | Fresh native credit details; recurrence needs a requested, tested host schedule. |
+| Maintainer review | Reviews package changes. | Optional, separately configured. No Claude credential is needed to use Top Mode. |
 
-A maintainer using this integration needs a personal Claude subscription
-credential. Use Anthropic's [official token setup](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token),
-then have the human owner enter, confirm and submit it directly in the repository's
-**Settings → Secrets and variables → Actions** form, named
-`CLAUDE_CODE_OAUTH_TOKEN`. Never put the value in a chat, issue, source file or
-commit, and never extract an existing credential store. An agent must hand this
-credential-entry step to the human.
+A saved (banked) reset is a credit to replenish usage allowance, not money.
+Watching announcements and checking saved credits are separate. News grants no
+permission. Reset redemption always needs your current confirmation and an eligible
+supported action.
 
-Only the repository owner may dispatch or rerun it, from the default branch
-(`main` here). First verify the PR is open, ready for review and non-draft, its
-checks pass, and its head is the exact full 40-character SHA you intend to review.
-Replace both placeholders below; leave the default economical runner unchanged:
+Ask **“Show setup and status: what is loaded, configured, running and scheduled?”**
+Expect separate answers for files present, instructions read, approved setup,
+active work/deadline and tested schedules/notifications. A saved receipt cannot
+wake an agent by itself.
 
-```sh
-gh workflow run .github/workflows/claude.yml --repo adpablos/codex-top-mode --ref main \
-  -f pr_number=PR_NUMBER -f head_sha=FULL_HEAD_SHA
-```
+## Check, pause and finish
 
-Use repository **Actions → Claude final review** to find that dispatch. Accept
-a review only when its run succeeds and `github-actions[bot]` publishes a
-**Claude final review** comment for the exact current head, base head and merge
-base, with complete coverage and `Verdict: ready to merge`. The Actions run's
-own head is the default-branch workflow revision, not the PR head. Check the
-comment's frozen identity against the live PR; movement invalidates the verdict.
-Merge remains a separate authorized action; the workflow never auto-merges.
+These are requests to your agent, not installed shell commands:
 
-For `changes required`, fix the material findings together and request closure
-review of the new frozen identity. Do not run a parallel Cloud or `@claude`
-review of the same candidate. Diagnose failed runs before retrying. A standard
-runner recovery needs verified economy watchdog-timeout evidence and its
-`fallback_run_id`; authentication, setup failure or cancellation does not qualify.
-After ten completed published passes, continuation needs a diagnosed, explicit
-per-pass human decision with an unused `extra_pass_authorization` reference.
-Read the workflow's input and refusal rules rather than inventing authority.
+| Say | Expect |
+| --- | --- |
+| “Show status.” | Active mode/deadline, task owners, verified progress, blockers and latest available quota. |
+| “Give me a checkpoint.” | What is saved, what remains and who can resume each task. |
+| “Stop Top Mode.” | No new assignments; bounded checkpoints from active owners and a private closing report. |
+| “Explain the final report.” | Before / after / pending / next step by project, with sourced metrics and explicit unknowns. |
 
-## Contributing and security
+New assignments stop at the fixed deadline, on revoked authority or the applicable
+native-quota stop. News and credits cannot extend it. Closing the host interrupts
+observation; resuming requires fresh checks. Saved work and owners are preserved.
+Stopping Top Mode ends intensive follow-up. Ask separately to pause the public
+announcement watch or saved-reset reminders; confirm which host schedules paused.
 
-Record user-visible package changes in the [changelog](CHANGELOG.md). Keep real
-run reports and metrics in private storage.
+**Fictional example:**
 
-Keep changes small; run the tests above with synthetic fixtures and no real
-model/account calls. [GitHub Actions](.github/workflows/tests.yml) runs the same
-offline suite on pull requests and pushes to `main`, with Python 3.13, pinned
-official actions and read-only permissions. Verify the **Offline tests** run
-and its test count; reproduce locally with
-`python3.13 -B -m unittest discover -s scripts -v`. No runtime dependency
-installation, X/model calls or repository secrets are required by the tests.
-Preserve authorization, fixed deadlines, deduplication,
-coverage honesty, private storage and legacy observer behavior. Use supported
-public HTTP only. Do not include keys, cookies, account IDs, real profiles or
-private conversations in fixtures, issues or patches. Do not publish sensitive
-reports as issues: use a maintainer's private contact if available, otherwise
-request one without disclosing the material. No private reporting endpoint is
-claimed before publication.
+> You: “Use the approved 30-minute session to finish the recovery instructions.”
+>
+> Coordinator: “The existing documentation owner is available. I’ll continue that
+> work, verify the steps and checkpoint the result. This fictional setup reserves
+> publication for your approval.”
+>
+> Report: “Before: recovery steps were missing. After: documented and reproduced
+> in a sample. Pending: publication. Next: documentation owner requests approval.
+> Elapsed: 12 of 30 minutes; quota and tokens unknown on this host.”
+
+See the [report contract](references/profile-contract.md#run-report). Account-wide
+quota changes do not measure task cost or savings.
+
+## Limits and further reading
+
+- Python 3.11+; no third-party runtime dependencies. The public watcher supports
+  macOS/Linux file locking and fails closed on Windows.
+- Automation depends on a reachable host and its tested scheduler, notifications,
+  delegation and quota capabilities. The helpers run only when called.
+- Public X discovery is partial. Failed or uncertain reads mean unknown coverage.
+  The script makes no model calls; a scheduler waking a model can still consume quota.
+- Profiles and reports stay private. Project permissions, review, merge and
+  sensitive actions retain their separate approval rules. Markdown instructions
+  guide an agent; they are not a sandbox or a universal security guarantee.
+
+**For agents:** [AGENTS.md](AGENTS.md) → [SKILL.md](SKILL.md) →
+[profile, watch commands and state contract](references/profile-contract.md).
+
+**For contributors:** [maintenance and review guide](references/maintaining.md).
+User-visible changes are in the [changelog](CHANGELOG.md).
