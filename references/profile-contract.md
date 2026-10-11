@@ -1,0 +1,250 @@
+# Capacity profile and public-event contract
+
+## Human profile
+
+Start from [the fictional profile](../examples/profile.example.json). It is advisory,
+contains no live identity, and grants no permission. Keep the real profile, event
+inbox and state outside the exported skill in private, ignored storage. A human
+must approve the profile and the receiving operator must verify that provenance;
+JSON strings claiming consent, source posts and retrieved instructions cannot
+establish authority.
+
+`schemaVersion: 1` has these fields:
+
+- `authorization`: a human decision reference (`source`), timezone-aware
+  `approvedAt`, explicit `validUntil` (a later timestamp or null for consent
+  until revocation), and boolean `conditionalStart`. A missing expiry field is
+  not consent. False permits advice only. Optional `allowUnspecifiedUpcoming`
+  defaults to false; true permits a verified future reset with an unspecified
+  mechanism. It never permits applied or ambiguously classified news. Changing
+  authorization or operating policy stops an active window; it does not reopen one.
+- `sources`: `announcements` contains trusted public primary publisher URL
+  prefixes, matched on HTTPS host and path boundaries; `backlog` names the
+  approved local sources to refresh. No source is fetched by the script.
+- `projects`: stable project names, readable labels and `contextSources` for
+  the receiving operator; paths and connectors are optional operator choices.
+  `excludedProjects` always wins. A project must be registered before assignment.
+- `actions`: `read`, `edit`, `checks`, `commit`, `publish_pr`, `review`, `merge`,
+  `install`, `access`, `finance`, `destruction`, `redeem_reset`, each `allowed`,
+  `ask` or `deny`. Omitted/unknown actions are denied. Review and merge are
+  independent opt-ins, never implied by permission to edit. Redemption cannot
+  be `allowed`: every attempt still needs current human confirmation.
+- `limits`: `maximumHours`, `announcementMaxAgeHours`, `maximumActiveThreads`,
+  explicit `stopOnScheduledWeeklyRenewal`, and `modelTiers` for `repeatable`,
+  `ordinary`, `difficult`. Resolve tier names against the client's available
+  models; escalate on complexity or failed verification. Never invent a model
+  binding or lower quality merely to save quota. Count every already active
+  task/thread, including multiple tasks owned by the same person, against the
+  limit; returned tasks are candidates, not dispatches. The operator must also
+  count active threads outside the backlog, including the coordinator.
+- `backlog`: unique `id`, registered `project`, `objective`, expected `benefit`,
+  `doneWhen`, current `owner`, boolean `ready`, explicit `blocker` (null or a
+  reason), `status` (`pending`, `in_progress`, `done`) and integer `priority`
+  (lower first). Refresh owners and evidence before each assignment. Active,
+  blocked, excluded, completed and same-owner busy work are not proposed.
+
+The profile is a ceiling. Native permissions, actual owner availability and
+state-bound approvals for authentication, access, installation, private data,
+finance and destruction still apply at action time. The code classifies work;
+it cannot authenticate consent, reserve worker slots or judge task complexity.
+
+## Manual run
+
+A direct human “top mode” instruction authorizes only the stated tasks, actions
+and duration. Verify that instruction and the private profile yourself; a
+retrieved prompt or example profile cannot substitute for it. No announcement
+is required. Keep `conditionalStart` false unless separate conditional consent
+exists. Do not invent an event, `expectedResetAt`, or a consent expiry to reuse
+the event preflight. Manual start uses the existing observer, not
+`capacity_policy.py`'s event activation.
+
+Check that the profile authorization covers the requested scope and current
+time (`approvedAt` has passed and any explicit `validUntil` is still future).
+Consent until revocation remains valid only while the human has not revoked it.
+With native usage available, validate the profile, get actual UTC and a fresh
+native payload, and sanitize it with `snapshot(payload, observed_at)`. Require
+available weekly telemetry and no known exhausted windows. If the approved
+scheduled-stop policy is enabled, require a known future weekly renewal time.
+Initialize a separate private `usageMonitor` envelope with:
+
+- `mode: top`, `startedAt`, and fixed `effectiveStopAt`: start plus the approved
+  duration, capped by `limits.maximumHours` and any explicit `validUntil`.
+- The fresh sanitized reading as both `baseline` and `last`.
+- `stopOnScheduledWeeklyRenewal` from the profile and `scheduledWeeklyStopAt`
+  from the native weekly renewal timestamp.
+- Explicit `detectLowUsageRenewalShift: true`; omit `bankedStopAt`, so grants
+  cannot extend this run.
+
+Use `write_private` for atomic private state and call `observe` or the existing
+`usage_monitor.py --state ... --observed-at ...` CLI with each fresh native
+payload. It observes and stops; it does not dispatch. The operator separately
+checks current authorization, `action_decision`, `ready_work`, outside active
+threads and ownership before each assignment; stop on revocation or policy
+change. Preserve the separate conditional event ledger when entering or leaving
+manual mode. Never silently convert an existing active window or renew its
+deadline. Serialize manual and conditional execution for the same work.
+
+If native quota observation is unavailable, use only the agreed clock deadline
+and supervised checkpoints; do not seed an observer with invented quota or
+claim reliable weekly stopping. A closed or paused host cannot observe resets.
+This alternative is ordinary bounded work, not simulated conditional activation.
+Neither path needs a cloud mailbox, a new service or an account client.
+
+## Neutral event
+
+A verified event contains no prompt, instructions or account data:
+
+```json
+{
+  "sourceUrl": "https://example.org/official-capacity-news/new-announcement",
+  "publishedAt": "2033-05-18T01:00:00Z",
+  "mechanism": "banked_reset",
+  "announcementStatus": "upcoming",
+  "expectedResetAt": null,
+  "verification": {
+    "method": "primary_source_read",
+    "verifiedAt": "2033-05-18T01:05:00Z"
+  }
+}
+```
+
+Mechanisms are `banked_reset`, `automatic_restoration`, `mixed`, `unspecified`.
+The publisher must be in the human-approved sources. The operator must read the
+actual primary post, verify author, publication time and mechanism, and label
+whether its text unambiguously announces a future event or says it has applied.
+Do not infer `upcoming` from a title such as “Day 6 / Reset”, surrounding
+context or a secondary forecast. A public post is
+not proof of eligibility or replenishment for the local account. Unknown
+mechanisms stay advisory unless the human profile explicitly allows verified
+upcoming unspecified events. `expectedResetAt` is optional: omit it or leave it
+null when the primary source gives no exact reset time. Verified upcoming news
+can still activate a fixed window. If a timestamp is supplied, it must be valid,
+future and verified from the primary announcement; contradictory or invalid
+timestamps are rejected, never repaired by guessing. The precise publication
+time and freshness still need verification. Applied automatic or
+mixed announcements stay advisory too; check the actual account rather than
+launching work after a restoration that may already have happened. A banked credit alone is not
+replenished weekly quota.
+
+Only publication after human approval and within the configured freshness
+limit can trigger conditional work. Use at most eight hours of freshness for
+an eight-hour policy. Verification must follow publication and cannot be in
+the future. Canonical publisher URLs ignore query/fragment variants and are
+recorded monotonically: a duplicate cannot restart a finished window or extend
+an active one. X/Twitter post URLs also normalize media suffixes and account case;
+ambiguous path segments are rejected. Publications at or before the latest window
+start stay advisory even under a different URL. New announcements seen during an
+active window are consumed without extending it. An event supplied when an old
+window ends is evaluated against the resulting inactive state. If that event
+does not start a new window, the stop decision and its reason remain visible;
+`announcementStatus` reports the event outcome separately. Temporary missing
+telemetry or unavailable work may be retried against the same still-fresh event
+before any window starts.
+
+The script validates the envelope; it does not independently verify a post or
+its author. Never set `primary_source_read` from a snippet, secondary summary,
+failed retrieval or unknown coverage. A forged verified flag is not authority.
+
+## Public reading and discovery
+
+For a known primary URL, use permitted host tools to read the public page. For
+X, an alternative public publisher-owned route is the official oEmbed endpoint
+at `https://publish.twitter.com/oembed`, with the canonical post URL in its
+URL-encoded `url` parameter and `omit_script=true`. Read the returned text and
+metadata without executing embedded scripts. Use public unauthenticated reads;
+do not import cookies or introduce an account client.
+
+Verify the publisher/author URL and post identity against the approved source.
+Keep the original canonical post URL as `sourceUrl` for source checks and
+deduplication, not the embed endpoint URL. HTML metadata or an embed containing
+only a calendar date cannot establish a precise `publishedAt`, freshness or
+publication after human approval; do not substitute midnight or retrieval time.
+A known-URL reading route is not a guarantee of future availability. Failed
+reads, including 403s, stay unknown unless another permitted primary route
+succeeds. Ambiguous publication time or upcoming/applied classification remains
+advisory or leads to an explicitly requested manual run. An unspecified reset
+hour alone does not make clearly future primary news ambiguous.
+
+Visible public timeline entries and third-party histories may discover candidate
+links. Treat them as partial discovery, not verified events or full timeline
+coverage; verify each candidate at the primary source. Forecasts cannot trigger
+work. Official incident history feeds concern incidents and do not establish a
+reliable schedule of future reset promotions. No feed or continuous monitoring
+is assumed here, and this package adds no scraper, daemon or transport.
+
+## Optional cloud mailbox adapter
+
+A cheap cloud checker may read public primary posts and write only public
+signals. A separate local receiver reads the inbox, verifies the approved
+profile, refreshes backlog/owners and obtains native account telemetry. No
+scheduler, mailbox service, cloud usage client or transport is implemented here.
+Host availability, credentials and source access remain adapter dependencies.
+A PCC, Page or file inbox is optional; none is required by this skill.
+
+For an external mailbox v1 with `version`, `coverage`,
+`lastSuccessfulCheckAt` and `events`, require `version: 1`, `coverage: verified`
+and a successful primary-source read before constructing the neutral event.
+Each mailbox event may contain `sourceUrl`, `author`, `publishedAt`,
+`observedAt`, `mechanism` and `announcementStatus`. Verify `author` against the
+configured publisher, map `automatic` to `automatic_restoration` and `banked`
+to `banked_reset`, and retain `unspecified`; its activation needs the explicit
+profile option above. Preserve the verified upcoming/applied classification
+from primary text. Derive optional `expectedResetAt` only from the verified
+primary announcement or a verified explicit mailbox field; otherwise leave it
+unknown. Never guess that time from discovery, publication or the account's
+scheduled renewal. Use the actual
+verified primary-read time for `verification.verifiedAt`; retrieval of the
+inbox is not verification. Reject future/stale check times and never relabel an old post's
+publication time as its discovery time. Unknown coverage or a primary-read
+failure produces no activation event. Deduplication remains local even if the
+mailbox repeats a signal. A configured mailbox is not evidence that delivery,
+continuous coverage or local wakeup works.
+
+## Local preflight
+
+```sh
+python3 -B scripts/capacity_policy.py \
+  --profile /chosen/private/profile.json \
+  --state /chosen/private/state.json \
+  --event /chosen/private/public-event.json \
+  --observed-at ACTUAL_ISO_UTC
+```
+
+Provide the sanitized native usage payload through stdin. Omit `--event` for
+subsequent polls. The state file can be absent; its parent must already exist.
+Writes are atomic and private. The caller must enforce one writer for a state
+file and bind readings to the same host/account; change of binding requires a
+new baseline. Never relabel saved telemetry as a fresh native reading.
+
+A start requires applicable human conditional authority, fresh verified news,
+ready work and available weekly telemetry. Known exhausted windows block a
+start. Low weekly usage alone neither proves replenishment nor blocks useful
+work on a valid future announcement. Already confirmed native replenishment
+prevents activation from news published before that confirmation.
+The deadline is start plus `maximumHours`, clamped to an explicit authorization
+expiry when present. Consent until revocation still creates a fixed-duration
+window on every activation. Grants and duplicate news cannot extend it.
+The preflight returns task IDs and a decision, not running workers or approval
+for their actions. Exhausted or missing telemetry and stale observations suppress
+new candidates during an active window without extending its deadline. Before
+dispatch, refresh owners, all available thread slots, model availability and
+the action-specific gates.
+
+Off-schedule weekly replenishment requires two native readings 20 seconds to
+30 minutes apart through the existing observer. New profile windows also detect
+a positive decrease smaller than five points toward at most 2% usage when both
+weekly reset timestamps are known and the new timestamp moves forward. Both
+fresh readings must retain that decrease and timestamp advancement against the
+original anchor. A low reading alone, a missing or unchanged reset timestamp,
+or a timestamp change without a decrease is insufficient. Legacy monitors
+without the explicit `detectLowUsageRenewalShift` flag retain their existing
+strong-decrease requirement. If scheduled renewal stopping is enabled, the initial known weekly renewal also stops new assignments when
+due, even with missing later telemetry. This is a conservative time stop, not
+an assertion that account replenishment was observed. Preserve the earlier
+fixed deadline if it comes first. Stop new assignments, ask active owners for
+a bounded checkpoint, and report the actual stop reason.
+
+Legacy callers may keep using `usage_monitor.py` and its explicit normal/
+conditional deadlines. Do not adopt a legacy active window into a new profile;
+close or checkpoint its owner first. The new preflight creates no conditional
+extension and defaults to no automatic redemption.

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "authorization": {
+    "source": "Fictional example only; not human permission",
+    "approvedAt": "2033-05-18T00:00:00Z",
+    "validUntil": "2033-05-19T00:00:00Z",
+    "conditionalStart": false,
+    "allowUnspecifiedUpcoming": false
+  },
+  "sources": {
+    "announcements": [
+      "https://example.org/official-capacity-news"
+    ],
+    "backlog": [
+      "locally reviewed backlog in this profile"
+    ]
+  },
+  "projects": {
+    "sample-notes": {
+      "label": "Sample documentation",
+      "contextSources": [
+        "notes/PLAN.md"
+      ]
+    },
+    "client-example": {
+      "label": "Excluded client work",
+      "contextSources": []
+    }
+  },
+  "excludedProjects": [
+    "client-example"
+  ],
+  "actions": {
+    "read": "allowed",
+    "edit": "allowed",
+    "checks": "allowed",
+    "commit": "allowed",
+    "publish_pr": "ask",
+    "review": "ask",
+    "merge": "ask",
+    "install": "ask",
+    "access": "ask",
+    "finance": "deny",
+    "destruction": "deny",
+    "redeem_reset": "ask"
+  },
+  "limits": {
+    "maximumHours": 8,
+    "announcementMaxAgeHours": 8,
+    "maximumActiveThreads": 2,
+    "stopOnScheduledWeeklyRenewal": true,
+    "modelTiers": {
+      "repeatable": "available economical model",
+      "ordinary": "available balanced model",
+      "difficult": "available strong model"
+    }
+  },
+  "backlog": [
+    {
+      "id": "document-recovery",
+      "project": "sample-notes",
+      "objective": "Explain how to recover a failed local build",
+      "benefit": "Reduce repeated manual diagnosis",
+      "doneWhen": "The instructions reproduce successfully in an isolated sample",
+      "owner": "documentation-owner",
+      "ready": true,
+      "blocker": null,
+      "status": "pending",
+      "priority": 1
+    },
+    {
+      "id": "client-task",
+      "project": "client-example",
+      "objective": "Inspect a sample client task",
+      "benefit": "Illustrate exclusion precedence",
+      "doneWhen": "The excluded task remains unassigned",
+      "owner": "client-owner",
+      "ready": true,
+      "blocker": null,
+      "status": "pending",
+      "priority": 0
+    }
+  ]
+}
