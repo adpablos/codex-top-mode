@@ -11,7 +11,7 @@ import json
 import os
 import subprocess
 import tempfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from capacity_policy import effective_actions, require, validate_profile
 from profile_binding import locate, private_path
@@ -77,24 +77,36 @@ COMMANDS = {
         "git switch -f:*",
         "git switch --force:*",
         "git switch --discard-changes:*",
+        "git switch -C:*",
+        "git switch --force-create:*",
+        "git checkout -B:*",
         "git clean:*",
         "git branch -D:*",
         "rm -rf:*",
         "rm -fr:*",
         "gh repo delete:*",
         "gh release delete:*",
+        "security delete-*",
     ),
 }
 # Denied at every level: work goes to a working branch, never the default one.
 DEFAULT_BRANCH = tuple(
     rule
     for name in ("main", "master")
-    for rule in (f"git push * {name}", f"git push * {name} *", f"git push *:{name}*")
+    for rule in (
+        f"git push * {name}",
+        f"git push * {name} *",
+        f"git push *:{name}*",
+        f"git push *refs/heads/{name}*",
+    )
 )
 
 
 def folder_rule(tool: str, folder: str) -> str:
-    """Claude Code reads `//path` as absolute; `/path` is relative to the settings."""
+    """Claude Code reads `//path` as absolute, and `C:\\work` as `//c/work`."""
+    windows = PureWindowsPath(folder)
+    if windows.drive:
+        folder = "/".join([f"/{windows.drive[0].lower()}", *windows.parts[1:]])
     return f"{tool}(/{folder}/**)"
 
 

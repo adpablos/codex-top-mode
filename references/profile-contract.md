@@ -83,9 +83,11 @@ it cannot authenticate consent, reserve worker slots or judge task complexity.
 The agent answers each command from its own permission rules, not from the
 level. On Claude Code, `host_rules.py` turns the level and its exceptions into
 Claude Code's `allow`, `ask` and `deny` rules for the folder where the user
-starts Top Mode, in `<folder>/.claude/settings.local.json`. That file applies
-to every Claude Code session started there, remote ones included, and to no
-other folder:
+starts Top Mode, in `<folder>/.claude/settings.local.json`. Claude Code
+applies it to every session whose project is that folder, remote ones
+included: sessions started there or, when the folder is a Git repository,
+anywhere inside it and in its worktrees. Start Top Mode from that same
+folder:
 
 ```sh
 python3 -B scripts/host_rules.py --agent claude --folder /where/you/start
@@ -108,14 +110,18 @@ a link (change the file it points to) or that Git would pick up.
 | `gh pr review`, `gh pr comment` | `review` |
 | `gh pr merge` | `merge` |
 | package installs, `gh auth`, the keychain | `install`, `access` |
-| forced pushes, deleting remote branches, hard resets, switching branches by force, `git clean`, `branch -D`, `rm -rf`, deleting repositories or releases | `destruction` |
+| forced pushes, deleting remote branches, hard resets, switching or recreating branches by force, `git clean`, `branch -D`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
 | the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
-| pushing to `main` or `master`; reading or editing excluded folders | always denied |
+| pushing to `main` or `master`; reading or editing excluded folders with Claude Code's file tools | always denied |
 
 Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
-`deny` to `deny`. These rules match a command's words, not its effect
-(`git -C . push` is not `git push`), so they are not a security boundary:
-protect each project's default branch on GitHub too.
+`deny` to `deny`. `finance` and `redeem_reset` have no commands to match, so
+the rules don't change with them; they stay with the agent and the profile.
+These rules match a command's words, not its effect (`git -C . push` is not
+`git push`), so they are not a security boundary: protect each project's
+default branch on GitHub too. Commands allowed in a project see all of it, so
+an excluded folder inside a project is kept from the file tools only; exclude
+whole repositories.
 
 ## Private profile binding
 

@@ -51,6 +51,17 @@ class ExpectedRulesTests(unittest.TestCase):
         rules = expected(profile("autonomous", destruction="allowed"), PACKAGE)
         self.assertEqual(where(rules, "Bash(git push * main)"), ["deny"])
         self.assertEqual(where(rules, "Bash(git push *:master*)"), ["deny"])
+        # `quota-coach/x:refs/heads/main` also matches the allowed run-branch push.
+        self.assertEqual(where(rules, "Bash(git push *refs/heads/main*)"), ["deny"])
+
+    def test_rewriting_a_branch_or_deleting_keychain_items_is_destruction(self):
+        rules = expected(profile(), PACKAGE)
+        for rule in ("git switch -C:*", "git checkout -B:*", "security delete-*"):
+            self.assertEqual(where(rules, f"Bash({rule})"), ["deny"])
+
+    def test_windows_folders_use_claude_codes_path_form(self):
+        self.assertEqual(host_rules.folder_rule("Read", "C:\\work\\app"), "Read(//c/work/app/**)")
+        self.assertEqual(host_rules.folder_rule("Edit", "/home/you/x"), "Edit(//home/you/x/**)")
 
     def test_projects_exclusions_and_checks_become_rules(self):
         rules = expected(profile(), PACKAGE)
