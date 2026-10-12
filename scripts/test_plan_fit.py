@@ -58,6 +58,12 @@ class WindowTests(unittest.TestCase):
         self.assertEqual([w["peakPercent"] for w in found], [50])
         self.assertEqual(left_out, 60)
 
+    def test_of_two_identical_parallel_meters_one_is_kept(self):
+        one = [(START + m * 600, 0.0, START + WEEK, "pro") for m in range(60)]
+        other = [(stamp + 60, used, START + WEEK + 3600, plan) for stamp, used, _, plan in one]
+        found, left_out = windows(one + other, NOW)
+        self.assertEqual((len(found), left_out), (1, 60))
+
     def test_a_late_reading_of_an_old_window_does_not_hide_the_new_one(self):
         old = window(START, 100, hours=48)
         new = window(START + 2 * DAY + 3600, 20)
@@ -93,6 +99,13 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual([w["renewedEarly"] for w in advice["windows"]], [True] * 7 + [False])
         replay = advice["withoutEarlyRenewals"]
         self.assertEqual({(w["usedPercent"], w["reachedLimit"]) for w in replay}, {(140, True)})
+
+    def test_a_natural_week_counts_once_it_runs_out_even_before_it_ends(self):
+        # Four windows at 30 %, each renewed the next day: 120 % within one week.
+        advice = advise_plan(weeks(*[30] * 5, every=DAY), START + 6 * DAY)
+        self.assertEqual(len(advice["windows"]), 4)
+        self.assertEqual(advice["withoutEarlyRenewals"][0]["reachedLimit"], True)
+        self.assertEqual(advice["verdict"], "enough_thanks_to_early_renewals")
 
     def test_a_verdict_needs_four_closed_windows_on_the_current_plan(self):
         readings = weeks(90, 90, 90, 90, plan="prolite")

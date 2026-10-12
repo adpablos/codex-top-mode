@@ -72,7 +72,8 @@ def windows(readings, now):
     Some logs carry a second weekly meter at the same time: one that stays near
     0% while the account's window fills, or another account signed in on the
     same machine. When two windows run in parallel, the one that used more is
-    kept; the other is not a renewal.
+    kept (on a tie, the one with more readings, then the later one); the other
+    is not a renewal.
     """
     groups = []
     for reading in sorted(readings, key=lambda reading: reading[2]):
@@ -83,7 +84,8 @@ def windows(readings, now):
     found = [summarize(sorted(group, key=lambda reading: reading[0])) for group in groups]
 
     def rank(window):
-        return window["peakPercent"], len(window["times"])
+        # Renewal times differ between groups, so exactly one of two parallel windows wins.
+        return window["peakPercent"], len(window["times"]), window["renewsAt"]
 
     kept = [
         window
@@ -127,7 +129,8 @@ def without_resets(found, plan, now):
     """Replay the use on this plan through natural weeks, with no early renewal.
 
     A natural window starts with the first use after the previous one ended and
-    lasts a week. Only weeks that have ended count. Where the real window hit
+    lasts a week. Only weeks that have ended, or already reached the limit,
+    count. Where the real window hit
     the limit, real demand was higher than what was used, so the replay is a
     lower bound for that week.
     """
@@ -148,7 +151,7 @@ def without_resets(found, plan, now):
             week["limitReachedAt"] = stamp
     for week in weeks:
         week["atLeast"] = any(week["start"] <= t < week["start"] + WEEK for t in limits)
-    return [week for week in weeks if week["start"] + WEEK <= now]
+    return [w for w in weeks if w["start"] + WEEK <= now or w["limitReachedAt"] is not None]
 
 
 def advise_plan(readings, now, count=WINDOWS):
