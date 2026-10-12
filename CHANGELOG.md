@@ -3,6 +3,22 @@
 User-visible changes integrated into the repository. Dates identify changes,
 not a tagged release or evidence of live installation.
 
+## Unreleased
+
+- Simplified quota parsing: readings are built directly, shared helpers live
+  in `common.py`, and the old saved-payload parser is removed. Runs opened
+  before the observer was removed retain its recorded renewal stop and saved-reset note.
+- The run journal refuses new tasks, task restarts and new sessions at the
+  deadline, even before an explicit stop. Existing work can still record its
+  outcome and close; the coordinator must stop agents and record the real time.
+- Codex plan verdicts explicitly describe observed use including Top Mode;
+  tier-change advice is conditional on the work the user wants to keep doing.
+  JSON and text reports carry that limit, without inventing usage attribution.
+- Shortened the skill's repeated field and report instructions, linked to the
+  contract, clarified the README's account-wide report example and plan scope,
+  and replaced the stale roadmap with current limitations. Update instructions
+  also recognize the original `adpablos/codex-top-mode` repository name.
+
 ## 2026-10-12
 
 - Checking the host rules at the start of a run no longer asks for permission in
@@ -26,12 +42,11 @@ not a tagged release or evidence of live installation.
   run, checks count as green only when every required check has passed, a
   review is published on GitHub, and a 403 on Dependabot alerts reads as
   "not enabled" only when GitHub says so, and as unknown otherwise.
-- Removed the saved Claude Code status line, the hand-saved Codex usage
-  payload passed to the check, the run journal and `usage_report.py quota`,
-  and the observer that used it to
-  notice an early renewal during a run. CodexBar now covers both quotas and
-  saved resets; a run still stops at its deadline, which already includes the
-  known weekly renewal. `usage_report.py quota --agent claude` reads Claude
+- Removed the saved Claude Code status line and the hand-saved Codex usage
+  payload input to the check, run journal and `usage_report.py quota`, plus the
+  quota-renewal observer that consumed it. The Top Mode run journal remains.
+  CodexBar now covers both quotas and saved resets; a run's deadline already
+  includes the known weekly renewal. `usage_report.py quota --agent claude` reads Claude
   through CodexBar.
 - Quota comes from [CodexBar](https://codexbar.app) when it is installed: a
   live reading for Codex and Claude, with Codex's saved resets. Without it,

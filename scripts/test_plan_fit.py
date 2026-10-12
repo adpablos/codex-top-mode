@@ -174,7 +174,7 @@ class VerdictTests(unittest.TestCase):
         self.assertIn("Reached the limit in 2 of 8, the last on 2033-05-22.", text)
         self.assertIn("would have reached the limit in 2 of 8 weeks (most: at least 100 %", text)
         self.assertIn("cannot be told apart", text)
-        self.assertIn("Verdict: enough.", text)
+        self.assertIn("Observed-use verdict: enough.", text)
         meter = [
             (START + 10 * 3600 + m * 600, 0.0, START + 10 * 3600 + WEEK, "pro") for m in range(60)
         ]
@@ -193,6 +193,20 @@ class VerdictTests(unittest.TestCase):
 class PlanTests(unittest.TestCase):
     def rows(self, advice):
         return {row["name"]: row for row in advice["plans"]["comparison"]}
+
+    def test_tier_advice_is_conditional_for_low_high_and_incomplete_usage(self):
+        for peaks, verdict in (
+            ([3] * 8, "could_go_lower"),
+            ([100] * 8, "short"),
+            ([40] * 2, "not_enough_history"),
+        ):
+            with self.subTest(verdict=verdict):
+                advice = advise_plan(weeks(*peaks), NOW, plans=PLANS)
+                self.assertEqual(advice["verdict"], verdict)
+                self.assertTrue(advice["includesTopModeRuns"])
+                self.assertIn("Conditional:", advice["tierChangeAdvice"])
+                self.assertIn(advice["tierChangeAdvice"], markdown(advice))
+                self.assertIn("Observed account use includes Top Mode", markdown(advice))
 
     def test_a_plan_size_follows_its_changes_and_grandfathering(self):
         pro = PLANS["plans"][2]
@@ -228,7 +242,7 @@ class PlanTests(unittest.TestCase):
             "size ends). The same use: median 140 %",
             text,
         )
-        self.assertIn("Verdict then: short.", text)
+        self.assertIn("Observed-use verdict then: short.", text)
 
     def test_on_your_own_plan_the_comparison_matches_the_windows(self):
         # Seven uneven steps to 100 %: converting them must not land just under the limit.
@@ -329,7 +343,8 @@ class PlanTests(unittest.TestCase):
             (advice["verdict"], advice["plans"]["lowerPlan"]), ("could_go_lower", "Plus")
         )
         self.assertIn(
-            "Verdict: enough, with room to spare. Plus would have stayed under 80 % every week, "
+            "Observed-use verdict: enough, with room to spare. Plus would have stayed under 80 % "
+            "every week, "
             "even without early renewals, for $180 less a month.",
             markdown(advice),
         )

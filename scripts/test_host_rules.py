@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -215,6 +216,9 @@ class SyncTests(unittest.TestCase):
 
     def test_refuses_a_folder_whose_git_would_pick_the_rules_up(self):
         subprocess.run(["git", "init", "-q", str(self.folder)], check=True)
+        subprocess.run(
+            ["git", "-C", str(self.folder), "config", "core.excludesFile", os.devnull], check=True
+        )
         with self.assertRaisesRegex(ValueError, "Have Git ignore"):
             self.sync(profile())
         (self.folder / ".gitignore").write_text(".claude/settings.local.json\n")
@@ -329,6 +333,9 @@ class CodexSyncTests(unittest.TestCase):
         repo = self.folder / "repo"
         (repo / "sub").mkdir(parents=True)
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "config", "core.excludesFile", os.devnull], check=True
+        )
         start = self.folder / "start"
         start.symlink_to(repo / "sub")
         with self.assertRaisesRegex(ValueError, "Have Git ignore"):
@@ -340,6 +347,9 @@ class CodexSyncTests(unittest.TestCase):
     def test_refuses_a_file_git_would_pick_up_even_when_it_is_current(self):
         self.assertTrue(sync_codex(profile(), self.folder, True, PACKAGE)["written"])
         subprocess.run(["git", "init", "-q", str(self.folder)], check=True)
+        subprocess.run(
+            ["git", "-C", str(self.folder), "config", "core.excludesFile", os.devnull], check=True
+        )
         self.assertTrue(sync_codex(profile(), self.folder, False, PACKAGE)["current"])
         with self.assertRaisesRegex(ValueError, "Have Git ignore"):
             sync_codex(profile(), self.folder, True, PACKAGE)

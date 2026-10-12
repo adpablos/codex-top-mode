@@ -250,6 +250,37 @@ class StatusTests(unittest.TestCase):
 
 
 class StopAndReportTests(unittest.TestCase):
+    def test_deadline_refuses_assignments_without_an_explicit_stop(self):
+        _, r = fresh()
+        new_task(r)
+        new_task(r, "working", status="in_progress")
+        run.record_session(r, "w", "codex", "worker", False, NOW)
+        # Work is still accepted immediately before the boundary.
+        new_task(r, "last", at=NOW + 2 * HOUR - 1)
+        run.record_session(r, "last", "codex", "worker", False, NOW + 2 * HOUR - 1)
+        before = copy.deepcopy(r)
+        for at in (NOW + 2 * HOUR, NOW + 3 * HOUR):
+            for refused in (
+                lambda at: new_task(r, "new", at=at),
+                lambda at: new_task(r, "new", status="done", evidence="tests pass", at=at),
+                lambda at: new_task(r, status="in_progress", at=at),
+                lambda at: new_task(r, "working", status="in_progress", at=at),
+                lambda at: new_task(r, "working", status="done", owner="you", evidence="ok", at=at),
+                lambda at: run.record_session(r, None, "codex", "worker", False, at),
+                lambda at: run.record_session(r, "new", "codex", "worker", True, at),
+                lambda at: run.record_session(r, "w", "codex", "worker", False, at),
+            ):
+                with self.subTest(at=at), self.assertRaisesRegex(ValueError, "deadline"):
+                    refused(at)
+                self.assertEqual(r, before)
+        # Checkpoints remain possible; the actual stop time is never invented.
+        new_task(r, status="blocked", blocker="Deadline arrived", at=at)
+        new_task(r, "working", status="done", evidence="tests pass", at=at)
+        run.record_session(r, "w", "codex", "worker", True, at)
+        self.assertNotIn("stoppedAt", r)
+        run.stop(r, "deadline", at)
+        self.assertEqual(r["stoppedAt"], iso(at))
+
     def test_deadline_is_refused_as_a_reason_before_it_arrives(self):
         _, r = fresh()
         with self.assertRaisesRegex(ValueError, "real reason"):
@@ -343,6 +374,10 @@ class StopAndReportTests(unittest.TestCase):
         _, r = fresh(p)
         r["usageMonitor"] = {"mode": "normal", "stopReason": "weekly_quota_replenished"}
         self.assertEqual(run.status(r, p, {}, NOW + 60)["stopReasons"], ["weekly_renewal"])
+        r["usageMonitor"]["bankedResetObserved"] = True
+        run.stop(r, "weekly_renewal", NOW + 60)
+        run.close(r, {}, NOW + 120)
+        self.assertIn("| Saved resets | A new one appeared during the run", run.report(r, ""))
 
 
 class CommandTests(unittest.TestCase):
@@ -368,10 +403,33 @@ class CommandTests(unittest.TestCase):
             run.main()
         return json.loads(out.getvalue())
 
-    def refused(self, *argv):
+    def refused(self, *argv, at=NOW):
         with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
-            self.cli(*argv)
+            self.cli(*argv, at=at)
         return err.getvalue()
+
+    def test_expired_run_rejects_cli_assignments_and_can_still_close(self):
+        self.cli("start", "--hours", "1", "--agents", "codex")
+        self.cli(
+            "task", "fix", "--status", "in_progress", "--project", "notes-app",
+            "--objective", "Fix it", "--done-when", "tests pass", "--owner", "anyone",
+        )  # fmt: skip
+        self.cli("session", "worker", "--agent", "codex")
+        journal = self.private / "runs.json"
+        before = journal.read_bytes()
+        at = NOW + HOUR
+        for argv in (
+            ("task", "new", "--status", "planned"),
+            ("task", "fix", "--status", "in_progress"),
+            ("session", "--agent", "codex"),
+        ):
+            self.assertIn("deadline", self.refused(*argv, at=at))
+            self.assertEqual(journal.read_bytes(), before)
+        self.cli("task", "fix", "--status", "done", "--evidence", "tests pass", at=at)
+        self.cli("session", "worker", "--agent", "codex", "--ended", at=at)
+        self.cli("stop", "--reason", "deadline", at=at)
+        closed = self.cli("close", at=at + 60)
+        self.assertIn("the deadline arrived", Path(closed["report"]).read_text())
 
     def test_a_whole_run_from_start_to_report(self):
         self.assertEqual(self.cli("status"), {"active": False, "lastRun": None})

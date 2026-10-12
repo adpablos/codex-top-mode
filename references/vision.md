@@ -24,9 +24,9 @@ report and whether the plan fits.
 4. **Start with one sentence.** "Start Top Mode for 2 hours."
 5. **Know what happened.** Every run ends with a short report: before and after,
    what is pending, and what it used.
-6. **Know if your plan fits.** Ask, and get a verdict on the plan from its own
-   weekly history, with the evidence, how the other plans compare and what a
-   coming change would mean.
+6. **Understand your Codex plan.** Compare its observed weekly use, including
+   Top Mode, with other plans and coming changes; decide which work to keep
+   before treating that comparison as a reason to change tiers.
 
 ## Principles
 
@@ -68,8 +68,7 @@ with the other Codex plans, a guided setup (the agent discovers projects and
 where their work lives, and the user picks one of three permission levels), and
 a private journal of each run that answers "status" and drafts the report.
 
-Next, in small pull requests:
-
-1. **Plan advice from the journal.** Tell Top Mode's use apart from the user's
-   own, say in `check` when the plan clearly doesn't fit, and do the same for
-   Claude Code by keeping CodexBar readings over time.
+Current limits: plan comparison covers Codex only, and account readings cannot
+separate Top Mode from ordinary use. Reliable attribution and a suitable Claude
+history source are prerequisites for broader advice; collecting more readings
+alone does not solve attribution.
