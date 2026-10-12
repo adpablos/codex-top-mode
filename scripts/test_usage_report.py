@@ -240,6 +240,20 @@ class QuotaTests(unittest.TestCase):
                 advice = advise(file_quota(path), NOW)
                 self.assertEqual(advice["suggestion"], suggestion)
 
+    def test_decisions_use_exact_times_not_rounded_ones(self):
+        path = self.home / "status.json"
+        cases = (
+            (6 * 3600, 3600, "consider_top_mode"),
+            (6 * 3600 + 60, 3600, "refresh_or_wait"),  # stale, though 6.0 h rounded
+            (3600, 60, "consider_top_mode"),  # renews in a minute, not yet renewed
+        )
+        for age, resets_in, suggestion in cases:
+            with self.subTest(age=age, resets_in=resets_in):
+                limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + resets_in}}
+                reading = {"observedAt": NOW - age, "payload": {"rate_limits": limits}}
+                path.write_text(json.dumps(reading))
+                self.assertEqual(advise(file_quota(path), NOW)["suggestion"], suggestion)
+
     def test_a_reading_without_a_weekly_window_is_unknown(self):
         path = self.home / "status.json"
         five_hour = {"five_hour": {"used_percentage": 10, "resets_at": NOW + 3600}}

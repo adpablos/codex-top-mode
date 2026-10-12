@@ -260,10 +260,12 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
     if reading is None:
         return {"suggestion": "unknown", "reasons": ["no_quota_reading"]}
     observed = epoch(reading["observedAt"])
+    # Decisions use exact hours; only the reported values are rounded.
+    age, hours = (now - observed) / 3600, None
     result = {
         "source": reading["source"],
         "observedAt": iso(observed),
-        "readingAgeHours": round((now - observed) / 3600, 1),
+        "readingAgeHours": round(age, 1),
         "weeklyUsedPercent": None,
         "weeklyResetsAt": None,
         "hoursToWeeklyReset": None,
@@ -273,14 +275,14 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
     if week:
         result["weeklyUsedPercent"] = week["usedPercent"]
         if week["resetsAt"] is not None:
+            hours = (week["resetsAt"] - now) / 3600
             result["weeklyResetsAt"] = iso(week["resetsAt"])
-            result["hoursToWeeklyReset"] = round((week["resetsAt"] - now) / 3600, 1)
-    if result["readingAgeHours"] > stale_hours:
+            result["hoursToWeeklyReset"] = round(hours, 1)
+    if age > stale_hours:
         result["reasons"].append("reading_is_stale")
     elif observed > now + 300:
         # A capture time ahead of the clock is a wrong date, not a fresh reading.
         result["reasons"].append("reading_time_in_the_future")
-    hours = result["hoursToWeeklyReset"]
     if week is None:
         result["reasons"].append("weekly_window_unknown")
     elif hours is not None and hours <= 0:
