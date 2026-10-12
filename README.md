@@ -31,8 +31,8 @@ Install Top Mode from https://github.com/adpablos/top-mode
 It runs two commands you can also run yourself:
 
 ```sh
-git clone https://github.com/adpablos/top-mode ~/.top-mode
-python3 ~/.top-mode/scripts/install.py
+git clone https://github.com/adpablos/top-mode ~/.top-mode &&
+  python3 ~/.top-mode/scripts/install.py
 ```
 
 This makes Top Mode available as a skill in every new Codex and Claude Code

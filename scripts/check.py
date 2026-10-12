@@ -96,9 +96,13 @@ def summary_line(agent, advice):
 
 
 def watch(script, config, state):
-    """Run the optional announcement watch once; it decides whether a read is due."""
+    """Run the optional announcement watch once: (news pairs, announcement lines).
+
+    The watch decides whether a read is due and tells each announcement once. A failure
+    to run repeats on every check, so it is news, told at most once a day.
+    """
     if not config.is_file():
-        return []
+        return [], []
     result = subprocess.run(
         [
             sys.executable,
@@ -115,7 +119,8 @@ def watch(script, config, state):
         check=False,
     )
     if result.returncode != 0:
-        return ["Announcement watch failed to run: " + (result.stderr.strip() or "no details")]
+        failure = "Announcement watch failed to run: " + (result.stderr.strip() or "no details")
+        return [("watch:failed", failure)], []
     lines = []
     for signal in json.loads(result.stdout or "{}").get("signals", []):
         if signal["kind"] == "needs_interpretation":
@@ -127,7 +132,7 @@ def watch(script, config, state):
             )
         elif signal["kind"] == "coverage_recovered":
             lines.append(f"Reading {signal['source']} works again.")
-    return lines
+    return [], lines
 
 
 def main():
@@ -158,7 +163,10 @@ def main():
         for agent, reading in readings(args.codex_home, claude_status, args.quota_file)
     ]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
-    announcements = watch(Path(__file__).with_name("public_watch.py"), config, watch_state)
+    failures, announcements = watch(
+        Path(__file__).with_name("public_watch.py"), config, watch_state
+    )
+    news += failures
     if args.json:
         lines = [line for _, line in news] + announcements
         print(json.dumps({"messages": lines, "quota": dict(advice)}, indent=2))

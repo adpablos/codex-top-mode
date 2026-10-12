@@ -226,7 +226,7 @@ the Codex local-log reading, a saved Claude Code status line
 when `~/.codex-top-mode/watch.json` exists. It prints one line per piece of news
 and nothing otherwise. Without `--verbose` it tells the same news at most once
 every 20 hours, remembered in `~/.codex-top-mode/check-state.json` (keys and
-times only). It refuses to run, before the watch writes anything, when its
+times only); a watch that fails to run counts as news too. It refuses to run, before the watch writes anything, when its
 private folder is inside a Git worktree or one of its files is a link. Quota news needs the suggestion `consider_top_mode`, so a stale
 reading stays quiet until it is refreshed. `--verbose` always prints the full
 status, including which sources are missing, and `--json` gives the same for

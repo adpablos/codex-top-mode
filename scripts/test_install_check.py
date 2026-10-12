@@ -188,6 +188,16 @@ class CheckTests(unittest.TestCase):
         url = "https://x.com/example_pub/status/1"
         self.assertEqual(messages, [f"New announcement to read: {url} (Reset coming tomorrow)"])
 
+    def test_a_failing_watch_is_told_once_a_day_like_other_news(self):
+        (self.private / "watch.json").write_text("{}")
+        failed = type("Failed", (), {"returncode": 1, "stdout": "", "stderr": "bad config"})
+        with patch.object(check.subprocess, "run", return_value=failed):
+            self.assertEqual(self.run_check(), "Announcement watch failed to run: bad config\n")
+            self.assertEqual(self.run_check(), "")
+            self.assertIn("failed to run", self.run_check("--verbose"))
+            self.now += 21 * 3600
+            self.assertIn("failed to run", self.run_check())
+
 
 if __name__ == "__main__":
     unittest.main()
