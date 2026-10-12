@@ -29,7 +29,10 @@ OWN = (
     "profile_binding.py locate",
 )
 # Claude Code Bash rules for each action. They match a command's text, not its
-# effect, so protecting the default branch on GitHub stays the real guard.
+# effect, so protecting the default branch on GitHub stays the real guard. An
+# allowed prefix takes any words after it, so commands with a destructive option
+# are allowed only in the narrow forms a run needs, and each such option is
+# denied below wherever it appears as its own word.
 COMMANDS = {
     "read": (
         "git status:*",
@@ -49,7 +52,8 @@ COMMANDS = {
     "commit": (
         "git add:*",
         "git commit:*",
-        "git switch:*",
+        f"git switch -c {BRANCH}*",
+        f"git switch {BRANCH}*",
         f"git checkout -b {BRANCH}*",
         "git worktree add:*",
     ),
@@ -64,30 +68,28 @@ COMMANDS = {
         "python3 -m pip install:*",
         "brew install:*",
     ),
-    "access": ("gh auth:*", "security:*"),
+    "access": ("gh auth:*", "security find-*"),
     "destruction": (
-        "git push --force:*",
-        "git push -f:*",
-        "git push * --force*",
-        "git push * -f*",
         "git push * +*",
-        "git push * --delete*",
         "git push * :*",
         "git reset --hard:*",
-        "git switch -f:*",
-        "git switch --force:*",
-        "git switch --discard-changes:*",
-        "git switch -C:*",
-        "git switch --force-create:*",
-        "git checkout -B:*",
         "git clean:*",
-        "git branch -D:*",
         "rm -rf:*",
         "rm -fr:*",
         "gh repo delete:*",
         "gh release delete:*",
         "security delete-*",
+        "security * delete-*",
     ),
+}
+# Options that destroy work, per command; each is denied as its own word
+# anywhere in the command. Combined short options (`-qC`) are not caught.
+DESTRUCTIVE = {
+    "git push": ("--force", "-f", "--delete", "-d"),
+    "git switch": ("--force", "-f", "--discard-changes", "-C"),
+    "git checkout": ("--force", "-f", "-B"),
+    "git worktree add": ("--force", "-f", "-B"),
+    "git branch": ("--force", "-f", "-D", "-M", "-C"),
 }
 # Denied at every level: work goes to a working branch, never the default one.
 DEFAULT_BRANCH = tuple(
@@ -106,6 +108,7 @@ def folder_rule(tool: str, folder: str) -> str:
     """Claude Code reads `//path` as absolute, and `C:\\work` as `//c/work`."""
     windows = PureWindowsPath(folder)
     if windows.drive:
+        require(windows.drive.endswith(":"), f"Network folders are not supported: {folder}")
         folder = "/".join([f"/{windows.drive[0].lower()}", *windows.parts[1:]])
     return f"{tool}(/{folder}/**)"
 
@@ -130,6 +133,15 @@ def expected(profile: dict, package: Path = PACKAGE) -> dict:
 
     for action, commands in COMMANDS.items():
         add(action, (f"Bash({c})" for c in commands))
+    add(
+        "destruction",
+        (
+            f"Bash({command}{gap}{option}*)"
+            for command, options in DESTRUCTIVE.items()
+            for option in options
+            for gap in (" ", " * ")
+        ),
+    )
     for project in profile["projects"].values():
         add("read", [folder_rule("Read", project["path"])])
         add("edit", [folder_rule("Edit", project["path"])])

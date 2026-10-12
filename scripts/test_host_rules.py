@@ -40,7 +40,7 @@ class ExpectedRulesTests(unittest.TestCase):
                 self.assertEqual(where(rules, PUSH), [push])
                 self.assertEqual(where(rules, "Bash(git commit:*)"), ["allow"])
                 self.assertEqual(where(rules, "Bash(npm install:*)"), ["ask"])
-                self.assertEqual(where(rules, "Bash(git push --force:*)"), ["deny"])
+                self.assertEqual(where(rules, "Bash(git push * --force*)"), ["deny"])
 
     def test_the_users_exceptions_win_over_the_level(self):
         rules = expected(profile("autonomous", merge="deny", destruction="ask"), PACKAGE)
@@ -56,12 +56,29 @@ class ExpectedRulesTests(unittest.TestCase):
 
     def test_rewriting_a_branch_or_deleting_keychain_items_is_destruction(self):
         rules = expected(profile(), PACKAGE)
-        for rule in ("git switch -C:*", "git checkout -B:*", "security delete-*"):
+        for rule in (
+            "git switch -C*",
+            "git switch * -C*",
+            "git switch * --force*",
+            "git checkout -B*",
+            "git worktree add * -B*",
+            "security delete-*",
+            "security * delete-*",
+        ):
             self.assertEqual(where(rules, f"Bash({rule})"), ["deny"])
+
+    def test_commands_with_destructive_options_are_allowed_only_narrowly(self):
+        rules = expected(profile("autonomous", access="allowed"), PACKAGE)
+        self.assertNotIn("Bash(git switch:*)", rules["allow"])
+        self.assertIn("Bash(git switch -c quota-coach/*)", rules["allow"])
+        self.assertNotIn("Bash(security:*)", rules["allow"])
+        self.assertIn("Bash(security find-*)", rules["allow"])
 
     def test_windows_folders_use_claude_codes_path_form(self):
         self.assertEqual(host_rules.folder_rule("Read", "C:\\work\\app"), "Read(//c/work/app/**)")
         self.assertEqual(host_rules.folder_rule("Edit", "/home/you/x"), "Edit(//home/you/x/**)")
+        with self.assertRaisesRegex(ValueError, "Network folders"):
+            host_rules.folder_rule("Read", "\\\\server\\share\\repo")
 
     def test_projects_exclusions_and_checks_become_rules(self):
         rules = expected(profile(), PACKAGE)

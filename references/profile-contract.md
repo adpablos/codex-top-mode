@@ -105,12 +105,12 @@ a link (change the file it points to) or that Git would pick up.
 | --- | --- |
 | `git status`, `log`, `diff`, `show`, `fetch`; `gh pr` and `gh issue` reading; each project's folder | `read`, `edit` |
 | each project's `checks` | `checks` |
-| `git add`, `commit`, `switch`, new branches `quota-coach/*`, `git worktree add` | `commit` |
+| `git add`, `commit`, creating or switching to `quota-coach/*` branches, `git worktree add` | `commit` |
 | pushing `quota-coach/*` branches, `gh pr create` | `publish_pr` |
 | `gh pr review`, `gh pr comment` | `review` |
 | `gh pr merge` | `merge` |
-| package installs, `gh auth`, the keychain | `install`, `access` |
-| forced pushes, deleting remote branches, hard resets, switching or recreating branches by force, `git clean`, `branch -D`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
+| package installs, `gh auth`, reading the keychain (`security find-*`) | `install`, `access` |
+| options that force, delete or reset branches (`-f`, `-d`, `-C`, `-B`, `-D` and their long forms) wherever they stand as their own word; hard resets, `git clean`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
 | the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
 | pushing to `main` or `master`; reading or editing excluded folders with Claude Code's file tools | always denied |
 
@@ -118,10 +118,12 @@ Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
 `deny` to `deny`. `finance` and `redeem_reset` have no commands to match, so
 the rules don't change with them; they stay with the agent and the profile.
 These rules match a command's words, not its effect (`git -C . push` is not
-`git push`), so they are not a security boundary: protect each project's
-default branch on GitHub too. Commands allowed in a project see all of it, so
-an excluded folder inside a project is kept from the file tools only; exclude
-whole repositories.
+`git push`, and combined options such as `-qC` slip past), so they are not a
+security boundary: protect each project's default branch on GitHub too. To
+keep that gap small, commands with destructive options are allowed only in the
+narrow forms a run needs. Commands allowed in a project see all of it, so an
+excluded folder inside a project is kept from the file tools only; exclude
+whole repositories. Network (UNC) folders are refused.
 
 ## Private profile binding
 
