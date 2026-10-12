@@ -108,6 +108,7 @@ class MainTests(unittest.TestCase):
     def test_reports_approval_ready_work_and_one_decision(self):
         p = profile()
         result = self.run_main(p, "--project", "sample-notes", "--action", "merge")
+        self.assertEqual(result.pop("fingerprint"), capacity_policy.fingerprint(p))
         # The fictional approval starts in 2033, so it is not active yet.
         self.assertEqual(
             result,
@@ -125,6 +126,14 @@ class MainTests(unittest.TestCase):
             clock = patch.object(capacity_policy.time, "time", return_value=now)
             with self.subTest(now=now), clock:
                 self.assertEqual(self.run_main(p)["authorizationActive"], active)
+
+    def test_the_fingerprint_changes_with_the_approval_not_with_progress(self):
+        p = profile()
+        before = self.run_main(p)["fingerprint"]
+        p["backlog"][0]["status"] = "in_progress"
+        self.assertEqual(self.run_main(p)["fingerprint"], before)
+        p["limits"]["maximumHours"] = 1
+        self.assertNotEqual(self.run_main(p)["fingerprint"], before)
 
     def test_refuses_an_invalid_profile_or_half_a_question(self):
         stderr = io.StringIO()

@@ -117,7 +117,7 @@ check never starts work by itself, whatever the news.
 Before the first assignment:
 
 1. Confirm the request is covered by the approved profile and note the
-   **start time**. Set the **deadline**: start + requested duration, capped by
+   **start time** and the profile's `fingerprint` from `capacity_policy.py`. Set the **deadline**: start + requested duration, capped by
    `limits.maximumHours` and `authorization.validUntil`. If no duration is given
    and none was approved as default, ask.
 2. Take a **quota baseline** with the same source as in step 2, if any.
@@ -129,7 +129,8 @@ Then, until the deadline or another stop:
 - Before each assignment check: time left, the action's decision from
   `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`,
   the owner is free, and active sessions (including yours) stay within
-  `maximumActiveThreads`.
+  `maximumActiveThreads`. A different `fingerprint` than at the start means the
+  profile changed: stop.
 - Prefer continuing a session that already owns the task. Delegate only bounded,
   independent work, through your host's supported tools; otherwise work serially.
 - Pick models by task shape: the economical tier for repeatable, easily checked

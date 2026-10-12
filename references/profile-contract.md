@@ -56,8 +56,9 @@ python3 -B scripts/capacity_policy.py --profile /chosen/private/profile.json
 ```
 
 It refuses an invalid profile (exit code 2) and otherwise prints
-`authorizationActive` (approved and not expired right now) and `readyWork`, the
-task IDs that may be assigned next. Add `--project NAME --action ACTION` to also
+`authorizationActive` (approved and not expired right now), `readyWork`, the
+task IDs that may be assigned next, and `fingerprint`, which changes whenever
+anything but the backlog changes. Add `--project NAME --action ACTION` to also
 print that action's `decision`: `allowed`, `ask` or `deny`.
 
 The human-approved profile defines standing scope and maximum permissions;
@@ -157,7 +158,8 @@ Use `write_private` for atomic private state and call `observe` or the existing
 payload. It observes and stops; it does not dispatch. The operator separately
 checks current authorization, ready work, the action's decision, outside active
 threads and ownership before each assignment; stop on revocation or policy
-change. Never silently convert an existing active window or renew its deadline.
+change. A policy change shows as a `fingerprint` (from `capacity_policy.py`)
+different from the one noted at the start; backlog progress does not change it. Never silently convert an existing active window or renew its deadline.
 
 If native quota observation is unavailable, use only the agreed clock deadline
 and supervised checkpoints; do not seed an observer with invented quota or

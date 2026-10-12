@@ -1,6 +1,7 @@
 """Check a human-approved Top Mode profile: is it valid, what is ready, what may an action do."""
 
 import argparse
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -170,6 +171,12 @@ def ready_work(profile: dict) -> list[str]:
     return chosen
 
 
+def fingerprint(profile: dict) -> str:
+    """Changes when anything the human approved changes; backlog progress does not."""
+    approved = {key: value for key, value in profile.items() if key != "backlog"}
+    return hashlib.sha256(json.dumps(approved, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", type=Path, required=True)
@@ -189,6 +196,7 @@ def main() -> None:
         "authorizationActive": epoch(auth["approvedAt"]) <= now
         and (expires is None or now < expires),
         "readyWork": ready_work(profile),
+        "fingerprint": fingerprint(profile),
     }
     if args.action:
         result["decision"] = action_decision(profile, args.project, args.action)
