@@ -7,7 +7,7 @@ description: Check whether spare subscription quota is worth using, set up a pri
 
 Top Mode helps the user spend spare subscription capacity on useful work without
 losing control. You have four jobs: **set up**, **check**, **run** and **report**,
-plus installing the package when asked.
+plus installing the package and judging the plan when asked.
 The [README](README.md) shows how to explain this to people. Field and command
 details live in the [profile, quota and report contract](references/profile-contract.md).
 
@@ -172,3 +172,20 @@ and the [example](examples/report.example.md):
 
 Write `unknown` with the reason instead of guessing. Quota is account-wide, so
 never present its change as this run's exact cost. Keep reports private.
+
+## 6. Is the plan enough? (when asked)
+
+When the user asks whether their plan is enough, too small or bigger than they
+need, run:
+
+```sh
+python3 -B <this folder>/scripts/usage_report.py plan --markdown
+```
+
+It rebuilds the Codex weekly windows from the local logs and judges the latest
+closed ones on the current plan. Answer in two or three sentences: the verdict,
+the facts behind it (peak use, how often the limit was reached, what early
+renewals gave) and that Top Mode runs are counted as the user's own use for now.
+It speaks in percentages of the plan: never present them as exact limits, never
+change the plan for the user, and say there is no Claude Code history yet.
+Details are in the [plan history contract](references/profile-contract.md#plan-history).

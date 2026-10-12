@@ -3,6 +3,15 @@
 User-visible changes integrated into the repository. Dates identify changes,
 not a tagged release or evidence of live installation.
 
+## 2026-10-12
+
+- Added `usage_report.py plan`: is your Codex plan enough? It rebuilds your
+  weekly windows from Codex's local logs and says whether the plan has been
+  enough, short, or enough only thanks to early renewals, with the evidence:
+  peak use per window, how often the limit was reached and how often the same
+  use would have run out without early renewals. Top Mode runs still count as
+  your own use. Codex only for now.
+
 ## 2026-10-11
 
 - Reset announcements now only notify. The watch and `check.py` report a new

@@ -17,6 +17,7 @@ from usage_report import (
     claude_tokens,
     codex_quota,
     codex_tokens,
+    codex_weekly_readings,
     file_quota,
     markdown,
 )
@@ -414,6 +415,49 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(reading["observedAt"], "2033-05-18T10:00:00Z")
         self.assertEqual(reading["windows"][0]["usedPercent"], 2.0)
 
+    def test_weekly_readings_leave_out_a_subagent_copy(self):
+        def quota_row(stamp, used):
+            weekly = {"used_percent": used, "window_minutes": 10080, "resets_at": NOW + 3600}
+            limits = {"limit_id": "codex", "plan_type": "pro", "primary": weekly}
+            return {"timestamp": stamp, "payload": {"rate_limits": limits}}
+
+        parent = self.home / "sessions/rollout-parent.jsonl"
+        write_lines(
+            parent,
+            [quota_row("2033-05-18T11:00:00.100Z", 30), quota_row("2033-05-18T11:30:00.200Z", 35)],
+        )
+        # A subagent starts by copying its parent's history: old readings, one exact time.
+        copied = [quota_row("2033-05-18T11:50:00.300Z", used) for used in (5, 20, 35)]
+        write_lines(self.home / "sessions/rollout-subagent.jsonl", copied)
+        self.assertEqual(sorted(r[1] for r in codex_weekly_readings(self.home)), [30.0, 35.0])
+
+    def test_weekly_readings_come_from_the_week_long_window_of_the_account(self):
+        five_hours = {"used_percent": 50, "window_minutes": 300, "resets_at": NOW}
+        week = {"used_percent": 20, "window_minutes": 10080, "resets_at": NOW + 3600}
+        rows = [
+            # Which slot holds the weekly window has changed over time.
+            {
+                "timestamp": "2033-05-18T10:00:00Z",
+                "payload": {
+                    "rate_limits": {"primary": five_hours, "secondary": week, "plan_type": "pro"}
+                },
+            },
+            # A model's own meter is not the account's allowance.
+            {
+                "timestamp": "2033-05-18T10:01:00Z",
+                "payload": {"rate_limits": {"limit_id": "codex_other", "primary": week}},
+            },
+            {
+                "timestamp": "2033-05-18T10:02:00Z",
+                "payload": {"rate_limits": {"primary": {**week, "used_percent": "x"}}},
+            },
+        ]
+        write_lines(self.home / "archived_sessions/rollout-x.jsonl", rows)
+        self.assertEqual(
+            codex_weekly_readings(self.home),
+            [(epoch("2033-05-18T10:00:00Z"), 20, NOW + 3600, "pro")],
+        )
+
     def test_claude_status_line_reading_carries_its_capture_time(self):
         status = {
             "rate_limits": {
@@ -580,6 +624,17 @@ class MainTests(unittest.TestCase):
         self.assertEqual(saved["weeklyUsedPercent"], 10)
         missing = json.loads(self.run_main("quota", "--codex-home", str(self.home / "none")))
         self.assertEqual(missing, {"suggestion": "unknown", "reasons": ["no_quota_reading"]})
+
+    def test_plan_history_and_verdict(self):
+        advice = json.loads(self.run_main("plan", *self.homes()))
+        # One reading, from a window that is still running: no verdict yet.
+        self.assertEqual((advice["verdict"], advice["windows"]), ("not_enough_history", []))
+        self.assertEqual((advice["historySince"], advice["compressedLogs"]), ("2033-05-18", 0))
+        text = self.run_main("plan", "--markdown", *self.homes())
+        self.assertIn("no closed weekly window", text)
+        quiet = contextlib.redirect_stderr(io.StringIO())
+        with self.assertRaises(SystemExit), quiet:
+            self.run_main("plan", "--windows", "3")
 
     def test_invalid_or_missing_times_are_rejected(self):
         bare = self.home / "bare.json"
