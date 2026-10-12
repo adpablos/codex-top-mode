@@ -16,6 +16,7 @@ WEEK_MINUTES = 10080
 CODEX_FIELDS = (
     "input_tokens",
     "cached_input_tokens",
+    "cache_write_input_tokens",
     "output_tokens",
     "reasoning_output_tokens",
     "total_tokens",
@@ -124,6 +125,8 @@ def codex_tokens(home, since, until):
             older += 1
     result = summary("codex", buckets, sessions, responses)
     result["olderLogs"] = older
+    # Codex compresses logs untouched for a week (.jsonl.zst); stdlib Python cannot read them.
+    result["compressedLogs"] = len(recent_files(roots, "rollout-*.jsonl.zst", since))
     return result
 
 
@@ -341,6 +344,11 @@ def markdown(report):
             out.append(
                 f"  {provider['olderLogs']} of its logs in this interval use an older format "
                 "that can leave out automatic compactions, so this total may be a lower bound."
+            )
+        if provider.get("compressedLogs"):
+            out.append(
+                f"  {provider['compressedLogs']} compressed logs that may cover this interval "
+                "were not read, so this total may be a lower bound."
             )
     return "\n".join(out)
 

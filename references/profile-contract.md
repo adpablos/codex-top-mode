@@ -231,10 +231,12 @@ under `CLAUDE_CONFIG_DIR`, including subagents), counts each
 response once, and groups usage by agent, model and effort. Codex logs in the
 older format (no per-response records) can leave out automatic compactions;
 `olderLogs` counts those that add usage to the interval, and the total may then
-be a lower bound. It covers only this
-machine and every session in that interval, including work outside the run; say
-so in the report. Codex `cached input` is part of `input`; Claude cache reads and
-writes are separate fields and are included in its total. Otherwise the host
+be a lower bound. Codex compresses logs untouched for a week (`.jsonl.zst`),
+which the stdlib cannot read; `compressedLogs` counts those that may cover the
+interval, with the same caveat. It covers only this machine and every session
+in that interval, including work outside the run; say so in the report. Codex
+`cached input` and `cache write input` are part of `input`; Claude cache reads
+and writes are separate fields and are included in its total. Otherwise the host
 operator supplies the evidence. Do not add an account client or read credential
 stores to fill a gap. Write `unknown` with the reason when a source is missing,
 partial, stale or cannot be attributed. Preserve sanitized report evidence in

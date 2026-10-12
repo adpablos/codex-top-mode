@@ -20,6 +20,7 @@ from usage_report import (
 
 NOW = epoch("2033-05-18T12:00:00Z")
 SINCE = epoch("2033-05-18T00:00:00Z")
+REPORT = {"since": "s", "until": "u"}
 
 
 def write_lines(path, rows):
@@ -57,7 +58,8 @@ def codex_rows(stamp="2033-05-18T01:00:00Z"):
         {
             "timestamp": "2033-05-18T02:00:00Z",
             "type": "token_usage_record",
-            "payload": {"response_id": "r2", "usage": usage(40)},
+            # Cache writes are part of input, like cached input.
+            "payload": {"response_id": "r2", "usage": {**usage(40), "cache_write_input_tokens": 7}},
         },
         {
             "timestamp": "2033-05-18T02:00:01Z",
@@ -91,7 +93,22 @@ class TokenTests(unittest.TestCase):
             [(m["model"], m["effort"], m["total_tokens"]) for m in result["byModel"]],
             [("model-a", "high", 100), ("model-b", "low", 40)],
         )
+        self.assertEqual(result["byModel"][1]["cache_write_input_tokens"], 7)
+        self.assertIn("cache write input 7", markdown({**REPORT, "providers": [result]}))
         self.assertNotIn("private-session-id", json.dumps(result))
+
+    def test_compressed_codex_logs_are_counted_as_unread(self):
+        write_lines(self.home / "sessions/rollout-x.jsonl", codex_rows())
+        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["compressedLogs"], 0)
+        for name, modified in (("recent", NOW), ("earlier", SINCE - 1)):
+            path = self.home / f"archived_sessions/rollout-{name}.jsonl.zst"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"\x28\xb5\x2f\xfd")
+            os.utime(path, (modified, modified))
+        result = codex_tokens(self.home, SINCE, NOW)
+        self.assertEqual((result["compressedLogs"], result["totalTokens"]), (1, 140))
+        report = markdown({**REPORT, "providers": [result]})
+        self.assertIn("1 compressed logs that may cover this interval were not read", report)
 
     def test_codex_usage_outside_the_window_is_ignored(self):
         write_lines(
@@ -144,7 +161,7 @@ class TokenTests(unittest.TestCase):
         write_lines(self.home / "sessions/rollout-earlier.jsonl", earlier)
         result = codex_tokens(self.home, SINCE, NOW)
         self.assertEqual((result["sessions"], result["olderLogs"]), (2, 1))
-        report = {"since": "s", "until": "u", "providers": [result]}
+        report = {**REPORT, "providers": [result]}
         self.assertIn("1 of its logs in this interval use an older format", markdown(report))
 
     def test_claude_messages_count_once_and_skip_synthetic(self):
