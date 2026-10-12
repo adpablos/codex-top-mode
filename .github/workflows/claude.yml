@@ -84,12 +84,16 @@ jobs:
           git -C pr diff --no-ext-diff --no-textconv --no-color --find-renames \
             "$merge_base" "$HEAD_SHA" > review/diff.patch
           echo "MERGE_BASE=$merge_base" >> "$GITHUB_ENV"
-          # Make pr/ plain files: no Git metadata, and the PR's own instruction
-          # files renamed so Claude Code never loads them as memory or settings.
-          # Their changes stay visible in diff.patch.
+          # Make pr/ plain files: no Git metadata, and none of the PR's own
+          # instruction files, so Claude Code can never load them as memory or
+          # settings. Their changes stay visible in diff.patch.
           rm -rf pr/.git
           find pr \( -name CLAUDE.md -o -name CLAUDE.local.md -o -name AGENTS.md \
-            -o -name GEMINI.md -o -name .claude \) -prune -exec mv {} {}.untrusted \;
+            -o -name GEMINI.md -o -name .claude \) -prune -exec rm -rf {} +
+          if find pr \( -name CLAUDE.md -o -name CLAUDE.local.md -o -name .claude \) | grep -q .; then
+            echo "::error::PR instruction files are still present under pr/."
+            exit 1
+          fi
 
       - name: Install pinned Claude Code
         run: |
