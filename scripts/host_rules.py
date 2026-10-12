@@ -1,9 +1,10 @@
 """Turn the user's Quota Coach level into their agent's own permission rules.
 
 The agent answers each command from its own rules, not from the profile, so a
-level governs only once its rules are in the settings of the folder where the
-user starts Top Mode. Without --write this shows what that folder lacks; with
-it, it writes them there, keeping every rule it did not add itself.
+level governs only once its rules are in the folder where the user starts Top
+Mode. Without --write this shows whether that folder's rules match the level;
+with it, it writes them there. Claude Code's settings keep every rule this did
+not add; Codex gets a rules file of its own.
 """
 
 import argparse
@@ -53,6 +54,7 @@ COMMANDS = {
         "git add:*",
         "git commit:*",
         f"git switch -c {BRANCH}*",
+        f"git switch --create {BRANCH}*",
         f"git switch {BRANCH}*",
         f"git checkout -b {BRANCH}*",
         "git worktree add:*",
@@ -85,8 +87,8 @@ COMMANDS = {
 # Options that destroy work, per command; each is denied as its own word
 # anywhere in the command. Combined short options (`-qC`) are not caught.
 DESTRUCTIVE = {
-    "git push": ("--force", "-f", "--delete", "-d"),
-    "git switch": ("--force", "-f", "--discard-changes", "-C"),
+    "git push": ("--force", "--force-with-lease", "-f", "--delete", "-d"),
+    "git switch": ("--force", "-f", "--discard-changes", "-C", "--force-create"),
     "git checkout": ("--force", "-f", "-B"),
     "git worktree add": ("--force", "-f", "-B"),
     "git branch": ("--force", "-f", "-D", "-M", "-C"),
@@ -102,6 +104,80 @@ DEFAULT_BRANCH = tuple(
         f"git push *refs/heads/{name}*",
     )
 )
+# Codex runs most commands in its sandbox without asking. Its rules name those
+# that leave it (writing .git, using the network), each a prefix of literal
+# words where a list means any of them; a command that matches several rules
+# gets the strictest decision.
+CODEX = {
+    "read": (
+        ["git", "fetch"],
+        ["gh", "pr", ["list", "view", "diff", "checks"]],
+        ["gh", "issue", ["list", "view"]],
+        ["gh", "run", ["list", "view"]],
+    ),
+    "commit": (
+        ["git", ["add", "commit"]],
+        ["git", "switch", ["-c", "--create"]],
+        ["git", "checkout", "-b"],
+        ["git", "worktree", "add"],
+    ),
+    # Only the forms the run uses, so an option right after `push` is never allowed.
+    "publish_pr": (
+        ["git", "push", "origin"],
+        ["git", "push", "-u", "origin"],
+        ["gh", "pr", "create"],
+    ),
+    "review": (["gh", "pr", ["review", "comment"]],),
+    "merge": (["gh", "pr", "merge"],),
+    "install": (
+        ["npm", ["install", "ci"]],
+        ["pip", "install"],
+        ["pip3", "install"],
+        ["python3", "-m", "pip", "install"],
+        ["brew", "install"],
+    ),
+    "access": (
+        ["gh", "auth"],
+        [
+            "security",
+            [
+                "find-generic-password",
+                "find-internet-password",
+                "find-identity",
+                "find-certificate",
+            ],
+        ],
+    ),
+    "destruction": (
+        # The same options as for Claude Code, but only right after the command.
+        *([*command.split(), list(options)] for command, options in DESTRUCTIVE.items()),
+        ["git", "reset", "--hard"],
+        ["git", "clean"],
+        ["rm", ["-rf", "-fr"]],
+        ["gh", "repo", "delete"],
+        ["gh", "release", "delete"],
+        [
+            "security",
+            [
+                "delete-keychain",
+                "delete-generic-password",
+                "delete-internet-password",
+                "delete-identity",
+                "delete-certificate",
+            ],
+        ],
+    ),
+}
+CODEX_DEFAULT_BRANCH = (
+    ["git", "push", "origin", ["main", "master"]],
+    ["git", "push", "-u", "origin", ["main", "master"]],
+)
+CODEX_DECISIONS = {"allowed": "allow", "ask": "prompt", "deny": "forbidden"}
+CODEX_HEADER = """\
+# Written by Quota Coach (host_rules.py) from your profile, and rewritten whole
+# when your level changes. Keep your own rules in another file. Codex reads
+# rules when a session starts.
+"""
 
 
 def folder_rule(tool: str, folder: str) -> str:
@@ -160,6 +236,40 @@ def expected(profile: dict, package: Path = PACKAGE) -> dict:
     return {name: sorted(entries) for name, entries in rules.items()}
 
 
+def words(pattern: list) -> str:
+    return " ".join("|".join(w) if isinstance(w, list) else w for w in pattern)
+
+
+def codex_rules(profile: dict, package: Path = PACKAGE) -> list:
+    """(pattern, decision, why) for the profile's level and exceptions."""
+    validate_profile(profile)
+    decisions = effective_actions(profile)
+    rules = [
+        (
+            pattern,
+            CODEX_DECISIONS[decisions[action]],
+            f"Your setup: {action} is {decisions[action]}",
+        )
+        for action, patterns in CODEX.items()
+        for pattern in patterns
+    ]
+    rules += [
+        (["python3", "-B", f"{folder}/scripts/{script}", *rest], "allow", "Quota Coach itself")
+        for folder in package_folders(package)
+        for script, *rest in (name.split() for name in OWN)
+    ]
+    rules += [(p, "forbidden", "never the default branch") for p in CODEX_DEFAULT_BRANCH]
+    return rules
+
+
+def codex_text(rules: list) -> str:
+    return CODEX_HEADER + "".join(
+        f"prefix_rule(pattern={json.dumps(pattern)}, decision={json.dumps(decision)}, "
+        f"justification={json.dumps(why)})\n"
+        for pattern, decision, why in rules
+    )
+
+
 def read_json(path: Path, default: dict) -> dict:
     if not path.exists() and not path.is_symlink():
         return default
@@ -206,17 +316,23 @@ def apply(settings: dict, change: dict) -> dict:
     return {**settings, "permissions": permissions}
 
 
-def settings_path(folder: Path) -> Path:
+def start_folder(folder: Path) -> Path:
     folder = folder.expanduser()
     require(folder.is_absolute() and folder.is_dir(), "Use the absolute folder where you start")
-    path = folder / ".claude" / "settings.local.json"
-    require(not path.is_symlink(), f"{path} is a link: change the file it points to instead")
+    # Follow a linked folder, so the Git check looks where the rules really land.
+    return folder.resolve()
+
+
+def rules_path(folder: Path, *parts: str) -> Path:
+    for depth in range(1, len(parts) + 1):
+        # A link anywhere below the folder would write somewhere else.
+        path = folder.joinpath(*parts[:depth])
+        require(not path.is_symlink(), f"{path} is a link: change what it points to instead")
     return path
 
 
-def outside_git(path: Path) -> None:
+def outside_git(folder: Path, path: Path) -> None:
     """The rules name the user's folders, so Git must never pick them up."""
-    folder = path.parent.parent
     if not any((p / ".git").exists() for p in (folder, *folder.parents)):
         return
     ignored = subprocess.run(
@@ -225,13 +341,12 @@ def outside_git(path: Path) -> None:
     require(ignored.returncode == 0, f"Have Git ignore {path} first")
 
 
-def write_json(path: Path, data: dict, mode: int) -> None:
+def write_text(path: Path, text: str, mode: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, name = tempfile.mkstemp(prefix=".quota-coach-", dir=path.parent)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            json.dump(data, stream, ensure_ascii=False, indent=2)
-            stream.write("\n")
+            stream.write(text)
         os.chmod(name, mode)
         os.replace(name, path)
     finally:
@@ -239,9 +354,14 @@ def write_json(path: Path, data: dict, mode: int) -> None:
             os.unlink(name)
 
 
-def sync(profile: dict, folder: Path, private: Path, write: bool, package: Path = PACKAGE):
-    """Compare the folder's rules with the level and, if asked, bring them in line."""
-    path = settings_path(folder)
+def write_json(path: Path, data: dict, mode: int) -> None:
+    write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n", mode)
+
+
+def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package=PACKAGE):
+    """Compare the folder's Claude Code rules with the level; if asked, bring them in line."""
+    folder = start_folder(folder)
+    path = rules_path(folder, ".claude", "settings.local.json")
     state_path = private_path(private / "host-rules.json", existing=False)
     if state_path.exists():
         private_path(state_path, existing=True)
@@ -254,8 +374,9 @@ def sync(profile: dict, folder: Path, private: Path, write: bool, package: Path 
     rules = expected(profile, package)
     change = changes(settings, rules, state["claude"].get(str(path), {}))
     current = not any(change["add"].values()) and not any(change["remove"].values())
+    if write:
+        outside_git(folder, path)
     if write and not current:
-        outside_git(path)
         mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
         write_json(path, apply(settings, change), mode)
         mine = state["claude"].get(str(path), {})
@@ -276,9 +397,32 @@ def sync(profile: dict, folder: Path, private: Path, write: bool, package: Path 
     }
 
 
+def sync_codex(profile: dict, folder: Path, write: bool, package: Path = PACKAGE) -> dict:
+    """Compare the folder's Codex rules file with the level; if asked, rewrite it."""
+    folder = start_folder(folder)
+    path = rules_path(folder, ".codex", "rules", "quota-coach.rules")
+    rules = codex_rules(profile, package)
+    text = codex_text(rules)
+    current = path.exists() and path.read_text(encoding="utf-8") == text
+    if write:
+        outside_git(folder, path)
+    if write and not current:
+        write_text(path, text, 0o600)
+    return {
+        "agent": "codex",
+        "rules": str(path),
+        "current": current or write,
+        "written": write and not current,
+        **{
+            decision: [words(p) for p, d, _ in rules if d == decision]
+            for decision in CODEX_DECISIONS.values()
+        },
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--agent", choices=["claude"], required=True)
+    parser.add_argument("--agent", choices=["claude", "codex"], required=True)
     parser.add_argument("--profile", type=Path, help="Default: the saved setup")
     parser.add_argument(
         "--folder", type=Path, default=Path.cwd(), help="Where the user starts Top Mode"
@@ -289,7 +433,11 @@ def main() -> None:
     try:
         path = args.profile or Path(locate(args.private / "binding.json")["profilePath"])
         profile = json.loads(path.read_text(encoding="utf-8"))
-        result = sync(profile, args.folder, args.private, args.write)
+        result = (
+            sync_claude(profile, args.folder, args.private, args.write)
+            if args.agent == "claude"
+            else sync_codex(profile, args.folder, args.write)
+        )
     except (OSError, ValueError) as error:
         parser.error(str(error))
     print(json.dumps(result, ensure_ascii=False, indent=2))

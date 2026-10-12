@@ -98,8 +98,11 @@ would `add` and `remove`. With `--write`, given only with the user's OK, it adds
 them and removes the ones it added before that the profile no longer gives. It
 never removes a rule it did not add: it keeps a record of its own in
 `~/.codex-top-mode/host-rules.json`. A stricter rule of the user's wins in
-Claude Code, as a narrower request does here. It refuses a settings file that is
-a link (change the file it points to) or that Git would pick up.
+Claude Code, as a narrower request does here. It refuses a settings file, or a
+folder on its way, that is a link (change what it points to instead). It also
+refuses one that Git would pick up, even when the file is already current: with
+the user's OK, list it in the repository's `.git/info/exclude`, which stays on
+their machine.
 
 | Rules | From |
 | --- | --- |
@@ -110,20 +113,40 @@ a link (change the file it points to) or that Git would pick up.
 | `gh pr review`, `gh pr comment` | `review` |
 | `gh pr merge` | `merge` |
 | package installs, `gh auth`, reading the keychain (`security find-*`) | `install`, `access` |
-| options that force, delete or reset branches (`-f`, `-d`, `-C`, `-B`, `-D` and their long forms) wherever they stand as their own word; hard resets, `git clean`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
+| options that force, delete or reset branches (`-f`, `-C`, `-B`, `-D`, `-M`, `-d` on push, and their long forms) wherever they stand as their own word; hard resets, `git clean`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
 | the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
 | pushing to `main` or `master`; reading or editing excluded folders with Claude Code's file tools | always denied |
 
 Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
 `deny` to `deny`. `finance` and `redeem_reset` have no commands to match, so
 the rules don't change with them; they stay with the agent and the profile.
+
+On Codex, `--agent codex` writes `<folder>/.codex/rules/quota-coach.rules`, a
+file of its own that it rewrites whole, with the same refusals; the user keeps
+their own rules in other files. Codex reads it when a session starts in that
+folder, once the user trusts the folder in Codex. Codex runs most commands in
+its sandbox without asking, so the file names only those that leave it: the
+Git, `gh` and install commands above, the run's own scripts and the
+always-denied pushes, each as `prefix_rule(pattern=[...], decision=...)`.
+`allowed` becomes `allow` (which runs the command outside the sandbox), `ask`
+becomes `prompt` and `deny` becomes `forbidden`; the strictest matching rule
+wins. Its prefixes are literal words in order, so it cannot tell run branches
+from others (`git push origin` and `git push -u origin` follow `publish_pr`,
+and the default branch is guarded on GitHub), and it catches a destructive
+option only right after its command and written as its own word: there, an
+option with its value joined by `=` matches no rule, so Codex asks, as for any
+command outside its sandbox. Checks and the projects' files stay with the
+sandbox.
+
 These rules match a command's words, not its effect (`git -C . push` is not
 `git push`, and combined options such as `-qC` slip past), so they are not a
 security boundary: protect each project's default branch on GitHub too. To
 keep that gap small, commands with destructive options are allowed only in the
-narrow forms a run needs. Commands allowed in a project see all of it, so an
-excluded folder inside a project is kept from the file tools only; exclude
-whole repositories. Network (UNC) folders are refused.
+narrow forms a run needs. `git branch -d` deletes only a branch that is already
+merged, so no rule blocks it; like any command without a rule, it asks.
+Commands allowed in a project see all of it, so an excluded folder inside a
+project is kept from the file tools only; exclude whole repositories. Network
+(UNC) folders are refused.
 
 ## Private profile binding
 

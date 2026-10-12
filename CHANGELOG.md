@@ -5,6 +5,11 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- `host_rules.py --agent codex` writes your level as Codex rules
+  (`.codex/rules/quota-coach.rules` in the folder where you start), so Codex
+  too stops asking for what your level allows and blocks what it denies. For
+  both agents, the rules also block more ways to force or delete a branch, and
+  the script won't write rules that Git would pick up.
 - Added `scripts/host_rules.py`. It turns your permission level into Claude
   Code's own rules for the folder where you start Top Mode, so Claude Code stops
   asking for what your level allows, keeps asking for what it doesn't, and
