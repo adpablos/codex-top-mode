@@ -233,9 +233,11 @@ revocation remains valid only while the human has not revoked it.
   criterion, owner and status (`planned`, `in_progress`, `done` with evidence,
   `blocked` with a blocker, both given again on each change, and `needsYou`,
   given again with each new blocker, when a blocked task waits on the user) and
-  the time of each change; sessions of an agent named at `start`, with role, start, end and
-  their private ID, which never leaves the journal. An owner that matches a
-  session ID shows as that session's agent and role.
+  the time of each change (`done` again with new evidence updates it);
+  sessions of an agent named at `start`, with role, start, end and the host's
+  private ID, which never leaves the journal. Without one, `session` gives an
+  ID such as `codex-worker-1` and prints it. An owner that matches a session ID
+  shows as that session's agent and role.
 - `status` prints time left, tasks by status with their objective, owner,
   evidence or blocker, `waitingOnYou` (blocked tasks that wait on the user),
   active sessions, `freeThreads` (the limit minus the
