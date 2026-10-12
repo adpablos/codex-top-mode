@@ -183,9 +183,13 @@ python3 -B <this folder>/scripts/usage_report.py plan --markdown
 ```
 
 It rebuilds the Codex weekly windows from the local logs and judges the latest
-closed ones on the current plan. Answer in two or three sentences: the verdict,
-the facts behind it (peak use, how often the limit was reached, what early
-renewals gave) and that Top Mode runs are counted as the user's own use for now.
-It speaks in percentages of the plan: never present them as exact limits, never
-change the plan for the user, and say there is no Claude Code history yet.
+closed ones on the current plan. It also replays the same use on the other
+plans and warns of a coming change to the user's plan. Answer in a few
+sentences: the verdict, the facts behind it (peak use, how often the limit was
+reached, what early renewals gave), any coming change and what it would mean,
+which plan would fit and at what monthly price, and that Top Mode runs are
+counted as the user's own use for now. Plan sizes are multiples of Plus that
+OpenAI has announced, not exact limits: say so, give the date they were checked,
+never change or cancel a plan for the user, and say there is no Claude Code
+history yet.
 Details are in the [plan history contract](references/profile-contract.md#plan-history).

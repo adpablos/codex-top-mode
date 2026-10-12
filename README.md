@@ -60,7 +60,7 @@ spare capacity to use.
 | "Status." | What is done and checked, what is in progress, blockers, time left. |
 | "Stop Top Mode." | No new work; running tasks save a checkpoint; you get the report. |
 | "Explain the report." | Before, after, pending and next step, per project. |
-| "Is my plan enough?" | From your Codex quota history: enough, short, or enough only thanks to resets, with the numbers behind it. |
+| "Is my plan enough?" | From your Codex quota history: enough, short, enough only thanks to resets, or a cheaper plan would do; how the other plans compare and any coming change to yours. |
 
 ## When is it worth it?
 
@@ -107,7 +107,8 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [scripts/install.py](scripts/install.py) | Makes Top Mode available in Codex and Claude Code. |
 | [scripts/check.py](scripts/check.py) | The quiet check: speaks only when there is capacity worth using. |
 | [scripts/usage_report.py](scripts/usage_report.py) | Quota details, tokens per model and plan history from local logs. |
-| [scripts/plan_fit.py](scripts/plan_fit.py) | Rebuilds weekly windows from quota readings and judges the plan. |
+| [scripts/plan_fit.py](scripts/plan_fit.py) | Rebuilds weekly windows from quota readings, judges the plan and compares the others. |
+| [references/plans.json](references/plans.json) | Codex plan prices and sizes, with sources and the date they were checked. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
 | [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, what is ready, what an action needs. |
@@ -125,8 +126,9 @@ Full example: [examples/report.example.md](examples/report.example.md).
 - Quota is shared by everything on your account, so before/after numbers include
   any other work you did meanwhile. The report says so.
 - Plan advice covers Codex only for now, and counts Top Mode runs as your own use
-  until runs are recorded. Providers publish no exact limits, so it speaks in
-  percentages of your plan, never in tokens or dollars.
+  until runs are recorded. Providers publish no exact limits: plans are compared
+  by the multiples of Plus that OpenAI has announced, never in tokens. Prices
+  and sizes change; the file says when they were checked.
 - These are instructions for an agent, not a sandbox. Your agent's own permission
   settings still apply.
 
