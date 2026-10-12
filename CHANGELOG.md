@@ -18,6 +18,10 @@ not a tagged release or evidence of live installation.
   contract, clarified the README's account-wide report example and plan scope,
   and replaced the stale roadmap with current limitations. Update instructions
   also recognize the original `adpablos/codex-top-mode` repository name.
+- The contract's report and run rules are shorter and no longer repeat the
+  skill; its example from the first stage is gone.
+- Removed the optional Claude final-review workflow for maintainers; pull
+  requests are reviewed by an independent agent instead.
 
 ## 2026-10-12
 
