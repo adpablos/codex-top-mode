@@ -1,8 +1,9 @@
 """Keep a private journal of each Top Mode run and answer from it.
 
 `start` fixes the deadline and takes the quota baseline, `task` and `session`
-record the work, `status` says what is going on and whether to stop, and `stop`
-closes the run and writes the report's skeleton. Never assigns work by itself.
+record the work, `status` says what is going on and whether to stop, `stop`
+ends new assignments, and `close` ends the run and writes the report's skeleton.
+Never assigns work by itself.
 """
 
 import argparse
@@ -104,7 +105,7 @@ def readings(codex_home: Path, claude_status: Path, quota_file=None, observed_at
 
 
 def start(data: dict, profile: dict, hours: float, agents: list, found: dict, now: float):
-    require(current(data) is None, "A run is still open; close it with `run.py stop` first")
+    require(current(data) is None, "A run is still open; stop and close it first")
     require(hours > 0, "Give the run a positive number of hours")
     agents = list(dict.fromkeys(agents))
     require(authorization_active(profile, now), "The setup's approval is not active now")
@@ -171,9 +172,14 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     updated.update({k: v for k, v in fields.items() if v and k != "status"})
     require(updated["project"] in run["projects"], "Unknown project: add it to the setup first")
     status = fields["status"]
-    require(status != "done" or updated.get("evidence"), "Say how it was verified: --evidence")
-    require(status != "blocked" or updated.get("blocker"), "Say what blocks it: --blocker")
     if status != updated["status"]:
+        # Reaching done or blocked again needs fresh evidence or a fresh blocker.
+        require(status != "done" or fields.get("evidence"), "Say how it was verified: --evidence")
+        require(status != "blocked" or fields.get("blocker"), "Say what blocks it: --blocker")
+        if status != "done":
+            updated.pop("evidence", None)
+        if status != "blocked":
+            updated.pop("blocker", None)
         updated["status"] = status
         updated["events"] = [*updated["events"], {"at": iso(now), "status": status}]
     if task is None:
@@ -184,6 +190,10 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
 
 
 def record_session(run: dict, session_id: str, agent: str, role: str, ended: bool, now: float):
+    require(
+        agent in run["agents"],
+        f"This run does not track {agent}'s quota; name every agent it spends at start",
+    )
     session = next((s for s in run["sessions"] if s["id"] == session_id), None)
     if session is None:
         session = {"id": session_id, "agent": agent, "role": role, "startedAt": iso(now)}
@@ -192,6 +202,17 @@ def record_session(run: dict, session_id: str, agent: str, role: str, ended: boo
     if ended and not session["endedAt"]:
         session["endedAt"] = iso(now)
     return session
+
+
+def owner(run: dict, name: str) -> str:
+    """Who owns a task, never as a session ID."""
+    session = next((s for s in run["sessions"] if s["id"] == name), None)
+    return f"{session['agent']} {session['role']} session" if session else name
+
+
+def task_view(run: dict, task: dict) -> dict:
+    view = {k: task[k] for k in ("id", "project", "objective", "evidence", "blocker") if k in task}
+    return {**view, "owner": owner(run, task["owner"])}
 
 
 def quota_now(run: dict, found: dict, now: float) -> dict:
@@ -223,28 +244,41 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
     if monitor.get("mode") == "normal" and monitor["stopReason"] != "authorized_time_window_ended":
         reasons.append("weekly_renewal")
     active = [s for s in run["sessions"] if not s["endedAt"] and s["role"] != "coordinator"]
+    working = [t for t in run["tasks"] if t["status"] == "in_progress"]
+    # The coordinator is one thread; each task in progress counts, even two of one session.
+    busy = 1 + max(len(active), len(working))
     return {
         "active": True,
         "startedAt": run["startedAt"],
         "deadline": run["deadline"],
         "minutesLeft": max(0, round((epoch(run["deadline"]) - now) / 60)),
-        "stopNow": bool(reasons),
+        "stoppedAt": run.get("stoppedAt"),
+        "stopNow": bool(reasons) or "stoppedAt" in run,
         "stopReasons": reasons,
-        "tasks": {s: [t["id"] for t in run["tasks"] if t["status"] == s] for s in STATUSES},
+        "tasks": {
+            s: [task_view(run, t) for t in run["tasks"] if t["status"] == s] for s in STATUSES
+        },
         "activeSessions": len(active),
-        # The coordinator counts as one thread.
-        "freeThreads": max(0, run["maximumActiveThreads"] - 1 - len(active)),
+        "freeThreads": max(0, run["maximumActiveThreads"] - busy),
         "quota": quota_now(run, found, now),
         "savedResetAdded": bool(monitor.get("bankedResetObserved")),
     }
 
 
-def stop(run: dict, reason: str, found: dict, now: float) -> dict:
+def stop(run: dict, reason: str, now: float) -> dict:
+    """No new assignments from now on; the run stays open to record checkpoints."""
+    require("stoppedAt" not in run, "The run already stopped; close it with `run.py close`")
     require(
         reason != "deadline" or now >= epoch(run["deadline"]) - 60,
         "The deadline has not arrived; give the real reason",
     )
-    run.update(endedAt=iso(now), stopReason=reason)
+    run.update(stoppedAt=iso(now), stopReason=reason)
+    return run
+
+
+def close(run: dict, found: dict, now: float) -> dict:
+    require("stoppedAt" in run, "Stop the run first with `run.py stop`")
+    run["endedAt"] = iso(now)
     run["quotaAfter"] = {agent: found.get(agent) for agent in run["agents"]}
     return run
 
@@ -293,13 +327,14 @@ def report(run: dict, tokens: str) -> str:
         if tasks:
             out.append(f"**{label}**")
         for t in tasks:
+            who = owner(run, t["owner"])
             if t["status"] == "done":
                 out.append(f"- Done: {t['objective']}. Verified: {t['evidence']}.")
             elif t["status"] == "blocked":
-                out.append(f"- Blocked: {t['objective']}. {t['blocker']}. Next: {t['owner']}.")
+                out.append(f"- Blocked: {t['objective']}. {t['blocker']}. Next: {who}.")
             else:
                 state = t["status"].replace("_", " ")
-                out.append(f"- Not finished ({state}): {t['objective']}. Next: {t['owner']}.")
+                out.append(f"- Not finished ({state}): {t['objective']}. Next: {who}.")
         if tasks:
             out.append("")
     if not run["tasks"]:
@@ -312,7 +347,8 @@ def report(run: dict, tokens: str) -> str:
         "| --- | --- |",
         f"| Started | {clock(run['startedAt'])}, for {run['requestedHours']:g} h |",
         f"| Deadline | {clock(run['deadline'])}{capped} |",
-        f"| Stopped | {clock(run['endedAt'])}: {REASONS[run['stopReason']]} |",
+        f"| Stopped | {clock(run['stoppedAt'])}: {REASONS[run['stopReason']]} |",
+        f"| Closed | {clock(run['endedAt'])}, after collecting checkpoints |",
         f"| Level | {run['level']} |",
     ]
     for agent in run["agents"]:
@@ -341,6 +377,16 @@ def report(run: dict, tokens: str) -> str:
     if run["unknown"]:
         out += ["", "## Unknown", ""] + [f"- {item}" for item in run["unknown"]]
     return "\n".join(out) + "\n"
+
+
+def report_path(folder: Path, since: float) -> Path:
+    """A new file per run, even for two runs started in the same second."""
+    stem = time.strftime("%Y-%m-%d-%H%M%S", time.gmtime(since))
+    path, n = folder / f"{stem}.md", 1
+    while path.exists() or path.is_symlink():
+        n += 1
+        path = folder / f"{stem}-{n}.md"
+    return path
 
 
 def load_profile(args) -> dict:
@@ -379,8 +425,9 @@ def main() -> None:
     one.add_argument("--role", choices=ROLES, default="worker")
     one.add_argument("--ended", action="store_true")
     commands.add_parser("status", parents=[sources], help="Where the run stands; stop or not")
-    end = commands.add_parser("stop", parents=[sources], help="Close the run, write the report")
+    end = commands.add_parser("stop", parents=[private], help="Stop assigning work, say why")
     end.add_argument("--reason", choices=REASONS, required=True)
+    commands.add_parser("close", parents=[sources], help="End the run, write the report")
     args = parser.parse_args()
     now = time.time()
     try:
@@ -393,7 +440,7 @@ def main() -> None:
             print(json.dumps({"active": False, "lastRun": last}))
             return
         require(args.command == "start" or run is not None, "No run is open")
-        if args.command in ("start", "status", "stop"):
+        if args.command in ("start", "status", "close"):
             found = readings(
                 args.codex_home,
                 args.private / "claude-status.json",
@@ -423,8 +470,11 @@ def main() -> None:
             except (OSError, ValueError):
                 profile = None  # Missing or broken now: either way, not what was approved.
             result = status(run, profile, found, now)
+        elif args.command == "stop":
+            stop(run, args.reason, now)
+            result = {"stoppedAt": run["stoppedAt"], "stopReason": args.reason}
         else:
-            stop(run, args.reason, found, now)
+            close(run, found, now)
             since = epoch(run["startedAt"])
             tokens = {
                 "since": iso(since),
@@ -434,10 +484,10 @@ def main() -> None:
                     claude_tokens(args.claude_home, since, now),
                 ],
             }
-            name = time.strftime("%Y-%m-%d-%H%M%S.md", time.gmtime(since))
-            path = write_text(args.private / "reports" / name, report(run, markdown(tokens)))
+            path = report_path(args.private / "reports", since)
+            write_text(path, report(run, markdown(tokens)))
             run["report"] = str(path)
-            result = {"report": str(path), "stopReason": args.reason}
+            result = {"report": str(path), "stopReason": run["stopReason"]}
         save(journal, data)
     except (OSError, ValueError) as error:
         parser.error(str(error))

@@ -161,19 +161,24 @@ revocation remains valid only while the human has not revoked it.
   `detectLowUsageRenewalShift: true`.
 - `task` and `session` record the work: tasks with project, objective, done
   criterion, owner and status (`planned`, `in_progress`, `done` with evidence,
-  `blocked` with a blocker) and the time of each change; sessions with agent,
-  role, start, end and their private ID, which never leaves the journal.
-- `status` prints time left, tasks by status, active sessions, `freeThreads`
-  (the limit minus the coordinator and active sessions; threads outside the run
-  still count and only the operator knows them) and each agent's newest reading
-  with its age. `stopNow` lists `stopReasons`: `deadline`, `profile_changed` (a
+  `blocked` with a blocker, both given again on each change) and the time of
+  each change; sessions of an agent named at `start`, with role, start, end and
+  their private ID, which never leaves the journal. An owner that matches a
+  session ID shows as that session's agent and role.
+- `status` prints time left, tasks by status with their objective, owner,
+  evidence or blocker, active sessions, `freeThreads` (the limit minus the
+  coordinator and the larger of active sessions and tasks in progress; threads
+  outside the run still count and only the operator knows them) and each agent's
+  newest reading with its age. `stopNow` lists `stopReasons`: `deadline`, `profile_changed` (a
   different fingerprint, or a missing or invalid profile), `authorization_ended`,
   and `weekly_renewal` when Codex's own payload, passed with `--quota-file`,
   confirms an early renewal with two fresh readings. Readings from logs or the
   status line are shown but do not stop a run. A saved reset that appears shows
   as `savedResetAdded` and in the report; it never extends the deadline.
-- `stop --reason R` records the end, the reason and `quotaAfter`, and writes the
-  [report](#run-report) skeleton to `~/.codex-top-mode/reports/`.
+- `stop --reason R` records when new assignments stopped and why; `status` then
+  keeps `stopNow`. Checkpoints are still recorded after it.
+- `close` ends the run, records `quotaAfter` and writes the
+  [report](#run-report) skeleton to a new file in `~/.codex-top-mode/reports/`.
 
 Nothing renews a deadline, also on resume. Without a quota reading a run has
 only its clock deadline and supervised checkpoints; never invent quota or claim
@@ -336,7 +341,7 @@ limits:
 ## Run report
 
 The coordinator closes a run with a private, portable Markdown report, starting
-from the skeleton `run.py stop` writes from the journal: tasks per project, the
+from the skeleton `run.py close` writes from the journal: tasks per project, the
 run's times and stop reason, quota before and after, sessions and tokens. Lead with
 what improved and why it matters, grouped by project: before, verified after,
 pending/blocker, and next step with an owner. Include attempted or blocked work

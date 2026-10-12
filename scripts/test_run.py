@@ -143,6 +143,18 @@ class TaskAndSessionTests(unittest.TestCase):
         task = new_task(self.run, status="done", evidence="tests pass", at=NOW + 60)
         self.assertEqual(task["status"], "done")
 
+    def test_reaching_done_or_blocked_again_needs_fresh_words(self):
+        new_task(self.run, status="done", evidence="old check")
+        task = new_task(self.run, status="in_progress", at=NOW + 60)
+        self.assertNotIn("evidence", task)
+        with self.assertRaisesRegex(ValueError, "evidence"):
+            new_task(self.run, status="done", at=NOW + 120)
+        new_task(self.run, status="blocked", blocker="Needs your login", at=NOW + 120)
+        task = new_task(self.run, status="in_progress", at=NOW + 180)
+        self.assertNotIn("blocker", task)
+        with self.assertRaisesRegex(ValueError, "blocker"):
+            new_task(self.run, status="blocked", at=NOW + 240)
+
     def test_progress_is_recorded_once_per_change(self):
         new_task(self.run)
         new_task(self.run, status="in_progress", at=NOW + 60)
@@ -160,22 +172,42 @@ class TaskAndSessionTests(unittest.TestCase):
         self.assertEqual(session["endedAt"], iso(NOW + 60))
         self.assertEqual(len(self.run["sessions"]), 1)
 
+    def test_a_session_must_spend_an_agent_named_at_start(self):
+        with self.assertRaisesRegex(ValueError, "does not track claude"):
+            run.record_session(self.run, "s1", "claude", "worker", False, NOW)
+        self.assertEqual(self.run["sessions"], [])
+
 
 class StatusTests(unittest.TestCase):
     def test_reports_time_left_tasks_threads_and_quota_age(self):
         _, r = fresh(profile(maximumActiveThreads=3))
         new_task(r, status="in_progress")
-        run.record_session(r, "c", "claude", "coordinator", False, NOW)
+        run.record_session(r, "c", "codex", "coordinator", False, NOW)
         run.record_session(r, "w", "codex", "worker", False, NOW)
         found = {"codex": log_reading(at=NOW + 30 * 60), "claude": None}
         result = run.status(r, profile(maximumActiveThreads=3), found, NOW + HOUR)
         self.assertEqual(result["minutesLeft"], 60)
         self.assertFalse(result["stopNow"])
-        self.assertEqual(result["tasks"]["in_progress"], ["fix-import"])
+        self.assertEqual(
+            result["tasks"]["in_progress"],
+            [{"id": "fix-import", "project": "notes-app", "objective": "Stop duplicate imports",
+              "owner": "anyone"}],
+        )  # fmt: skip
         # Three threads: this coordinator, one worker, one free.
         self.assertEqual((result["activeSessions"], result["freeThreads"]), (1, 1))
         self.assertEqual(result["quota"]["codex"]["minutesOld"], 30)
         self.assertNotIn("claude", result["quota"])
+
+    def test_every_task_in_progress_takes_a_thread_and_owners_hide_session_ids(self):
+        _, r = fresh(profile(maximumActiveThreads=3))
+        run.record_session(r, "private-id", "codex", "worker", False, NOW)
+        new_task(r, status="in_progress", owner="private-id")
+        new_task(r, "docs", status="in_progress", owner="private-id")
+        result = run.status(r, profile(maximumActiveThreads=3), {}, NOW)
+        self.assertEqual(result["freeThreads"], 0)
+        owners = [t["owner"] for t in result["tasks"]["in_progress"]]
+        self.assertEqual(owners, ["codex worker session"] * 2)
+        self.assertNotIn("private-id", json.dumps(result["tasks"]))
 
     def test_says_stop_at_the_deadline_or_when_the_setup_changes(self):
         p = profile()
@@ -216,9 +248,25 @@ class StopAndReportTests(unittest.TestCase):
     def test_deadline_is_refused_as_a_reason_before_it_arrives(self):
         _, r = fresh()
         with self.assertRaisesRegex(ValueError, "real reason"):
-            run.stop(r, "deadline", {}, NOW + HOUR)
-        run.stop(r, "deadline", {}, NOW + 2 * HOUR - 30)
+            run.stop(r, "deadline", NOW + HOUR)
+        run.stop(r, "deadline", NOW + 2 * HOUR - 30)
         self.assertEqual(r["stopReason"], "deadline")
+
+    def test_stop_ends_assignments_and_close_ends_the_run(self):
+        p = profile()
+        _, r = fresh(p)
+        with self.assertRaisesRegex(ValueError, "Stop the run first"):
+            run.close(r, {}, NOW)
+        run.stop(r, "user", NOW + 60)
+        with self.assertRaisesRegex(ValueError, "already stopped"):
+            run.stop(r, "user", NOW + 90)
+        result = run.status(r, p, {}, NOW + 90)
+        self.assertEqual((result["stopNow"], result["stoppedAt"]), (True, iso(NOW + 60)))
+        # Checkpoints still go in after the stop.
+        new_task(r, status="blocked", blocker="Waiting on CI", at=NOW + 120)
+        run.close(r, {"codex": log_reading(at=NOW + 180)}, NOW + 180)
+        self.assertEqual((r["stoppedAt"], r["endedAt"]), (iso(NOW + 60), iso(NOW + 180)))
+        self.assertIsNone(run.current({"runs": [r]}))
 
     def test_the_report_keeps_the_facts_and_leaves_the_story_to_the_agent(self):
         found = {"codex": log_reading(used=38), "claude": None}
@@ -226,14 +274,19 @@ class StopAndReportTests(unittest.TestCase):
         new_task(r, status="done", evidence="2 new tests pass; merged")
         new_task(r, "alerts", project="website", status="blocked", blocker="Needs your login")
         new_task(r, "docs", status="in_progress", owner="you")
+        new_task(r, "lint", status="in_progress", owner="w1")
         run.record_session(r, "w1", "codex", "worker", True, NOW)
-        run.stop(r, "user", {"codex": log_reading(used=71, at=NOW + HOUR), "claude": None}, NOW)
+        run.stop(r, "user", NOW)
+        after = {"codex": log_reading(used=71, at=NOW + HOUR), "claude": None}
+        run.close(r, after, NOW + 10 * 60)
         text = run.report(r, "TOKENS TABLE")
         for expected in (
             "- Done: Stop duplicate imports. Verified: 2 new tests pass; merged.",
             "**Personal website**\n- Blocked: Stop duplicate imports. Needs your login.",
             "- Not finished (in progress): Stop duplicate imports. Next: you.",
+            "- Not finished (in progress): Stop duplicate imports. Next: codex worker session.",
             "| Stopped | 2033-05-18 03:33 UTC: you asked to stop |",
+            "| Closed | 2033-05-18 03:43 UTC, after collecting checkpoints |",
             "| Weekly quota, codex | 38% used at 2033-05-18 03:33 UTC → 71% used at "
             "2033-05-18 04:33 UTC (Codex local logs). Includes anything else",
             "| Weekly quota, claude | unknown: no reading; save the Claude Code status line",
@@ -242,6 +295,7 @@ class StopAndReportTests(unittest.TestCase):
             "- claude: renewal time unknown",
         ):
             self.assertIn(expected, text)
+        self.assertNotIn("w1", text)
 
     def test_a_saved_reset_that_appears_is_reported_and_extends_nothing(self):
         p = profile()
@@ -251,13 +305,15 @@ class StopAndReportTests(unittest.TestCase):
         result = run.status(r, p, {"codex": later}, NOW + 60)
         self.assertTrue(result["savedResetAdded"])
         self.assertEqual((result["stopReasons"], result["deadline"]), ([], iso(NOW + 2 * HOUR)))
-        run.stop(r, "user", {"codex": later}, NOW + 120)
+        run.stop(r, "user", NOW + 120)
+        run.close(r, {"codex": later}, NOW + 120)
         self.assertIn("| Saved resets | A new one appeared during the run", run.report(r, ""))
 
     def test_a_renewal_between_readings_is_not_counted_as_the_runs_use(self):
         _, r = fresh()
         after = log_reading(used=3, at=NOW + HOUR, renews=NOW + 200 * HOUR)
-        run.stop(r, "weekly_renewal", {"codex": after}, NOW + HOUR)
+        run.stop(r, "weekly_renewal", NOW + HOUR)
+        run.close(r, {"codex": after}, NOW + HOUR)
         text = run.report(r, "")
         self.assertIn("renewed in between, so the difference is not this run's use", text)
         self.assertIn("No tasks were recorded.", text)
@@ -266,7 +322,7 @@ class StopAndReportTests(unittest.TestCase):
     @staticmethod
     def with_coordinator(r):
         r = copy.deepcopy(r)
-        run.record_session(r, "c", "claude", "coordinator", True, NOW)
+        run.record_session(r, "c", "codex", "coordinator", True, NOW)
         return r
 
 
@@ -284,7 +340,7 @@ class CommandTests(unittest.TestCase):
 
     def cli(self, *argv, at=NOW):
         args = ["run.py", *argv, "--private", str(self.private)]
-        if argv[0] in ("start", "status", "stop"):
+        if argv[0] in ("start", "status", "close"):
             args += ["--profile", str(self.profile), "--codex-home", str(self.codex)]
             args += ["--claude-home", str(self.codex)]
         out = io.StringIO()
@@ -309,21 +365,36 @@ class CommandTests(unittest.TestCase):
         )  # fmt: skip
         session = self.cli("session", "private-id", "--agent", "codex", "--ended")
         self.assertNotIn("private-id", json.dumps(session))
-        self.assertEqual(self.cli("status", at=NOW + 60)["tasks"]["done"], ["fix"])
+        self.assertEqual(self.cli("status", at=NOW + 60)["tasks"]["done"][0]["id"], "fix")
         stopped = self.cli("stop", "--reason", "nothing_ready", at=NOW + HOUR)
-        report = Path(stopped["report"])
+        self.assertEqual(stopped["stoppedAt"], iso(NOW + HOUR))
+        self.assertTrue(self.cli("status", at=NOW + HOUR)["stopNow"])
+        closed = self.cli("close", at=NOW + HOUR + 60)
+        report = Path(closed["report"])
         self.assertEqual(report.name, "2033-05-18-033320.md")
         self.assertIn("no ready work was left", report.read_text())
         last = self.cli("status")["lastRun"]
-        self.assertEqual((last["endedAt"], last["report"]), (iso(NOW + HOUR), str(report)))
+        self.assertEqual((last["endedAt"], last["report"]), (iso(NOW + HOUR + 60), str(report)))
         for path in (report, self.private / "runs.json"):
             self.assertFalse(path.stat().st_mode & 0o077)
         self.assertIn("private-id", (self.private / "runs.json").read_text())
         self.assertNotIn("private-id", report.read_text())
 
     def test_refuses_work_without_an_open_run(self):
-        for argv in (("task", "x", "--status", "planned"), ("stop", "--reason", "user")):
+        for argv in (
+            ("task", "x", "--status", "planned"),
+            ("stop", "--reason", "user"),
+            ("close",),
+        ):
             self.assertIn("No run is open", self.refused(*argv))
+
+    def test_two_runs_started_in_the_same_second_keep_both_reports(self):
+        for _ in range(2):
+            self.cli("start", "--hours", "1", "--agents", "codex")
+            self.cli("stop", "--reason", "user")
+            self.cli("close")
+        names = sorted(p.name for p in (self.private / "reports").iterdir())
+        self.assertEqual(names, ["2033-05-18-033320-2.md", "2033-05-18-033320.md"])
 
     def test_a_broken_setup_shows_as_changed(self):
         self.cli("start", "--hours", "1", "--agents", "codex")

@@ -147,10 +147,11 @@ python3 -B <this folder>/scripts/run.py start --hours <H> --agents <codex and/or
 `--agents` names whose quota the run spends: yours and any agent you delegate
 to. If no duration was given and none was approved as default, ask first. It
 refuses when the setup's approval is not active or another run is still open
-(close that one with `run.py stop`). It fixes the **deadline**: the hours asked,
-capped by `maximumHours`, `validUntil` and, when the setup says so, the weekly
-renewal; nothing extends it. On Codex with its own usage payload, pass it saved
-as `--quota-file` here and on every `status`, to notice an early renewal.
+(finish that one first, as in [Stop](#4-stop)). It fixes the **deadline**: the
+hours asked, capped by `maximumHours`, `validUntil` and, when the setup says so,
+the weekly renewal; nothing extends it. On Codex with its own usage payload, save
+a fresh one and pass it as `--quota-file` here, on every `status` and on
+`close`, to notice an early renewal and measure the run with the same source.
 
 Then:
 
@@ -160,23 +161,27 @@ Then:
    the user can change it or stop at any time.
 2. Record each task when you plan it and whenever its state changes:
    `run.py task <id> --status planned|in_progress|done|blocked`. A new task also
-   takes `--project`, `--objective`, `--done-when` and `--owner`; `done` needs
-   `--evidence` you checked yourself (tests, diff, file), `blocked` a `--blocker`.
+   takes `--project`, `--objective`, `--done-when` and `--owner`; each change to
+   `done` needs new `--evidence` you checked yourself (tests, diff, file), and
+   each change to `blocked` a new `--blocker`.
 3. Record each session you start or reuse:
    `run.py session <id> --agent codex|claude --role worker|reviewer`, and again
-   with `--ended` when it finishes. Its ID stays in the private journal.
+   with `--ended` when it finishes. Its ID stays in the private journal. Name
+   every agent a session spends in `start --agents`; others are refused.
 4. Before each assignment, run `run.py status`. Stop when it says `stopNow`
    (deadline, setup changed, approval ended, weekly allowance renewed). Delegate
-   only while `freeThreads` is above zero, and check the action's decision with
+   only while `freeThreads` is above zero (each task in progress takes a thread),
+   and check the action's decision with
    `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`.
 
 While working:
 
 - Prefer continuing a session that already owns the task. Delegate only bounded,
   independent work, through your host's supported tools; otherwise work serially.
-- An owner is a person, "anyone", or a session you can see. If you cannot tell
-  whether the owner is busy (a Codex thread seen from Claude Code, say), ask the
-  user, or only read and diagnose.
+- An owner is a person, "anyone", or a session you can see, written as its role
+  (`codex worker`), never its ID. If you cannot tell whether the owner is busy (a
+  Codex thread seen from Claude Code, say), ask the user, or only read and
+  diagnose.
 - Commit only on a working branch, never on the default branch. At `autonomous`,
   merge only after an independent review and with checks green.
 - Work outside the run you come across (a broken pull request, a stale branch):
@@ -194,21 +199,22 @@ with its age.
 
 ## 4. Stop
 
-Stop assigning new work when `status` says so or the user says stop. Ask active
-owners for a short checkpoint, collect results and record them, then close the
-run:
+When `status` says so or the user says stop, record it at once, so the journal
+keeps the real time new assignments stopped:
 
 ```sh
 python3 -B <this folder>/scripts/run.py stop --reason <reason>
 ```
 
 The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
-`authorization_ended` or `weekly_renewal`. Stopping Top Mode does not pause any
+`authorization_ended` or `weekly_renewal`. Assign nothing new after it. Ask
+active owners for a short checkpoint and record each result with `run.py task`
+and `run.py session --ended`, then end the run with `run.py close`. Stopping Top Mode does not pause any
 separate scheduled watch; say which schedules, if any, are still active.
 
 ## 5. Report
 
-`stop` writes the report's skeleton in the private folder and prints its path:
+`close` writes the report's skeleton in the private folder and prints its path:
 the tasks, the run's times, quota before and after, sessions and tokens. Turn it
 into a short report in the user's language, grouped by project, following the
 [run-report contract](references/profile-contract.md#run-report) and the
