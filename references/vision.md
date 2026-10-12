@@ -17,7 +17,7 @@ without babysitting and **without losing control**.
    The setup stays private and is updated as things change.
 3. **Get told when it's worth it.** A quiet periodic check speaks up only when
    there is something to use: weekly allowance about to renew with plenty left,
-   saved resets about to expire, or an announced reset.
+   or saved resets about to expire.
 4. **Start with one sentence.** "Start Top Mode for 2 hours."
 5. **Know what happened.** Every run ends with a short report: before and after,
    what is pending, and what it used.
@@ -54,8 +54,7 @@ without babysitting and **without losing control**.
 
 Done: plain-language docs, private setup that later sessions recover, quota
 suggestion and token report from local logs, manual runs with deadlines and
-reports, an experimental watch for announced Codex resets that only notifies,
-quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
+reports, quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
 documentation links, macOS), one-step install for Codex and Claude Code, a
 quiet `check` command to schedule with the agent's own scheduler, a verdict
 on whether the Codex plan has been enough, from its weekly history, compared

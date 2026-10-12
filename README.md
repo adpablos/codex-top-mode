@@ -10,7 +10,7 @@ than you need. Quota Coach is a skill for your agent (Codex, Claude Code or any
 agent that can read files and run Python) that helps you get the most out of it:
 
 - **It tells you when it's worth it.** Your weekly allowance renews soon and a
-  lot is still unused, saved resets are about to expire, or a reset was announced.
+  lot is still unused, or saved resets are about to expire.
 - **Top Mode works on your priorities, with your rules.** When you say so, it
   spends the spare capacity on your projects. You decide what to leave out, and
   what the agent may do alone or must ask first.
@@ -54,7 +54,7 @@ saves it, after your approval, in a private file outside any Git repository. You
 never need to edit JSON.
 
 **3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
-every 4 hours with your cheapest model and only tell me when there is
+once a day with your cheapest model and only tell me when there is
 something."* The agent schedules a quiet check with its own scheduler. It speaks
 up only when there is spare capacity to use.
 
@@ -75,10 +75,11 @@ up only when there is spare capacity to use.
 | --- | --- | --- |
 | Weekly allowance renews soon and plenty is unused | Yes, from Codex's local logs | Yes, if you let the agent save your status line ([how](references/profile-contract.md#quota-readings)); otherwise it asks you |
 | Saved resets are about to expire | Only from Codex's own usage payload, saved and passed to the check ([how](references/profile-contract.md#proactive-check)); local logs don't list them | Not applicable |
-| A usage reset is announced | Optional, experimental ([details](references/announcements.md)) | Not applicable |
 | You simply want to push work forward | Yes | Yes |
 
-The check only suggests. Top Mode only starts when you say so.
+The check only suggests. Top Mode only starts when you say so. For announced
+Codex resets, follow a public tracker such as
+[Codex Resets](https://mcpservers.org/remote-mcp-servers/codex-resets).
 
 ## You stay in control
 
@@ -118,7 +119,6 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [AGENTS.md](AGENTS.md) | Entry point for agents. |
 | [SKILL.md](SKILL.md) | How the agent sets up, runs, stops and reports. |
 | [references/profile-contract.md](references/profile-contract.md) | The setup file, quota sources and report rules. |
-| [references/announcements.md](references/announcements.md) | Optional: watching for announced Codex resets. |
 | [scripts/install.py](scripts/install.py) | Makes Quota Coach available in Codex and Claude Code. |
 | [scripts/check.py](scripts/check.py) | The quiet check: speaks only when there is capacity worth using. |
 | [scripts/usage_report.py](scripts/usage_report.py) | Quota details, tokens per model and plan history from local logs. |
@@ -128,8 +128,7 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [scripts/run.py](scripts/run.py) | Keeps a private journal of each run: deadline, quota, tasks and sessions. Answers "status" and drafts the report. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
 | [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, and what an action needs. |
-| [scripts/public_watch.py](scripts/public_watch.py) | Optional: watches for announced Codex resets and only tells you. |
-| [examples/](examples/) | Fictional setup, watch and report examples. |
+| [examples/](examples/) | Fictional setup and report examples. |
 
 ## Limits
 

@@ -5,6 +5,10 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Removed the experimental watch for announced Codex resets (`public_watch.py`
+  and its guide). Public trackers such as Codex Resets do this better; the
+  check now reads quota only and a daily schedule is enough. A leftover
+  `watch.json` in the private folder is ignored.
 - `host_rules.py --agent codex` writes your level as Codex rules
   (`.codex/rules/quota-coach.rules` in the folder where you start), so Codex
   too stops asking for what your level allows and blocks what it denies. For
@@ -96,7 +100,7 @@ not a tagged release or evidence of live installation.
 - Rewrote the README, AGENTS.md and skill in plain language around four jobs:
   set up, check, run and report. Top Mode now targets Codex, Claude Code and
   similar agents; announced Codex resets are an optional add-on with their own
-  [guide](references/announcements.md). Removed the unimplemented cloud mailbox
+  guide (since removed). Removed the unimplemented cloud mailbox
   description.
 - Added `scripts/usage_report.py`: a quota suggestion (unused weekly allowance
   near renewal, expiring saved resets) from Codex local logs, a native Codex

@@ -7,8 +7,6 @@ run on a schedule. Never starts work.
 
 import argparse
 import json
-import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -95,46 +93,6 @@ def summary_line(agent, advice):
     return f"{agent}: {week} ({age}). Suggestion: {advice['suggestion']}."
 
 
-def watch(script, config, state):
-    """Run the optional announcement watch once: (news pairs, announcement lines).
-
-    The watch decides whether a read is due and tells each announcement once. A failure
-    to run repeats on every check, so it is news, told at most once a day.
-    """
-    if not config.is_file():
-        return [], []
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            str(script),
-            "--once",
-            "--config",
-            str(config),
-            "--state",
-            str(state),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        failure = "Announcement watch failed to run: " + (result.stderr.strip() or "no details")
-        return [("watch:failed", failure)], []
-    lines = []
-    for signal in json.loads(result.stdout or "{}").get("signals", []):
-        if signal["kind"] == "needs_interpretation":
-            text = " ".join(str(signal.get("text", "")).split())[:140]
-            lines.append(f"New announcement to read: {signal['sourceUrl']} ({text})")
-        elif signal["kind"] == "coverage_failure":
-            lines.append(
-                f"Could not read {signal['source']} for a while; announcements may be missed."
-            )
-        elif signal["kind"] == "coverage_recovered":
-            lines.append(f"Reading {signal['source']} works again.")
-    return [], lines
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verbose", action="store_true", help="Also print the full status")
@@ -144,16 +102,10 @@ def main():
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        # Nothing check or the watch reads or writes may sit in Git or behind a link.
-        state, config, watch_state, _, claude_status = (
+        # Nothing check reads or writes may sit in Git or behind a link.
+        state, claude_status = (
             private_path(args.private / name, existing=False)
-            for name in (
-                "check-state.json",
-                "watch.json",
-                "watch-state.json",
-                "watch-state.json.lock",  # created by public_watch.py
-                "claude-status.json",
-            )
+            for name in ("check-state.json", "claude-status.json")
         )
     except ValueError as error:
         parser.error(str(error))
@@ -163,23 +115,16 @@ def main():
         for agent, reading in readings(args.codex_home, claude_status, args.quota_file)
     ]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
-    failures, announcements = watch(
-        Path(__file__).with_name("public_watch.py"), config, watch_state
-    )
-    news += failures
     if args.json:
-        lines = [line for _, line in news] + announcements
+        lines = [line for _, line in news]
         print(json.dumps({"messages": lines, "quota": dict(advice)}, indent=2))
         return
     if args.verbose:
         lines = [summary_line(agent, item) for agent, item in advice]
-        if not config.is_file():
-            lines.append("Announcements: watch not set up (optional).")
         lines += [line for _, line in news]
     else:
         # Scheduled checks repeat; tell each piece of news at most once a day.
         lines = unseen(news, state, now)
-    lines += announcements
     if lines:
         print("\n".join(lines))
 
