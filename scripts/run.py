@@ -178,11 +178,19 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     return updated
 
 
-def record_session(run: dict, session_id: str, agent: str, role: str, ended: bool, now: float):
+def record_session(run: dict, session_id, agent: str, role: str, ended: bool, now: float):
     require(
         agent in run["agents"],
         f"This run does not track {agent}'s quota; name every agent it spends at start",
     )
+    if not session_id:
+        # No ID the host shows: give one, which the caller reuses for --ended.
+        taken = {s["id"] for s in run["sessions"]}
+        session_id = next(
+            f"{agent}-{role}-{n}"
+            for n in range(1, len(taken) + 2)
+            if f"{agent}-{role}-{n}" not in taken
+        )
     session = next((s for s in run["sessions"] if s["id"] == session_id), None)
     require(session or "stoppedAt" not in run, "The run stopped: start no new sessions")
     if session is None:
@@ -429,7 +437,7 @@ def main() -> None:
         "--needs-you", action="store_true", help="Blocked on the user's decision or action"
     )
     one = commands.add_parser("session", parents=[private], help="Record a session the run uses")
-    one.add_argument("id")
+    one.add_argument("id", nargs="?", help="The host's session ID; default: a new one")
     one.add_argument("--agent", choices=AGENTS, required=True)
     one.add_argument("--role", choices=ROLES, default="worker")
     one.add_argument("--ended", action="store_true")
@@ -470,7 +478,9 @@ def main() -> None:
             result = {**task, "owner": owner(run, task["owner"])}
         elif args.command == "session":
             session = record_session(run, args.id, args.agent, args.role, args.ended, now)
-            result = {k: v for k, v in session.items() if k != "id"}
+            # A host's ID stays private; one run.py gave is needed again for --ended.
+            hidden = () if args.id is None else ("id",)
+            result = {k: v for k, v in session.items() if k not in hidden}
         elif args.command == "status":
             try:
                 profile = load_profile(args)

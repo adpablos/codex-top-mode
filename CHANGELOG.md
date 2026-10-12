@@ -5,6 +5,9 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- `run.py session` gives an ID when the host shows none. The guide says how to
+  update a done task's evidence and to leave each repository on its branch,
+  without the run's worktrees, before closing.
 - The private folder is now `~/.config/quota-coach`; a setup in
   `~/.codex-top-mode` moves there on its own, leaving a link behind.
   `install.py --agent codex|claude` installs for one agent, and broken links
