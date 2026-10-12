@@ -3,14 +3,9 @@
   "authorization": {
     "source": "Fictional example only; not human permission",
     "approvedAt": "2033-05-18T00:00:00Z",
-    "validUntil": "2033-05-19T00:00:00Z",
-    "conditionalStart": false,
-    "allowUnspecifiedUpcoming": false
+    "validUntil": "2033-05-19T00:00:00Z"
   },
   "sources": {
-    "announcements": [
-      "https://example.org/official-capacity-news"
-    ],
     "backlog": [
       "locally reviewed backlog in this profile"
     ]
@@ -46,7 +41,6 @@
   },
   "limits": {
     "maximumHours": 8,
-    "announcementMaxAgeHours": 8,
     "maximumActiveThreads": 2,
     "stopOnScheduledWeeklyRenewal": true,
     "modelTiers": {

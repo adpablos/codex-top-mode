@@ -5,6 +5,13 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Reset announcements now only notify. The watch and `check.py` report a new
+  post and the agent reads it and tells you what it says; only you start a run.
+  Removed the automatic start on announcements and its policy code, and saved
+  resets that appear during a run no longer extend its deadline. Existing
+  profiles stay valid; their announcement fields are ignored.
+  `scripts/capacity_policy.py` is now a small profile check that prints whether
+  the approval is active, the ready work and, if asked, one action's decision.
 - Added one-step install (`scripts/install.py`) that makes Top Mode a skill in
   Codex and Claude Code, and `scripts/check.py`, a quiet check that combines
   quota, expiring saved resets and announcements, speaks only when there is

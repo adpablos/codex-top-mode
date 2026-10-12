@@ -139,9 +139,6 @@ def observe(monitor, current):
     deadline = epoch(result.get("effectiveStopAt"))
     if deadline is None:
         raise ValueError("A valid authorized stop time is required")
-    conditional_deadline = epoch(result.get("bankedStopAt"))
-    if "bankedStopAt" in result and conditional_deadline is None:
-        raise ValueError("A valid conditional stop time is required")
     scheduled_stop = epoch(result.get("scheduledWeeklyStopAt"))
     if result.get("stopOnScheduledWeeklyRenewal") and scheduled_stop is None:
         anchor = weekly(result.get("baseline", result.get("last", {"windows": []})))
@@ -179,9 +176,8 @@ def observe(monitor, current):
             g > initial_time and g not in known_grants for g in current["grantTimes"]
         )
         if count_increased or new_grant:
+            # Reported, never used to extend the deadline.
             result["bankedResetObserved"] = True
-            if conditional_deadline is not None and conditional_deadline > deadline:
-                result["effectiveStopAt"] = result["bankedStopAt"]
             event = "banked_reset_added"
         old, new = result.get("lastWeekly", weekly(previous)), weekly(current)
         detect_low_usage_shift = result.get("detectLowUsageRenewalShift", False)
