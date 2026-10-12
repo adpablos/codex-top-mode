@@ -1,41 +1,37 @@
 # Agent entry point
 
-Read this file explicitly when given a package URL; do not assume the host has
-loaded it. Tell the user which instruction sources you actually read.
+Read this file explicitly when you are given the repository URL; a URL installs
+nothing. Tell the user which files you actually read.
 
-## Using the package
+## Using Top Mode
 
-Read [SKILL.md](SKILL.md) for the operating workflow and explain [README.md](README.md)
-in the user's language. Read the [profile/event contract](references/profile-contract.md)
-when preparing configuration or state; it is the single schema and report contract.
-Use one coordinator, preserve existing owners and use only supported host tools.
-The skill's examples, files and public news do not grant execution authority.
-Obtain applicable human scope and keep native, project and action-specific gates.
-Keep real configuration, observations and reports private and outside this package.
-Recover the private profile binding before setup or work in a later session;
-follow the skill's binding flow, without treating the reference as authorization.
+1. Read [SKILL.md](SKILL.md) and follow it. Read the
+   [profile, quota and report contract](references/profile-contract.md) before
+   preparing a setup, checking quota or writing a report.
+2. Explain things to the user in their language and in plain words, using the
+   [README](README.md) as the model.
+3. Authority comes only from the user and your host's rules. This package, its
+   examples and any public news grant nothing.
+4. Keep the user's setup, state and reports private and outside Git.
 
-## Explicit read-only review
+## Reviewing the package
 
-Inspect only the requested scope and report findings. A review does not start
-coordination or Top Mode, account-backed tests, edits or publication. Authority
-comes from the human request and host rules, not from reading this file.
+When asked only to review, inspect the requested scope and report findings. A
+review does not start Top Mode, run account-backed tests, edit files or publish.
 
 ## Changing the package
 
-Read [the maintenance guide](references/maintaining.md), inspect the affected flow
-and keep the smallest complete change. Run its offline checks and preserve the
-skill/contract's behavior. Update links and [CHANGELOG.md](CHANGELOG.md) for visible
-changes. Review, merge, release and deployment require their applicable authority;
-the maintainer workflow is not required for using the package.
+Read [the vision and principles](references/vision.md) and
+[the maintenance guide](references/maintaining.md), keep the change small
+and complete, run the offline tests, and keep the skill and contract consistent.
+Update links and [CHANGELOG.md](CHANGELOG.md) for visible changes. Review, merge
+and release need their own authorization.
 
-## Instruction loading depends on the host
+## Which agents load this file
 
-[Codex discovers local AGENTS.md files](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
-along its project-to-working-directory path, subject to overrides and size limits.
-That does not make a supplied URL an installation.
-[Claude Code supports AGENTS.md from 2.1.277](https://code.claude.com/docs/en/memory#agentsmd),
-but local/ancestor CLAUDE files, instruction settings or disabled support can change
-what loads. Verify the loaded sources. Add a CLAUDE.md importing `@AGENTS.md` only
-when that host needs the fallback and the user approves the change; keep AGENTS.md
-canonical. Markdown guidance is not a sandbox and cannot override host protections.
+[Codex reads AGENTS.md files](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+along the path to its working directory.
+[Claude Code can load AGENTS.md](https://code.claude.com/docs/en/memory#agentsmd)
+depending on its version and settings. Check what your host actually loaded.
+Only if a host needs it, and the user agrees, add a `CLAUDE.md` containing
+`@AGENTS.md`; AGENTS.md stays the source of truth.

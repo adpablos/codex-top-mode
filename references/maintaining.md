@@ -1,10 +1,12 @@
-# Maintaining Codex Top Mode
+# Maintaining Top Mode
 
 This guide is for changing the package. To use it for your own work, start
 with the [README](../README.md) and [agent entry point](../AGENTS.md).
 
+Every change should fit the [vision and principles](vision.md).
 Keep changes focused and preserve the [skill](../SKILL.md) and
-[profile/event contract](profile-contract.md) as the operating sources.
+[profile, quota and report contract](profile-contract.md) as the operating
+sources; the optional announcement flow lives in [announcements](announcements.md).
 Keep review, merge, release and deployment authority separate.
 
 ## Optional maintainer review
@@ -28,7 +30,7 @@ checks pass, and its head is the exact full 40-character SHA you intend to revie
 Replace both placeholders below; leave the default economical runner unchanged:
 
 ```sh
-gh workflow run .github/workflows/claude.yml --repo adpablos/codex-top-mode --ref main \
+gh workflow run .github/workflows/claude.yml --repo adpablos/top-mode --ref main \
   -f pr_number=PR_NUMBER -f head_sha=FULL_HEAD_SHA
 ```
 

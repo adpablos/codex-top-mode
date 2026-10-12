@@ -318,7 +318,7 @@ class PublicRedirects(urllib.request.HTTPRedirectHandler):
 
 def fetch(url):
     request = urllib.request.Request(
-        url, headers={"User-Agent": "Mozilla/5.0 (compatible; codex-top-mode/0.1)"}
+        url, headers={"User-Agent": "Mozilla/5.0 (compatible; top-mode/0.1)"}
     )
     try:
         with urllib.request.build_opener(PublicRedirects()).open(

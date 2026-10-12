@@ -5,6 +5,28 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Added the [vision and principles](references/vision.md) that guide every change.
+- Renamed the project to Top Mode (repository `adpablos/top-mode`, skill
+  `top-mode`). The private folder stays `~/.codex-top-mode` so saved setups
+  keep working.
+- Rewrote the README, AGENTS.md and skill in plain language around four jobs:
+  set up, check, run and report. Top Mode now targets Codex, Claude Code and
+  similar agents; announced Codex resets are an optional add-on with their own
+  [guide](references/announcements.md). Removed the unimplemented cloud mailbox
+  description.
+- Added `scripts/usage_report.py`: a quota suggestion (unused weekly allowance
+  near renewal, expiring saved resets) from Codex local logs, a native Codex
+  payload or a saved Claude Code status line, and token totals per agent, model
+  and effort from local Codex and Claude Code logs for run reports. Claude
+  advisor calls count under the advisor's model. It honors
+  `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, and a saved reading must carry its
+  capture time (the file's modification time is not trusted). A reading
+  without a weekly window is `unknown`, never `nothing_to_do`. Totals that may
+  miss usage (older-format Codex logs, which can leave out automatic
+  compactions, compressed Codex logs, which the stdlib cannot read, or Claude
+  responses logged before they finished) are marked as a possible lower bound.
+- Added a [fictional run report](examples/report.example.md).
+
 - Added a private profile reference that setup saves and later sessions recover,
   with a short activation request, explicit profile replacement and refusal of
   Git worktree locations. Package updates preserve personal settings.
