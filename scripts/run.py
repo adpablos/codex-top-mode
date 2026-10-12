@@ -34,6 +34,7 @@ SOURCES = {
     "claude_status_line": ("claude", "Claude Code status line"),
 }
 STATUSES = ("planned", "in_progress", "done", "blocked")
+TASK_FIELDS = ("project", "objective", "doneWhen", "owner")
 ROLES = ("coordinator", "worker", "reviewer")
 # Why a run stopped, as the report says it.
 REASONS = {
@@ -166,12 +167,14 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     status = fields["status"]
     if "stoppedAt" in run:
         require(
-            task is not None and status in (task["status"], "done", "blocked"),
+            task is not None
+            and status in (task["status"], "done", "blocked")
+            and all(fields.get(k) in (None, "", task.get(k)) for k in TASK_FIELDS),
             "The run stopped: record only how existing tasks ended, as done or blocked",
         )
     if task is None:
         require(
-            all(fields.get(k) for k in ("project", "objective", "doneWhen", "owner")),
+            all(fields.get(k) for k in TASK_FIELDS),
             "A new task needs --project, --objective, --done-when and --owner",
         )
     updated = {**(task or {"id": task_id, "status": None, "events": []})}

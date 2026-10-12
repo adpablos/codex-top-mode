@@ -269,6 +269,7 @@ class StopAndReportTests(unittest.TestCase):
         for refused in (
             lambda: new_task(r, "new"),
             lambda: new_task(r, "docs", status="in_progress"),
+            lambda: run.record_task(r, "docs", {"status": "planned", "owner": "you"}, NOW + 90),
             lambda: run.record_session(r, "w2", "codex", "worker", False, NOW + 90),
         ):
             with self.assertRaisesRegex(ValueError, "The run stopped"):
