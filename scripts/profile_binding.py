@@ -9,8 +9,37 @@ from pathlib import Path
 from capacity_policy import require, validate_profile
 
 
+def private_folder(home=None) -> Path:
+    """The private folder, moving the one from before the rename there on first use."""
+    home = Path.home() if home is None else home
+    folder, former = home / ".config" / "quota-coach", home / ".codex-top-mode"
+    if folder.exists() or former.is_symlink() or not former.is_dir():
+        return folder
+    if in_worktree(folder):
+        return former
+    try:
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        former.rename(folder)
+    except OSError:
+        return former
+    try:
+        # Paths saved before the move, such as the profile's, keep working.
+        former.symlink_to(folder, target_is_directory=True)
+    except OSError:
+        folder.rename(former)
+        return former
+    return folder
+
+
 def default_binding() -> Path:
-    return Path.home() / ".codex-top-mode" / "binding.json"
+    return private_folder() / "binding.json"
+
+
+def in_worktree(path: Path) -> bool:
+    return any(
+        (parent / ".git").exists() or (parent / ".git").is_symlink()
+        for parent in (path.parent, *path.parent.parents)
+    )
 
 
 def private_path(path: Path, *, existing: bool) -> Path:
@@ -18,13 +47,7 @@ def private_path(path: Path, *, existing: bool) -> Path:
     require(path.is_absolute(), "Use an absolute private path")
     require(not path.is_symlink(), "Private files must not be symlinks")
     path = path.resolve(strict=existing)
-    require(
-        not any(
-            (parent / ".git").exists() or (parent / ".git").is_symlink()
-            for parent in (path.parent, *path.parent.parents)
-        ),
-        "Keep private files outside Git worktrees, even ignored folders",
-    )
+    require(not in_worktree(path), "Keep private files outside Git worktrees, even ignored folders")
     if existing:
         require(path.is_file(), "A private regular file is required")
         if os.name == "posix":
@@ -82,13 +105,14 @@ def bind(binding: Path, profile: Path, *, replace: bool = False) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binding", type=Path, default=default_binding())
+    parser.add_argument("--binding", type=Path, help="Default: binding.json in the private folder")
     commands = parser.add_subparsers(dest="command", required=True)
     setup = commands.add_parser("bind", help="Save the approved profile's location")
     setup.add_argument("--profile", type=Path, required=True)
     setup.add_argument("--replace", action="store_true")
     commands.add_parser("locate", help="Locate a profile without starting work")
     args = parser.parse_args()
+    args.binding = args.binding or default_binding()
     try:
         result = (
             bind(args.binding, args.profile, replace=args.replace)

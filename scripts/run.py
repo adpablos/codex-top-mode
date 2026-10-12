@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from capacity_policy import authorization_active, fingerprint, require, validate_profile
-from profile_binding import locate, private_path
+from profile_binding import locate, private_folder, private_path
 from usage_monitor import epoch, weekly
 from usage_report import (
     agent_home,
@@ -25,7 +25,6 @@ from usage_report import (
     markdown,
 )
 
-PRIVATE = Path.home() / ".codex-top-mode"
 AGENTS = ("codex", "claude")
 SOURCES = {"codex_session_log": "Codex local logs", "codexbar": "CodexBar"}
 STATUSES = ("planned", "in_progress", "done", "blocked")
@@ -407,7 +406,7 @@ def load_profile(args) -> dict:
 
 def main() -> None:
     private = argparse.ArgumentParser(add_help=False)
-    private.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
+    private.add_argument("--private", type=Path, help=argparse.SUPPRESS)
     sources = argparse.ArgumentParser(add_help=False, parents=[private])
     sources.add_argument("--profile", type=Path, help="Default: the saved setup")
     sources.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
@@ -439,6 +438,7 @@ def main() -> None:
     end.add_argument("--reason", choices=REASONS, required=True)
     commands.add_parser("close", parents=[sources], help="End the run, write the report")
     args = parser.parse_args()
+    args.private = args.private or private_folder()
     now = time.time()
     try:
         journal = args.private / "runs.json"

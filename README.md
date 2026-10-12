@@ -39,10 +39,12 @@ git clone https://github.com/adpablos/quota-coach ~/.quota-coach &&
 ```
 
 This makes Quota Coach available as a skill in every new Codex and Claude Code
-session. Your agent may ask you to approve running the install script; that is
-expected. Update with `git -C ~/.quota-coach pull`; undo with
+session (add `--agent codex` or `--agent claude` for just one). Your agent may
+ask you to approve running the install script; that is expected. To update, ask
+your agent to update Quota Coach; undo with
 `python3 ~/.quota-coach/scripts/install.py --remove`. Installed it as Top Mode?
-Ask your agent to update Top Mode; your setup and folder stay as they are.
+Ask the same; your setup moves to `~/.config/quota-coach` on its own. Leave
+`~/.quota-coach` as it is: to change Quota Coach, clone it somewhere else.
 
 **2. Set up, once.** In a new session, say *"Help me set up Quota Coach."* The
 agent looks at the folders you point it to, proposes your projects and where

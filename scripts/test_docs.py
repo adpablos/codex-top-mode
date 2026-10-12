@@ -15,7 +15,7 @@ SCRIPT = re.compile(r"scripts/([a-z_]+\.py)")
 MENTION = re.compile(r"\b([a-z_]+\.py)\b")
 FLAG = re.compile(r"(?<![\w-])--[a-z][a-z-]*")
 # Flags of other tools the docs use: ruff, zizmor and gh in the maintenance guide, codexbar.
-OTHER_TOOLS = {"--check", "--offline", "--ref", "--repo", "--provider", "--format"}
+OTHER_TOOLS = {"--check", "--offline", "--ref", "--repo", "--provider", "--format", "--ff-only"}
 
 
 def anchor(heading):

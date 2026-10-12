@@ -5,6 +5,11 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- The private folder is now `~/.config/quota-coach`; a setup in
+  `~/.codex-top-mode` moves there on its own, leaving a link behind.
+  `install.py --agent codex|claude` installs for one agent, and broken links
+  left by a moved folder are replaced. Updating switches the installed copy to
+  `main` first and fixes a remote still named `top-mode`.
 - The guided setup asks in two short rounds with plain defaults, marks pending
   items that look done, and offers exceptions in the user's words. During a
   run, checks count as green only when every required check has passed, a
