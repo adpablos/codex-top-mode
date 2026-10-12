@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
@@ -244,17 +245,19 @@ def codex_quota(home):
     for path in recent_files(roots, "rollout-*.jsonl", 0):
         if best and path.stat().st_mtime < best[0]:
             break
+        found = []
         for row in lines(path, ('"rate_limits"',)):
             limits = (row.get("payload") or {}).get("rate_limits")
-            stamp = epoch(row.get("timestamp"))
-            if (
-                isinstance(limits, dict)
-                # Model-specific buckets (codex_<model>) are not the account's allowance.
-                and limits.get("limit_id") in (None, "codex")
-                and stamp
-                and (best is None or stamp > best[0])
-            ):
-                best = (stamp, row["timestamp"], limits)
+            # Model-specific buckets (codex_<model>) are not the account's allowance.
+            if isinstance(limits, dict) and limits.get("limit_id") in (None, "codex"):
+                found.append((row.get("timestamp"), limits))
+        # A subagent's log starts with a copy of its parent's history, written at once:
+        # those readings share one time, which is not when they were taken.
+        times = Counter(text for text, _ in found)
+        for text, limits in found:
+            stamp = epoch(text)
+            if stamp and times[text] == 1 and (best is None or stamp > best[0]):
+                best = (stamp, text, limits)
     if best is None:
         return None
     _, stamp, limits = best

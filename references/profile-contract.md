@@ -184,6 +184,8 @@ times. Do not read authentication files or add an account client.
 Codex log readings are as fresh as the last Codex response on that machine;
 `usage_report.py` uses the newest one however old, reports its age and treats
 readings older than six hours as stale. They do not include saved resets.
+A subagent's log starts with a copy of its parent's readings, all stamped with
+the copy's time; those are skipped.
 Codex compresses logs untouched for a week, and those are not read: after a week
 without Codex the reading is `unknown` until a new session reports its limits.
 

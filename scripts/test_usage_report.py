@@ -386,6 +386,24 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(reading["observedAt"], "2033-05-18T11:55:00Z")
         self.assertEqual(reading["windows"][0]["usedPercent"], 4.0)
 
+    def test_a_subagent_copy_of_old_readings_is_not_a_new_reading(self):
+        def quota_row(stamp, used):
+            limits = {"primary": {"used_percent": used, "window_minutes": 10080}}
+            return {"timestamp": stamp, "payload": {"rate_limits": limits}}
+
+        parent = self.home / "sessions/rollout-parent.jsonl"
+        rows = [quota_row("2033-05-18T09:00:00Z", 56), quota_row("2033-05-18T10:00:00Z", 2)]
+        write_lines(parent, rows)
+        os.utime(parent, (NOW - 600, NOW - 600))
+        # The subagent starts by copying that history, every row with the same new time.
+        copied = "2033-05-18T11:00:00.123Z"
+        child = self.home / "sessions/rollout-child.jsonl"
+        write_lines(child, [quota_row(copied, 56), quota_row(copied, 2), {"type": "x"}])
+        os.utime(child, (NOW, NOW))
+        reading = codex_quota(self.home)
+        self.assertEqual(reading["observedAt"], "2033-05-18T10:00:00Z")
+        self.assertEqual(reading["windows"][0]["usedPercent"], 2.0)
+
     def test_claude_status_line_reading_carries_its_capture_time(self):
         status = {
             "rate_limits": {
