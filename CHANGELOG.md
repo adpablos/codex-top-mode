@@ -5,6 +5,10 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- The README and the vision say what Quota Coach is for next to CodexBar: it
+  reads the quota CodexBar measures and turns spare quota into work done, a
+  report and plan advice. Usage history and costs are left to CodexBar and
+  ccusage.
 - `run.py session` gives an ID when the host shows none. The guide says how to
   update a done task's evidence and to put each repository back on its branch
   before closing; the report names the run's branches and worktrees.
