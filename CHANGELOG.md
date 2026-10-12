@@ -5,6 +5,10 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Checking the host rules at the start of a run no longer asks for permission in
+  Claude Code; writing them still always asks. Runs now work from inside each
+  project (`cd <project> && git ...`), because the rules don't recognize
+  `git -C`.
 - The README and the vision say what Quota Coach is for next to CodexBar: it
   reads the quota CodexBar measures and turns spare quota into work done, a
   report and plan advice. Usage history and costs are left to CodexBar and

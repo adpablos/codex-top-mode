@@ -226,6 +226,11 @@ def expected(profile: dict, package: Path = PACKAGE) -> dict:
         for folder in package_folders(package)
         for script in OWN
     )
+    # Every run checks these rules; writing them always waits for the user.
+    for folder in package_folders(package):
+        script = f"python3 -B {folder}/scripts/host_rules.py"
+        rules["allow"].add(f"Bash({script}:*)")
+        rules["ask"].update(f"Bash({script}{gap}--write*)" for gap in (" ", " * "))
     rules["deny"].update(f"Bash({c})" for c in DEFAULT_BRANCH)
     for folder in profile.get("excluded", []):
         rules["deny"].update(folder_rule(tool, folder) for tool in ("Read", "Edit"))
@@ -252,6 +257,8 @@ def codex_rules(profile: dict, package: Path = PACKAGE) -> list:
         for action, patterns in CODEX.items()
         for pattern in patterns
     ]
+    # host_rules.py gets no rule: checking runs in the sandbox, and writing touches
+    # the private record or .codex, which the sandbox protects, so Codex asks.
     rules += [
         (["python3", "-B", f"{folder}/scripts/{script}", *rest], "allow", "Quota Coach itself")
         for folder in package_folders(package)
@@ -376,16 +383,17 @@ def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package
     if write:
         outside_git(folder, path)
     if write and not current:
+        mine = state["claude"].get(str(path), {})
+        owned = {k: set(mine.get(k, [])) | set(change["add"][k]) for k in rules}
+        # The record first: it lives outside the project, so a sandboxed agent
+        # (Codex) is stopped here and asks before the settings change. It still
+        # holds the rules about to go, so a failed settings write loses none.
+        state["claude"][str(path)] = {k: sorted(owned[k]) for k in rules}
+        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        write_json(state_path, state, 0o600)
         mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
         write_json(path, apply(settings, change), mode)
-        mine = state["claude"].get(str(path), {})
-        state["claude"][str(path)] = {
-            k: sorted(
-                {r for r in mine.get(k, []) if r not in change["remove"][k]} | set(change["add"][k])
-            )
-            for k in rules
-        }
-        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        state["claude"][str(path)] = {k: sorted(owned[k] - set(change["remove"][k])) for k in rules}
         write_json(state_path, state, 0o600)
     return {
         "agent": "claude",
@@ -420,7 +428,8 @@ def sync_codex(profile: dict, folder: Path, write: bool, package: Path = PACKAGE
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    # No abbreviations: the host rules look for the full --write.
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--agent", choices=["claude", "codex"], required=True)
     parser.add_argument("--profile", type=Path, help="Default: the saved setup")
     parser.add_argument(
