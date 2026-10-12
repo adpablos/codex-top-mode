@@ -23,8 +23,8 @@ not a tagged release or evidence of live installation.
   capture time (the file's modification time is not trusted). A reading
   without a weekly window is `unknown`, never `nothing_to_do`. Totals that may
   miss usage (older-format Codex logs, which can leave out automatic
-  compactions, or compressed Codex logs, which the stdlib cannot read) are
-  marked as a possible lower bound.
+  compactions, compressed Codex logs, which the stdlib cannot read, or Claude
+  responses logged before they finished) are marked as a possible lower bound.
 - Added a [fictional run report](examples/report.example.md).
 
 - Added a private profile reference that setup saves and later sessions recover,

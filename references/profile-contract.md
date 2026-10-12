@@ -240,7 +240,10 @@ in that interval, including work outside the run; say so in the report. Codex
 and writes are separate fields and are included in its total. When a Claude
 response itemizes its steps (`usage.iterations`: an advisor call, a compaction,
 a retried attempt), the report sums the steps, each under its own model, since
-the top-level counts can leave them out. Otherwise the host
+the top-level counts can leave them out. A Claude response logged while it was
+still streaming counts with its finished copy (the one with a `stop_reason`);
+`unfinishedResponses` counts those that have none, and the total may then be a
+lower bound. Otherwise the host
 operator supplies the evidence. Do not add an account client or read credential
 stores to fill a gap. Write `unknown` with the reason when a source is missing,
 partial, stale or cannot be attributed. Preserve sanitized report evidence in

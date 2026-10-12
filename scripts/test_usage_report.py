@@ -206,6 +206,7 @@ class TokenTests(unittest.TestCase):
                 "message": {
                     "id": key,
                     "model": model,
+                    "stop_reason": "end_turn",
                     "usage": {
                         "input_tokens": 1,
                         "cache_creation_input_tokens": 10,
@@ -232,7 +233,24 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(result["sessions"], 2)
         self.assertEqual(result["totalTokens"], 232)
         self.assertEqual({m["model"] for m in result["byModel"]}, {"claude-x", "claude-y"})
+        self.assertEqual(result["unfinishedResponses"], 0)
         self.assertNotIn("private-session", json.dumps(result))
+
+    def test_claude_responses_use_their_finished_copy(self):
+        def row(key, stop_reason, output):
+            usage = {"input_tokens": 10, "output_tokens": output}
+            message = {"id": key, "model": "claude-x", "stop_reason": stop_reason, "usage": usage}
+            return {"type": "assistant", "timestamp": "2033-05-18T01:00:00Z", "message": message}
+
+        # A response logged while streaming, then finished; and one never finished.
+        rows = [row("m1", None, 1), row("m1", "end_turn", 500), row("m1", None, 1)]
+        rows += [row("m2", None, 1), row("m2", None, 40)]
+        write_lines(self.home / "projects/p/session/subagents/agent.jsonl", rows)
+        result = claude_tokens(self.home, SINCE, NOW)
+        self.assertEqual((result["responses"], result["totalTokens"]), (2, 560))
+        self.assertEqual(result["unfinishedResponses"], 1)
+        report = markdown({**REPORT, "providers": [result]})
+        self.assertIn("1 of its responses were logged before they finished", report)
 
     def test_claude_advisor_steps_count_under_the_advisor_model(self):
         step = {"input_tokens": 1, "cache_read_input_tokens": 100, "output_tokens": 5}

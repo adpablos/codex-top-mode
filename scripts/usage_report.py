@@ -153,8 +153,13 @@ def started_after(path, until):
 
 
 def claude_tokens(home, since, until):
-    """Sum assistant message usage from Claude Code transcripts, once per message."""
-    buckets, sessions, seen = {}, set(), set()
+    """Sum assistant message usage from Claude Code transcripts, once per message.
+
+    A message can be logged while it is still streaming; its finished copy (with a
+    stop_reason) has the final usage. Without one, the last copy is used and the
+    response counts in `unfinishedResponses`.
+    """
+    latest = {}
     for path in recent_files([home / "projects"], "*.jsonl", since):
         for row in lines(path, ('"usage"',)):
             message = row.get("message")
@@ -167,26 +172,32 @@ def claude_tokens(home, since, until):
                 not isinstance(usage, dict)
                 or not model
                 or model.startswith("<")
-                or key in seen
                 or stamp is None
                 or not since <= stamp <= until
             ):
                 continue
-            seen.add(key)
-            # Subagents share their parent's sessionId; each has its own agentId.
-            sessions.add((row.get("sessionId") or path.stem, row.get("agentId")))
-            groups = {}
-            for step_model, step in claude_steps(usage, model):
-                effort = row.get("effort") if step_model == model else None
-                groups.setdefault((step_model, effort), []).append(step)
-            for group, steps in groups.items():
-                bucket = buckets.setdefault(group, {"responses": 0})
-                bucket["responses"] += 1
-                for step in steps:
-                    add(bucket, step, CLAUDE_FIELDS)
+            finished = message.get("stop_reason") is not None
+            if finished or not latest.get(key, (False,))[0]:
+                # Subagents share their parent's sessionId; each has its own agentId.
+                session = (row.get("sessionId") or path.stem, row.get("agentId"))
+                latest[key] = (finished, session, model, row.get("effort"), usage)
+    buckets, sessions = {}, set()
+    for _, session, model, effort, usage in latest.values():
+        sessions.add(session)
+        groups = {}
+        for step_model, step in claude_steps(usage, model):
+            group = (step_model, effort if step_model == model else None)
+            groups.setdefault(group, []).append(step)
+        for group, steps in groups.items():
+            bucket = buckets.setdefault(group, {"responses": 0})
+            bucket["responses"] += 1
+            for step in steps:
+                add(bucket, step, CLAUDE_FIELDS)
     for bucket in buckets.values():
         bucket["total_tokens"] = sum(bucket.get(f, 0) for f in CLAUDE_FIELDS)
-    return summary("claude", buckets, len(sessions), len(seen))
+    result = summary("claude", buckets, len(sessions), len(latest))
+    result["unfinishedResponses"] = sum(not item[0] for item in latest.values())
+    return result
 
 
 def claude_steps(usage, model):
@@ -390,6 +401,11 @@ def markdown(report):
             out.append(
                 f"  {provider['compressedLogs']} compressed logs that may cover this interval "
                 "were not read, so this total may be a lower bound."
+            )
+        if provider.get("unfinishedResponses"):
+            out.append(
+                f"  {provider['unfinishedResponses']} of its responses were logged before they "
+                "finished, so this total may be a lower bound."
             )
     return "\n".join(out)
 
