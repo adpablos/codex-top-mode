@@ -259,6 +259,19 @@ class PlanTests(unittest.TestCase):
         self.assertEqual((yours["timesPlus"], yours["mostPercent"]), (5, 85))
         self.assertEqual(yours["windowsAtLimit"], 0)
 
+    def test_a_natural_week_adds_up_use_across_a_change_of_size(self):
+        resized = {"from": "2033-06-22T22:00:00Z", "value": 5}
+        pro100 = {**PLANS["plans"][1], "timesPlus": [{"from": None, "value": 10}, resized]}
+        plans = {**PLANS, "plans": [PLANS["plans"][0], pro100, *PLANS["plans"][2:]]}
+        readings = weeks(*[10] * 6, plan="prolite")
+        # Five windows renewed daily, 15 % each: 4.5x Plus at 10x, then 1.5x Plus at 5x.
+        for d in range(5):
+            readings += window(START + 7 * WEEK + d * DAY, 15, plan="prolite", hours=20)
+        advice = advise_plan(readings, NOW, plans=plans)
+        week = advice["withoutEarlyRenewals"][-1]
+        self.assertEqual((week["usedPercent"], week["reachedLimit"]), (120, True))
+        self.assertEqual(self.rows(advice)["Pro 100"]["weeksAtLimit"], 1)
+
     def test_the_week_still_running_counts_against_the_room_left(self):
         readings = weeks(*[3] * 8)
         # Then a window renewed every day: 2 % each, 6 % of Pro 200 in one running week.

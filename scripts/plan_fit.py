@@ -137,13 +137,15 @@ def current_stretch(found):
     return plan, stretch[::-1]
 
 
-def without_resets(found, plan, now):
+def without_resets(found, plan, now, size=None):
     """Replay the use on this plan through natural weeks, with no early renewal.
 
     A natural window starts with the first use after the previous one ended and
     lasts a week; `ended` tells whether it has. Where the real window hit the
     limit, real demand was higher than what was used, so the replay is a lower
-    bound for that week.
+    bound for that week. When `size(plan, time)` gives the plan's size, a week
+    adds up its use in Plus and measures it against the size at each moment, as
+    the plan's own meter does when its size changes.
     """
     steps = []
     for window in reversed(found):
@@ -158,7 +160,13 @@ def without_resets(found, plan, now):
             weeks.append({"start": stamp, "usedPercent": 0.0, "limitReachedAt": None, "steps": []})
         week = weeks[-1]
         week["steps"].append((stamp, points, plan))
-        week["usedPercent"] += points
+        times = size(plan, stamp) if size else None
+        if times:
+            week["plus"] = week.get("plus", 0.0) + points * times / 100
+            # Rounded so that converting between sizes adds no floating-point noise.
+            week["usedPercent"] = round(week["plus"] / times * 100, 3)
+        else:
+            week["usedPercent"] += points
         if week["usedPercent"] >= 100 and week["limitReachedAt"] is None:
             week["limitReachedAt"] = stamp
     for week in weeks:
@@ -345,7 +353,7 @@ def advise_plan(readings, now, count=WINDOWS, plans=None):
         found, left_out = windows(readings, now, sized[2])
     plan, stretch = current_stretch(found)
     recent = stretch[-count:]
-    replay = without_resets(found, plan, now)
+    replay = without_resets(found, plan, now, sized[2] if sized else None)
     # A week counts once it has ended or already reached the limit.
     weeks = [w for w in replay if w["ended"] or w["limitReachedAt"] is not None][-count:]
     hits = [w for w in recent if w["limitReachedAt"]]
