@@ -184,6 +184,8 @@ times. Do not read authentication files or add an account client.
 Codex log readings are as fresh as the last Codex response on that machine;
 `usage_report.py` uses the newest one however old, reports its age and treats
 readings older than six hours as stale. They do not include saved resets.
+Codex compresses logs untouched for a week, and those are not read: after a week
+without Codex the reading is `unknown` until a new session reports its limits.
 
 Claude Code exposes `rate_limits.five_hour` and `rate_limits.seven_day` only to
 a [status-line command](https://code.claude.com/docs/en/statusline). With the
