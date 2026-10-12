@@ -83,6 +83,13 @@ def codex_rows(stamp="2033-05-18T01:00:00Z"):
     ]
 
 
+def setUpModule():
+    # A CodexBar installed on the test machine must not change the results.
+    patcher = patch.object(usage_report, "CODEXBAR", "codexbar-not-installed")
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
 class TokenTests(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
@@ -577,6 +584,93 @@ class QuotaTests(unittest.TestCase):
         ).stdout
         self.assertIn("| codex | model-a | high | 1 | 100 |", output)
         self.assertNotIn(str(self.home), output)
+
+
+def codexbar_row(provider="codex", **extra):
+    """CodexBar's usage JSON for one provider, shaped like version 0.73."""
+    week = {
+        "usedPercent": 8,
+        "windowMinutes": 10080,
+        "resetsAt": "2033-05-19T03:58:00Z",
+        "resetDescription": "in 1 day",
+    }
+    usage = {"primary": None, "secondary": week, "tertiary": None}
+    usage.update(updatedAt="2033-05-18T11:59:00Z", dataConfidence="exact", identity="REDACTED")
+    return {"provider": provider, "source": "oauth", "usage": usage, **extra}
+
+
+class CodexBarTests(unittest.TestCase):
+    def reading(self, stdout, returncode=0, provider="codex"):
+        done = subprocess.CompletedProcess([], returncode, stdout=stdout, stderr="")
+        with patch.object(usage_report, "CODEXBAR", sys.executable):
+            return usage_report.codexbar_quota(provider, run=lambda *a, **k: done)
+
+    def test_reads_the_weekly_window_by_its_length_and_the_saved_resets(self):
+        credits = {"available": 3, "nextExpiresAt": "2033-05-22T00:00:00Z"}
+        reading = self.reading(json.dumps([codexbar_row(resetCredits=credits)]))
+        self.assertEqual(reading["source"], "codexbar")
+        self.assertEqual(
+            reading["windows"],
+            [
+                {
+                    "slot": "secondary",
+                    "usedPercent": 8,
+                    "durationMinutes": 10080,
+                    "resetsAt": epoch("2033-05-19T03:58:00Z"),
+                }
+            ],
+        )
+        self.assertEqual(reading["availableResets"], 3)
+        self.assertNotIn("REDACTED", json.dumps(reading))
+        advice = advise(reading, epoch("2033-05-18T12:00:00Z"))
+        self.assertEqual(advice["weeklyUsedPercent"], 8)
+        self.assertEqual(advice["suggestion"], "consider_top_mode")
+        self.assertIn("saved_resets_expiring_soon", advice["reasons"])
+
+    def test_claude_has_both_windows_and_no_saved_resets(self):
+        row = codexbar_row("claude")
+        row["usage"]["primary"] = {"usedPercent": 0, "windowMinutes": 300, "resetsAt": None}
+        reading = self.reading(json.dumps([row]), provider="claude")
+        self.assertEqual([w["durationMinutes"] for w in reading["windows"]], [300, 10080])
+        self.assertIsNone(reading["availableResets"])
+        self.assertEqual(reading["resetExpirations"], [])
+
+    def test_anything_unexpected_is_no_reading(self):
+        no_time = codexbar_row()
+        no_time["usage"]["updatedAt"] = None
+        no_window = codexbar_row()
+        no_window["usage"]["secondary"]["windowMinutes"] = "10080"
+        huge = json.dumps([codexbar_row()]).replace(
+            '"usedPercent": 8', '"usedPercent": 1' + "0" * 400
+        )
+        for stdout, code in (
+            ("", 0),
+            ("not json", 0),
+            (json.dumps({"provider": "codex"}), 0),
+            (json.dumps([codexbar_row("claude")]), 0),
+            (json.dumps([no_time]), 0),
+            (json.dumps([no_window]), 0),
+            (huge, 0),
+            (json.dumps([{"provider": "codex", "usage": []}]), 0),
+            (json.dumps([codexbar_row()]), 1),
+        ):
+            with self.subTest(stdout=stdout[:40], code=code):
+                self.assertIsNone(self.reading(stdout, code))
+
+    def test_a_missing_or_hanging_codexbar_is_no_reading(self):
+        self.assertIsNone(usage_report.codexbar_quota("codex"))  # not installed
+
+        def hang(*args, **kwargs):
+            raise subprocess.TimeoutExpired("codexbar", 45)
+
+        with patch.object(usage_report, "CODEXBAR", sys.executable):
+            self.assertIsNone(usage_report.codexbar_quota("codex", run=hang))
+
+    def test_codex_falls_back_to_its_logs_and_claude_does_not(self):
+        home = Path(tempfile.mkdtemp())
+        write_lines(home / "sessions/rollout-x.jsonl", codex_rows())
+        self.assertEqual(usage_report.latest_quota("codex", home)["source"], "codex_session_log")
+        self.assertIsNone(usage_report.latest_quota("claude", home))
 
 
 class PlansFileTests(unittest.TestCase):

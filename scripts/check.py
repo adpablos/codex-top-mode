@@ -12,14 +12,14 @@ from pathlib import Path
 
 from profile_binding import private_path
 from usage_monitor import write_private
-from usage_report import advise, agent_home, codex_quota, file_quota
+from usage_report import advise, agent_home, codexbar_quota, file_quota, latest_quota
 
 PRIVATE = Path.home() / ".codex-top-mode"
 QUIET_SECONDS = 20 * 3600
 # What to do when an agent has no reading, for --verbose.
 NO_READING = {
     "Codex": "it appears once a Codex session reports its limits",
-    "Claude": "save its status line as references/profile-contract.md shows",
+    "Claude": "install CodexBar (https://codexbar.app) to see it",
 }
 
 
@@ -35,8 +35,10 @@ def readings(codex_home, claude_status, quota_file):
     """(agent, reading or None) for each quota source."""
     if quota_file:
         return [("quota file", saved(quota_file))]
-    claude = saved(claude_status) if claude_status.is_file() else None
-    return [("Codex", codex_quota(codex_home)), ("Claude", claude)]
+    claude = codexbar_quota("claude")
+    if claude is None and claude_status.is_file():
+        claude = saved(claude_status)
+    return [("Codex", latest_quota("codex", codex_home)), ("Claude", claude)]
 
 
 def quota_lines(agent, advice):

@@ -5,6 +5,11 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Quota comes from [CodexBar](https://codexbar.app) when it is installed: a
+  live reading for Codex and Claude, with Codex's saved resets. Without it,
+  Codex is read from its local logs as before. The check, the run journal and
+  `usage_report.py quota` use it first; the setup mentions it instead of
+  offering to save the Claude Code status line.
 - Removed the experimental watch for announced Codex resets (`public_watch.py`
   and its guide). Public trackers such as Codex Resets do this better; the
   check now reads quota only and a daily schedule is enough. A leftover

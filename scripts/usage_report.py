@@ -8,6 +8,8 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -17,6 +19,9 @@ import plan_fit
 from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
 
 WEEK_MINUTES = 10080
+CODEXBAR = "codexbar"
+# CodexBar can take a while: for Claude it asks Claude's own CLI.
+CODEXBAR_SECONDS = 45
 # Plan sizes and prices, with their sources and the date they were checked.
 PLANS = Path(__file__).resolve().parent.parent / "references" / "plans.json"
 CODEX_FIELDS = (
@@ -315,6 +320,84 @@ def codex_quota(home):
     return {"source": "codex_session_log", **snapshot(payload, stamp)}
 
 
+def codexbar_quota(provider, run=subprocess.run):
+    """A live reading from the CodexBar CLI, or None when it is missing or fails.
+
+    CodexBar (https://codexbar.app) is optional. Anything unexpected in its answer
+    means no reading, so the caller falls back to its other sources.
+    """
+    command = shutil.which(CODEXBAR)
+    if not command:
+        return None
+    try:
+        done = run(
+            [command, "usage", "--provider", provider, "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=CODEXBAR_SECONDS,
+            check=False,
+        )
+        if done.returncode != 0:
+            return None
+        return codexbar_reading(json.loads(done.stdout), provider)
+    except (OSError, subprocess.SubprocessError, ValueError, OverflowError):
+        return None
+
+
+def codexbar_reading(rows, provider):
+    """Keep window percentages, lengths and renewal times, and the saved-reset count
+    and next expiry; drop identity. Windows are told apart by their length, not
+    their position: a Codex Pro account has no 5-hour window."""
+    rows = rows if isinstance(rows, list) else []
+    row = next((r for r in rows if isinstance(r, dict) and r.get("provider") == provider), {})
+    usage = row.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    observed = epoch(usage.get("updatedAt"))
+    windows = []
+    for slot in ("primary", "secondary", "tertiary"):
+        window = usage.get(slot)
+        if not isinstance(window, dict):
+            continue
+        used, minutes = number(window.get("usedPercent")), number(window.get("windowMinutes"))
+        if used is not None and 0 <= used <= 100 and minutes and minutes > 0:
+            windows.append(
+                {
+                    "slot": slot,
+                    "usedPercent": used,
+                    "durationMinutes": minutes,
+                    "resetsAt": epoch(window.get("resetsAt")),
+                }
+            )
+    if observed is None or not windows:
+        return None
+    credits = row.get("resetCredits", usage.get("resetCredits"))
+    credits = credits if isinstance(credits, dict) else {}
+    count = number(credits.get("available"))
+    if count is not None and (count < 0 or count != int(count)):
+        count = None
+    expires = epoch(credits.get("nextExpiresAt"))
+    return {
+        "source": "codexbar",
+        "observedAt": iso(observed),
+        "windows": windows,
+        "availableResets": count,
+        "grantTimes": [],
+        # Only the next expiry is known, enough to warn before it.
+        "resetExpirations": [{"grantedAt": None, "expiresAt": expires}]
+        if count and expires
+        else [],
+    }
+
+
+def latest_quota(agent, codex_home, run=subprocess.run):
+    """The best reading for an agent: CodexBar first, then Codex's own logs."""
+    reading = codexbar_quota(agent, run)
+    if reading is None and agent == "codex":
+        reading = codex_quota(codex_home)
+    return reading
+
+
 def file_quota(path, observed_at=None):
     """A saved Claude Code status-line JSON or a native Codex usage payload.
 
@@ -510,7 +593,7 @@ def main():
         except (OSError, ValueError) as error:
             parser.error(f"Cannot use {args.file}: {error}")
     else:
-        reading = codex_quota(args.codex_home)
+        reading = latest_quota("codex", args.codex_home)
     json.dump(advise(reading, now, args.min_unused, args.within_hours), sys.stdout, indent=2)
     print()
 

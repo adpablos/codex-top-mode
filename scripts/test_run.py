@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import run
+import usage_report
 from capacity_policy import fingerprint
 from usage_monitor import snapshot
 from usage_report import iso
@@ -56,6 +57,13 @@ def new_task(r, task_id="fix-import", status="planned", at=NOW, **fields):
         "owner": "anyone",
     }
     return run.record_task(r, task_id, {**defaults, **fields, "status": status}, at)
+
+
+def setUpModule():
+    # A CodexBar installed on the test machine must not change the results.
+    patcher = patch.object(usage_report, "CODEXBAR", "codexbar-not-installed")
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
 
 
 class StartTests(unittest.TestCase):
@@ -322,7 +330,7 @@ class StopAndReportTests(unittest.TestCase):
             "- Blocked: Stop duplicate imports. Merge #12? Recommended: yes. Next: you.",
             "| Weekly quota, codex | 38% used at 2033-05-18 03:33 UTC → 71% used at "
             "2033-05-18 04:33 UTC (Codex local logs). Includes anything else",
-            "| Weekly quota, claude | unknown: no reading; save the Claude Code status line",
+            "| Weekly quota, claude | unknown: no reading; install CodexBar to see it",
             "| Sessions | codex worker: 1 started, 1 finished (plus this coordinator) |",
             "TOKENS TABLE",
             "- claude: renewal time unknown",

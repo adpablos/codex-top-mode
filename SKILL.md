@@ -97,9 +97,10 @@ A request that only reviews or changes this package does not need it.
   4. Say that their agent answers each command from its own rules, not from
      the level, and that you will offer to write the level into them once the
      setup is saved.
-  5. On Claude Code without a saved status line, offer to save it
-     ([how](references/profile-contract.md#quota-readings)); it changes their
-     settings, so only with their OK. Without it, Claude quota stays unknown.
+  5. If `codexbar` is not installed, say in one sentence that
+     [CodexBar](https://codexbar.app) would let Quota Coach see Claude's quota
+     and Codex's saved resets, and that installing it is their choice. Without
+     it, Claude quota stays unknown.
   6. Write the profile from the
      [fictional example](examples/profile.example.json) (its permissions are
      not real; the fields are in the
@@ -131,8 +132,9 @@ When the user asks, run:
 python3 -B <this folder>/scripts/check.py --verbose
 ```
 
-It reads every quota source on this machine (Codex local logs, a saved Claude
-Code status line). Explain the answer in one
+It reads the best quota source on this machine for each agent: CodexBar when it
+is installed, otherwise Codex's local logs or a saved Claude Code status line.
+Explain the answer in one
 or two sentences: how much of the weekly allowance is used, when it renews, and
 whether a run is worth it. If there is no reading, say so and offer a run with a
 clock deadline only. Details per source are in
