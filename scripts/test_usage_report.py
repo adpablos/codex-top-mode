@@ -579,6 +579,34 @@ class QuotaTests(unittest.TestCase):
         self.assertNotIn(str(self.home), output)
 
 
+class PlansFileTests(unittest.TestCase):
+    def test_the_plans_file_is_complete_and_sourced(self):
+        plans = usage_report.load_plans()
+        self.assertIsNotNone(epoch(plans["checked"] + "T00:00:00+00:00"))
+        kinds = [plan["planType"] for plan in plans["plans"] if plan["planType"]]
+        self.assertEqual(len(kinds), len(set(kinds)))
+        for plan in plans["plans"]:
+            with self.subTest(plan=plan["name"]):
+                self.assertGreater(plan["usdPerMonth"], 0)
+                self.assertTrue(plan["sources"])
+                self.assertTrue(all(url.startswith("https://") for url in plan["sources"]))
+                # The first size has no start; later ones start in order.
+                periods = plan["timesPlus"]
+                self.assertEqual([p["from"] for p in periods[:1]], [None] * len(periods[:1]))
+                starts = [epoch(period["from"]) for period in periods[1:]]
+                self.assertNotIn(None, starts)
+                self.assertEqual(starts, sorted(starts))
+                kept = plan.get("grandfathered") or {}
+                self.assertNotIn(None, [epoch(value) for value in kept.values()])
+
+    def test_an_unreadable_plans_file_skips_the_comparison(self):
+        with tempfile.TemporaryDirectory() as folder:
+            broken = Path(folder) / "plans.json"
+            broken.write_text("{", encoding="utf-8")
+            self.assertIsNone(usage_report.load_plans(broken))
+            self.assertIsNone(usage_report.load_plans(Path(folder) / "missing.json"))
+
+
 class MainTests(unittest.TestCase):
     """Run the CLI in-process so argument handling is covered too."""
 

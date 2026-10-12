@@ -22,7 +22,8 @@ without babysitting and **without losing control**.
 5. **Know what happened.** Every run ends with a short report: before and after,
    what is pending, and what it used.
 6. **Know if your plan fits.** Ask, and get a verdict on the plan from its own
-   weekly history, with the evidence.
+   weekly history, with the evidence, how the other plans compare and what a
+   coming change would mean.
 
 ## Principles
 
@@ -57,7 +58,8 @@ reports, an experimental watch for announced Codex resets that only notifies,
 quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
 documentation links, macOS), one-step install for Codex and Claude Code, a
 quiet `check` command to schedule with the agent's own scheduler, and a verdict
-on whether the Codex plan has been enough, from its weekly history.
+on whether the Codex plan has been enough, from its weekly history, compared
+with the other Codex plans.
 
 Next, in small pull requests:
 

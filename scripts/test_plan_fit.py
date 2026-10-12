@@ -1,11 +1,47 @@
 import unittest
 
-from plan_fit import WEEK, advise_plan, markdown, windows
+from plan_fit import WEEK, advise_plan, markdown, times_plus, windows
 from usage_monitor import epoch
 
 DAY = 24 * 3600
 START = epoch("2033-05-02T00:00:00Z")
 NOW = epoch("2033-06-30T00:00:00Z")
+
+
+# Fictional sizes and dates, shaped like references/plans.json.
+PLANS = {
+    "checked": "2033-06-20",
+    "plans": [
+        {
+            "name": "Plus",
+            "planType": "plus",
+            "usdPerMonth": 20,
+            "timesPlus": [{"from": None, "value": 1}],
+        },
+        {
+            "name": "Pro 100",
+            "planType": "prolite",
+            "planTypeInferred": True,
+            "usdPerMonth": 100,
+            "timesPlus": [{"from": None, "value": 5}],
+        },
+        {
+            "name": "Pro 200",
+            "planType": "pro",
+            "usdPerMonth": 200,
+            "timesPlus": [
+                {"from": None, "value": 20},
+                {"from": "2033-06-15T00:00:00Z", "value": 10},
+            ],
+            "grandfathered": {
+                "activeFrom": "2033-06-08T00:00:00Z",
+                "activeUntil": "2033-06-15T00:00:00Z",
+                "previousUntil": "2033-07-15T00:00:00Z",
+            },
+        },
+        {"name": "Pro 500", "planType": None, "usdPerMonth": 500, "timesPlus": []},
+    ],
+}
 
 
 def window(start, peak, plan="pro", hours=6 * 24):
@@ -152,6 +188,101 @@ class VerdictTests(unittest.TestCase):
         self.assertIn("no closed weekly window", text)
         text = markdown(advise_plan(weeks(40, 40), NOW))
         self.assertIn("Not enough history for a verdict: 2 closed windows", text)
+
+
+class PlanTests(unittest.TestCase):
+    def rows(self, advice):
+        return {row["name"]: row for row in advice["plans"]["comparison"]}
+
+    def test_a_plan_size_follows_its_changes_and_grandfathering(self):
+        pro = PLANS["plans"][2]
+        before, after = epoch("2033-06-14T00:00:00Z"), epoch("2033-06-20T00:00:00Z")
+        self.assertEqual((times_plus(pro, before), times_plus(pro, after)), (20, 10))
+        self.assertEqual(times_plus(pro, after, grandfathered=True), 20)
+        self.assertEqual(times_plus(pro, epoch("2033-07-15T00:00:00Z"), grandfathered=True), 10)
+        self.assertIsNone(times_plus(PLANS["plans"][3], after))
+
+    def test_the_same_use_on_each_plan_and_the_coming_change(self):
+        # Active during the eligibility week: keeps 20x Plus until 2033-07-15.
+        advice = advise_plan(weeks(*[70] * 8), NOW, plans=PLANS)
+        compared = advice["plans"]
+        self.assertEqual((compared["current"], compared["grandfathered"]), ("Pro 200", True))
+        rows = self.rows(advice)
+        self.assertEqual(rows["Plus"]["medianPercent"], 1400)
+        self.assertEqual(rows["Pro 100"]["windowsAtLimit"], 8)
+        self.assertEqual((rows["Pro 200"]["timesPlus"], rows["Pro 200"]["medianPercent"]), (20, 70))
+        self.assertEqual(compared["notCompared"], ["Pro 500"])
+        self.assertEqual(advice["verdict"], "enough")
+        change = compared["change"]
+        self.assertEqual((change["date"], change["timesPlus"]), ("2033-07-15", 10))
+        self.assertEqual((change["medianPercent"], change["verdict"]), (140, "short"))
+        text = markdown(advice)
+        self.assertIn('plan "pro" (Pro 200): last 8', text)
+        self.assertIn("checked 2033-06-20):", text)
+        self.assertIn(
+            "  - Plus, $20/month, 1x Plus: median 1400 %, limit in 8 of 8 windows (8 of", text
+        )
+        self.assertIn("  - Pro 500: not compared, no confirmed size.", text)
+        self.assertIn(
+            "from 2033-07-15, Pro 200 includes 10x Plus instead of 20x (your grandfathered "
+            "size ends). The same use: median 140 %",
+            text,
+        )
+        self.assertIn("Verdict then: short.", text)
+
+    def test_on_your_own_plan_the_comparison_matches_the_windows(self):
+        # Seven uneven steps to 100 %: converting them must not land just under the limit.
+        readings = []
+        for i, peak in enumerate((100, 40, 100, 40, 40, 40, 40, 40)):
+            readings += window(START + i * WEEK, peak, hours=7)
+        advice = advise_plan(readings, NOW, plans=PLANS)
+        yours = self.rows(advice)["Pro 200"]
+        self.assertEqual((yours["windowsAtLimit"], yours["unknownWindows"]), (2, 0))
+        reached = [w["reachedLimit"] for w in advice["withoutEarlyRenewals"]]
+        self.assertEqual(yours["weeksAtLimit"], reached.count(True))
+
+    def test_a_cheaper_plan_that_would_have_been_enough(self):
+        advice = advise_plan(weeks(*[3] * 8), NOW, plans=PLANS)
+        self.assertEqual(
+            (advice["verdict"], advice["plans"]["lowerPlan"]), ("could_go_lower", "Plus")
+        )
+        self.assertIn(
+            "Verdict: enough, with room to spare. Plus would have stayed under 80 % every week, "
+            "even without early renewals, for $180 less a month.",
+            markdown(advice),
+        )
+        # At 80 % of Plus there is no room left: the next plan up is the cheaper one.
+        tight = advise_plan(weeks(*[4] * 8), NOW, plans=PLANS)
+        self.assertEqual(self.rows(tight)["Plus"]["mostPercent"], 80)
+        self.assertEqual(tight["plans"]["lowerPlan"], "Pro 100")
+
+    def test_a_bigger_plan_cannot_tell_how_much_a_window_at_the_limit_needed(self):
+        readings = weeks(100, 40, 100, 40, 100, 40, 40, 40, plan="prolite")
+        advice = advise_plan(readings, NOW, plans={**PLANS, "checked": "2033-04-01"})
+        self.assertEqual(advice["verdict"], "short")
+        rows = self.rows(advice)
+        # 5x Plus used fully is half of Pro 200's 10x, but those weeks stopped at the limit.
+        self.assertEqual(
+            (rows["Pro 200"]["windowsAtLimit"], rows["Pro 200"]["unknownWindows"]), (0, 3)
+        )
+        self.assertIsNone(advice["plans"]["change"])
+        text = markdown(advice)
+        self.assertIn('plan "prolite" (probably Pro 100)', text)
+        self.assertIn("; 3 more reached your limit, so what they needed is unknown.", text)
+        self.assertIn("over 60 days ago, they may have changed", text)
+
+    def test_plans_that_cannot_be_compared(self):
+        advice = advise_plan(weeks(*[40] * 8, plan="team"), NOW, plans=PLANS)
+        self.assertEqual(advice["plans"]["note"], 'plan type "team" is not in the plans file')
+        self.assertIn("- Not compared with other plans: plan type", markdown(advice))
+        before = window(START, 60, plan="free", hours=24)
+        after = [(START + 25 * 3600, 15.0, START + WEEK, "pro")]
+        readings = before + after + weeks(*[40] * 4, first=START + WEEK)
+        advice = advise_plan(readings, NOW, plans=PLANS)
+        self.assertEqual(
+            advice["plans"]["note"], "the size of a plan you used is not in the plans file"
+        )
+        self.assertIsNone(advise_plan(weeks(40, 40), NOW, plans=PLANS)["plans"])
 
 
 if __name__ == "__main__":

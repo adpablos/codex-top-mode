@@ -17,6 +17,8 @@ import plan_fit
 from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
 
 WEEK_MINUTES = 10080
+# Plan sizes and prices, with their sources and the date they were checked.
+PLANS = Path(__file__).resolve().parent.parent / "references" / "plans.json"
 CODEX_FIELDS = (
     "input_tokens",
     "cached_input_tokens",
@@ -253,6 +255,14 @@ def quota_rows(path):
     return [(text, limits) for text, limits in rows if repeated[text] == 1]
 
 
+def load_plans(path=PLANS):
+    """The plans file, or None if it cannot be read: the advice then skips the comparison."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def codex_weekly_readings(home):
     """Every weekly reading in Codex's local logs: (time, used %, renewal time, plan)."""
     found = []
@@ -485,7 +495,8 @@ def main():
     if args.command == "plan":
         if args.windows < plan_fit.MINIMUM:
             parser.error(f"--windows needs at least {plan_fit.MINIMUM}")
-        advice = plan_fit.advise_plan(codex_weekly_readings(args.codex_home), now, args.windows)
+        readings = codex_weekly_readings(args.codex_home)
+        advice = plan_fit.advise_plan(readings, now, args.windows, load_plans())
         roots = [args.codex_home / "sessions", args.codex_home / "archived_sessions"]
         # Unreadable without extra libraries; the history may be shorter than it looks.
         advice["compressedLogs"] = len(recent_files(roots, "rollout-*.jsonl.zst", 0))

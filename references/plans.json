@@ -1,0 +1,53 @@
+{
+  "checked": "2026-10-12",
+  "about": "Codex plans: monthly USD list price and included allowance as a multiple of Plus. OpenAI publishes the prices and the Pro 200 transition dates; the multiples come from OpenAI statements reported by the press, not from a pricing page. planType is the plan name Codex writes into its logs.",
+  "plans": [
+    {
+      "name": "Plus",
+      "planType": "plus",
+      "usdPerMonth": 20,
+      "timesPlus": [{"from": null, "value": 1}],
+      "sources": ["https://learn.chatgpt.com/docs/pricing"]
+    },
+    {
+      "name": "Pro 100",
+      "planType": "prolite",
+      "planTypeInferred": true,
+      "usdPerMonth": 100,
+      "timesPlus": [
+        {"from": null, "value": 10},
+        {"from": "2026-06-01T00:00:00-07:00", "value": 5}
+      ],
+      "sources": [
+        "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers",
+        "https://9to5mac.com/2026/04/09/openai-introduces-100-month-pro-plan-aimed-at-codex-users-heres-what-it-includes/"
+      ]
+    },
+    {
+      "name": "Pro 200",
+      "planType": "pro",
+      "usdPerMonth": 200,
+      "timesPlus": [
+        {"from": null, "value": 20},
+        {"from": "2026-09-29T10:00:00-07:00", "value": 10}
+      ],
+      "grandfathered": {
+        "activeFrom": "2026-09-22T00:00:00-07:00",
+        "activeUntil": "2026-09-29T10:00:00-07:00",
+        "previousUntil": "2026-10-30T00:00:00-07:00"
+      },
+      "sources": [
+        "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers",
+        "https://www.engadget.com/2272106/openai-adds-dollar500-pro-subscription-nerfs-its-existing-dollar200-tier/"
+      ]
+    },
+    {
+      "name": "Pro 500",
+      "planType": null,
+      "usdPerMonth": 500,
+      "timesPlus": [],
+      "note": "OpenAI says only that it has the highest included usage; no multiple of Plus is confirmed.",
+      "sources": ["https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers"]
+    }
+  ]
+}

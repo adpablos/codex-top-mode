@@ -287,6 +287,28 @@ Mode runs are not recorded yet, so their use counts as the user's
 (`includesTopModeRuns`). Compressed logs (`.jsonl.zst`) cannot be read and are
 counted. There is no Claude Code history: its status line is not kept over time.
 
+`plans` compares the same use with every plan in
+[plans.json](plans.json): its monthly price and its size as a multiple of Plus,
+with sources and the date they were checked (`stale` after 60 days). Each
+percentage step is converted to Plus with the size its plan had at that moment,
+then measured against each plan's size today: the median, the windows and
+natural weeks that would reach its limit, and `unknownWindows`, windows that
+reached the user's limit and would fit a bigger plan, so their real need is
+unknown. Plans without a confirmed size are listed in `notCompared`. Rules and
+limits:
+
+- A grandfathered subscriber keeps a plan's earlier size until the date the file
+  gives. It is inferred from readings on that plan during the eligibility
+  period; without them the new size is assumed.
+- `change` warns of a change to the user's plan within 30 days: the new size,
+  the same figures and the verdict it would give.
+- `could_go_lower` replaces `enough` when a cheaper plan would have stayed below
+  80 % in every window and natural week, with no unknown window. It names
+  `lowerPlan`; the monthly saving follows from the prices.
+- Only the weekly allowance is judged; the 5-hour limit is not. A plan type the
+  file does not know, here or in the history, skips the comparison with a
+  `note`.
+
 ## Run report
 
 The coordinator closes a run with a private, portable Markdown report. Lead with
