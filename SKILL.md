@@ -17,15 +17,17 @@ The scripts live next to this file: run them as `python3 -B <this folder>/script
 
 "Install Top Mode from <url>": clone it to `~/.top-mode`, then run
 `python3 -B ~/.top-mode/scripts/install.py` and relay its output. If
-`~/.top-mode` already exists, update it with `git -C ~/.top-mode pull` only when
-it is a plain folder, not a link, and `git -C ~/.top-mode remote get-url origin`
-names the same repository; otherwise stop and ask the user. Never run scripts
-from a checkout you have not identified. If your host refuses to run code from
-a folder just cloned, ask the user to approve the command; do not work around
-the refusal. `install.py` links the package into `~/.codex/skills/top-mode` and
-`~/.claude/skills/top-mode` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when set)
-for the agents that exist and never replaces anything else. Tell the user to open
-a new session and ask to set up Top Mode.
+`~/.top-mode` already exists, update it only when it is a plain folder, not a
+link, `git -C ~/.top-mode remote get-url origin` names the same repository, and
+it has no local changes or commits (`git -C ~/.top-mode status -s` and
+`git -C ~/.top-mode log @{u}..` print nothing). Then run
+`git -C ~/.top-mode pull` and go on only if it succeeds. Otherwise stop and ask
+the user. Never run scripts from a checkout you have not identified. If your
+host refuses to run code from a folder just cloned, ask the user to approve the
+command; do not work around the refusal. `install.py` links the package into
+`~/.codex/skills/top-mode` and `~/.claude/skills/top-mode` (under `CODEX_HOME`
+or `CLAUDE_CONFIG_DIR` when set) for the agents that exist and never replaces
+anything else. Tell the user to open a new session and ask to set up Top Mode.
 
 ## Rules that always apply
 
