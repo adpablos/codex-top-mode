@@ -228,7 +228,8 @@ tokens, run `python3 -B scripts/usage_report.py tokens --since START_ISO --markd
 at closure. It reads local Codex session logs (`~/.codex/sessions`, or under
 `CODEX_HOME` when set) and Claude Code transcripts (`~/.claude/projects`, or
 under `CLAUDE_CONFIG_DIR`, including subagents), counts each
-response once, and groups usage by agent, model and effort. Codex logs in the
+response once (a forked Codex log's copy of its parent's history is not counted
+again), and groups usage by agent, model and effort. Codex logs in the
 older format (no per-response records) can leave out automatic compactions;
 `olderLogs` counts those that add usage to the interval, and the total may then
 be a lower bound. Codex compresses logs untouched for a week (`.jsonl.zst`),

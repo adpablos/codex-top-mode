@@ -82,13 +82,18 @@ def add(bucket, usage, fields):
 def codex_tokens(home, since, until):
     """Sum per-response usage from Codex rollout logs, attributed to model/effort."""
     roots = [home / "sessions", home / "archived_sessions"]
-    buckets, sessions, responses, older = {}, 0, 0, 0
+    buckets, sessions, responses, older, seen = {}, 0, 0, 0, set()
+    markers = ('"session_meta"', '"turn_context"', '"token_usage_record"', '"token_count"')
     for path in recent_files(roots, "rollout-*.jsonl", since):
-        model, effort, seen, used = "unknown", None, set(), False
+        model, effort, used, owner = "unknown", None, False, None
         records = any(True for _ in lines(path, ('"token_usage_record"',)))
         previous = None
-        for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
+        for row in lines(path, markers):
             kind, payload = row.get("type"), row.get("payload") or {}
+            if kind == "session_meta":
+                # The first one is this rollout's own; a fork copies its parent's later.
+                owner = owner or payload.get("id")
+                continue
             if kind == "turn_context":
                 model = payload.get("model") or model
                 effort = payload.get("effort") or effort
@@ -96,7 +101,10 @@ def codex_tokens(home, since, until):
             stamp = epoch(row.get("timestamp"))
             if records and kind == "token_usage_record":
                 usage, key = payload.get("usage") or {}, payload.get("response_id")
-                if key in seen or stamp is None or not since <= stamp <= until:
+                # A fork copies its parent's records, maybe with new timestamps: count
+                # each response once, in the thread that made it.
+                copied = owner is not None and payload.get("thread_id") not in (None, owner)
+                if copied or key in seen or stamp is None or not since <= stamp <= until:
                     continue
                 seen.add(key)
             elif not records and payload.get("type") == "token_count":

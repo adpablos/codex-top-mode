@@ -118,6 +118,31 @@ class TokenTests(unittest.TestCase):
         report = markdown({**REPORT, "providers": [result]})
         self.assertIn("2 compressed logs that may cover this interval were not read", report)
 
+    def test_a_forked_codex_log_counts_only_its_own_responses(self):
+        def record(response, thread, stamp="2033-05-18T03:00:00Z"):
+            payload = {"response_id": response, "thread_id": thread, "usage": usage(100)}
+            return {"timestamp": stamp, "type": "token_usage_record", "payload": payload}
+
+        parent = [
+            {"type": "session_meta", "payload": {"id": "parent"}},
+            record("r1", "parent", "2033-05-17T23:00:00Z"),
+            record("r2", "parent"),
+        ]
+        # A fork copies its parent's history, with new timestamps, then adds its own.
+        child = [
+            {"type": "session_meta", "payload": {"id": "child"}},
+            *[{**row, "timestamp": "2033-05-18T04:00:00Z"} for row in parent],
+            record("r3", "child"),
+        ]
+        # A thread that writes a second log of its own repeats its records.
+        rewritten = [*parent, record("r4", "parent")]
+        write_lines(self.home / "sessions/rollout-parent.jsonl", parent)
+        write_lines(self.home / "sessions/rollout-child.jsonl", child)
+        write_lines(self.home / "sessions/rollout-parent_2.jsonl", rewritten)
+        result = codex_tokens(self.home, SINCE, NOW)
+        # r1 is before the interval; r2, r3 and r4 count once each.
+        self.assertEqual((result["responses"], result["totalTokens"]), (3, 300))
+
     def test_codex_usage_outside_the_window_is_ignored(self):
         write_lines(
             self.home / "sessions/rollout-old.jsonl",
