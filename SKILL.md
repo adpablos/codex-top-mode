@@ -127,14 +127,14 @@ A request that only reviews or changes this package does not need it.
      outside Git, then run `profile_binding.py bind --profile <path>`.
   7. For each agent the runs will use, run
      `python3 -B <this folder>/scripts/host_rules.py --agent <claude or codex> --folder <F>`,
-     where F is the folder where they start Top Mode, and say in plain words what
-     it would set there: what stops asking, what keeps asking and what is
+     where F is the folder where they start Top Mode, and say in plain words
+     what it would set there: what stops asking, what keeps asking and what is
      blocked. Write it with `--write` only with their OK; Claude Code keeps
      their own rules, and Codex gets a file of its own, read when a session
-     starts from a folder they trust in Codex. If F is in a Git repository,
-     the script refuses until Git ignores the rules file: with their OK, list
-     it in that repository's `.git/info/exclude`, which is never shared.
-     Recommend protecting each
+     starts from a folder they trust in Codex. They apply to sessions started
+     after the write. If F is in a Git repository, the script refuses until Git
+     ignores the rules file: with their OK, list it in that repository's
+     `.git/info/exclude`, which is never shared. Recommend protecting each
      project's default branch on GitHub (no direct or forced pushes, checks
      required): rules match a command's words, not its effect. Change GitHub
      settings only with their OK.
@@ -218,6 +218,9 @@ While working:
   default branch, and push it as `git push -u origin quota-coach/<task>`, the
   form the host rules allow. At `autonomous`, merge only after an independent
   review and with checks green.
+- Run Git and `gh` from inside the project, as `cd <project> && git ...`, never
+  with `git -C`: the host rules match the command's words, so `git -C` asks for
+  what the level allows and slips past what it blocks.
 - Work outside the run you come across (a broken pull request, a stale branch):
   report it, don't touch it.
 - Checks are green only when every check the default branch requires has

@@ -226,6 +226,11 @@ def expected(profile: dict, package: Path = PACKAGE) -> dict:
         for folder in package_folders(package)
         for script in OWN
     )
+    # Every run checks these rules; writing them always waits for the user.
+    for folder in package_folders(package):
+        script = f"python3 -B {folder}/scripts/host_rules.py"
+        rules["allow"].add(f"Bash({script}:*)")
+        rules["ask"].update(f"Bash({script}{gap}--write*)" for gap in (" ", " * "))
     rules["deny"].update(f"Bash({c})" for c in DEFAULT_BRANCH)
     for folder in profile.get("excluded", []):
         rules["deny"].update(folder_rule(tool, folder) for tool in ("Read", "Edit"))
@@ -252,6 +257,7 @@ def codex_rules(profile: dict, package: Path = PACKAGE) -> list:
         for action, patterns in CODEX.items()
         for pattern in patterns
     ]
+    # Checking host_rules.py runs in the sandbox; writing leaves it, so Codex asks.
     rules += [
         (["python3", "-B", f"{folder}/scripts/{script}", *rest], "allow", "Quota Coach itself")
         for folder in package_folders(package)
@@ -420,7 +426,8 @@ def sync_codex(profile: dict, folder: Path, write: bool, package: Path = PACKAGE
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    # No abbreviations: the host rules look for the full --write.
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--agent", choices=["claude", "codex"], required=True)
     parser.add_argument("--profile", type=Path, help="Default: the saved setup")
     parser.add_argument(

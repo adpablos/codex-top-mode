@@ -98,7 +98,17 @@ class ExpectedRulesTests(unittest.TestCase):
             self.assertIn(
                 f"Bash(python3 -B {folder}/scripts/profile_binding.py locate:*)", rules["allow"]
             )
-        self.assertFalse(any("install.py" in r or "host_rules" in r for r in rules["allow"]))
+        self.assertFalse(any("install.py" in r for r in rules["allow"]))
+
+    def test_checking_the_rules_is_allowed_and_writing_them_asks(self):
+        with patch.object(host_rules.Path, "home", return_value=Path("/home/you")):
+            rules = expected(profile("autonomous"), PACKAGE)
+        script = "python3 -B ~/.quota-coach/scripts/host_rules.py"
+        self.assertIn(f"Bash({script}:*)", rules["allow"])
+        self.assertIn(f"Bash({script} --write*)", rules["ask"])
+        self.assertIn(f"Bash({script} * --write*)", rules["ask"])
+        codex = codex_rules(profile("autonomous"), PACKAGE)
+        self.assertFalse(any("host_rules" in str(p) for p, _, _ in codex))
 
     def test_each_rule_sits_in_one_list(self):
         rules = expected(profile("autonomous", read="ask", checks="deny"), PACKAGE)
@@ -336,6 +346,17 @@ class CommandLineTests(unittest.TestCase):
                     result = json.loads(out.getvalue())
                     self.assertEqual((result["agent"], result["written"]), (agent, written))
                 self.assertTrue(result["current"])
+
+    def test_write_is_never_abbreviated(self):
+        err = io.StringIO()
+        argv = ["host_rules.py", "--agent", "codex", "--profile", str(EXAMPLE), "--wri"]
+        with (
+            patch.object(sys, "argv", argv),
+            contextlib.redirect_stderr(err),
+            self.assertRaises(SystemExit),
+        ):
+            host_rules.main()
+        self.assertIn("unrecognized arguments: --wri", err.getvalue())
 
     def test_a_relative_folder_is_refused(self):
         err = io.StringIO()

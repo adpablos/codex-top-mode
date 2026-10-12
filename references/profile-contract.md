@@ -113,7 +113,7 @@ their machine.
 | `gh pr merge` | `merge` |
 | package installs, `gh auth`, reading the keychain (`security find-*`) | `install`, `access` |
 | options that force, delete or reset branches (`-f`, `-C`, `-B`, `-D`, `-M`, `-d` on push, and their long forms) wherever they stand as their own word; hard resets, `git clean`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
-| the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
+| the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`, and `host_rules.py` to check these rules) | always allowed; writing these rules always asks |
 | pushing to `main` or `master`; reading or editing excluded folders with Claude Code's file tools | always denied |
 
 Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
@@ -139,7 +139,10 @@ sandbox.
 
 These rules match a command's words, not its effect (`git -C . push` is not
 `git push`, and combined options such as `-qC` slip past), so they are not a
-security boundary: protect each project's default branch on GitHub too. To
+security boundary: protect each project's default branch on GitHub too. Runs
+work from inside each project (`cd <project> && git ...`) so the rules see the
+command as written. Sessions started before the rules were written may not
+follow them; test them in a new session. To
 keep that gap small, commands with destructive options are allowed only in the
 narrow forms a run needs. `git branch -d` deletes only a branch that is already
 merged, so no rule blocks it; like any command without a rule, it asks.
