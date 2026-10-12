@@ -51,16 +51,15 @@ without babysitting and **without losing control**.
 
 Done: plain-language docs, private setup that later sessions recover, quota
 suggestion and token report from local logs, manual runs with deadlines and
-reports, an experimental watch for announced Codex resets.
+reports, an experimental watch for announced Codex resets, and quality gates in
+CI (Python 3.9+, lint, formatting, coverage floor, documentation links, macOS).
 
 Next, in small pull requests:
 
-1. **Quality gates.** Python 3.9+ (macOS's own Python), lint, formatting,
-   coverage floor, documentation link checks, macOS in CI.
-2. **One-step install and a proactive check.** Install for Codex and Claude
+1. **One-step install and a proactive check.** Install for Codex and Claude
    Code; one `check` command that combines quota, expiring resets and the
    announcement watch, and a recipe to run it daily with the agent's own
    scheduler.
-3. **Guided setup.** The agent discovers projects and pending work from the
+2. **Guided setup.** The agent discovers projects and pending work from the
    workspace; three permission levels with optional detail; the profile points
    to where work lives instead of copying task lists.

@@ -8,7 +8,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from usage_monitor import epoch, expiry_advice, observe, snapshot
+from usage_monitor import epoch, expiry_advice, observe, replenished, snapshot
 
 START = 2000000000
 
@@ -99,9 +99,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["effectiveStopAt"], START + 6 * 3600)
 
     def test_new_grant_can_coincide_with_expiration_and_no_net_count_change(self):
-        state, event = observe(
-            policy(), reading(resets=3, now=START + 30, grants=[START + 10])
-        )
+        state, event = observe(policy(), reading(resets=3, now=START + 30, grants=[START + 10]))
         self.assertEqual(event, "banked_reset_added")
         self.assertEqual(state["mode"], "top")
 
@@ -189,9 +187,7 @@ class MonitorTests(unittest.TestCase):
     def test_explicit_per_limit_map_does_not_mix_with_legacy_bucket(self):
         legacy = {"primary": {"usedPercent": 0, "windowDurationMins": 10080}}
         for buckets in ({}, {"other": legacy}):
-            current = snapshot(
-                {"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30
-            )
+            current = snapshot({"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30)
             state, event = observe(policy(), current)
             self.assertEqual(event, "usage_unavailable")
             self.assertEqual(state["mode"], "top")
@@ -208,9 +204,7 @@ class MonitorTests(unittest.TestCase):
     def test_cli_preserves_envelope_and_writes_only_sanitized_usage(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
-            path.write_text(
-                json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"})
-            )
+            path.write_text(json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"}))
             payload = {"accountId": "synthetic-private-id", "token": "synthetic-secret"}
             run = subprocess.run(
                 [
@@ -260,9 +254,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["baseline"]["observedAt"], START)
 
     def test_zero_authoritative_count_cannot_extend_from_stale_credit_detail(self):
-        state, event = observe(
-            policy(), reading(resets=0, now=START + 30, grants=[START + 5])
-        )
+        state, event = observe(policy(), reading(resets=0, now=START + 30, grants=[START + 5]))
         self.assertEqual(event, "unchanged")
         self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
 
@@ -303,9 +295,7 @@ class MonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             path.write_text(
-                json.dumps(
-                    {"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600}
-                )
+                json.dumps({"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600})
             )
             payload = {
                 "rateLimitsByLimitId": {
@@ -337,17 +327,13 @@ class MonitorTests(unittest.TestCase):
                 saved = json.loads(path.read_text())
                 self.assertEqual(saved["usageMonitor"]["mode"], "normal")
                 self.assertEqual(saved["stopNewWorkAt"], "2033-05-18T03:34:11Z")
-                self.assertEqual(
-                    saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600
-                )
+                self.assertEqual(saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600)
 
     def test_cli_reports_the_earlier_scheduled_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"
             monitor = policy()
-            monitor.update(
-                stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600
-            )
+            monitor.update(stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600)
             path.write_text(json.dumps({"usageMonitor": monitor}))
             payload = {
                 "rateLimitsByLimitId": {
@@ -432,6 +418,49 @@ class MonitorTests(unittest.TestCase):
         advice = expiry_advice(observation)
         self.assertEqual(advice["expiryCoverage"], "partial")
         self.assertEqual(advice["dueExpirations"], [START + 100])
+
+
+class BoundaryTests(unittest.TestCase):
+    """Exact limits: the moment a stop is due and the size of a real drop."""
+
+    def test_scheduled_renewal_stops_exactly_at_its_time(self):
+        monitor = policy()
+        monitor.update(stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 100)
+        state, event = observe(monitor, reading(now=START + 99))
+        self.assertEqual(state["mode"], "top")
+        _, event = observe(monitor, reading(now=START + 100))
+        self.assertEqual(event, "scheduled_weekly_renewal_due")
+        # A renewal at the deadline itself is still reported as the renewal.
+        monitor["scheduledWeeklyStopAt"] = monitor["effectiveStopAt"]
+        _, event = observe(monitor, reading(now=START + 4 * 3600))
+        self.assertEqual(event, "scheduled_weekly_renewal_due")
+
+    def test_confirmation_needs_a_second_read_20_seconds_to_30_minutes_later(self):
+        candidate, _ = observe(policy(), reading(0, now=START + 30))
+        for age, confirmed in ((19, False), (20, True), (1800, True), (1801, False)):
+            with self.subTest(age=age):
+                state, _ = observe(candidate, reading(1, now=START + 30 + age))
+                self.assertEqual(state["mode"] == "normal", confirmed)
+
+    def test_a_real_drop_is_at_least_five_points_down_to_two_percent(self):
+        def drop(before, after):
+            return replenished({"usedPercent": before}, {"usedPercent": after})
+
+        self.assertTrue(drop(6, 1))
+        self.assertFalse(drop(5.9, 1))
+        self.assertTrue(drop(7, 2))
+        self.assertFalse(drop(7, 2.1))
+
+    def test_snapshot_keeps_0_and_100_and_drops_impossible_values(self):
+        def windows(used):
+            limits = {"primary": {"usedPercent": used, "windowDurationMins": 10080}}
+            return snapshot({"rateLimits": limits}, START)["windows"]
+
+        self.assertTrue(windows(0) and windows(100))
+        self.assertFalse(windows(-1) or windows(101))
+        for count, kept in ((2, 2), (-1, None), (1.5, None)):
+            payload = {"rateLimitResetCredits": {"availableCount": count}}
+            self.assertEqual(snapshot(payload, START)["availableResets"], kept)
 
 
 if __name__ == "__main__":

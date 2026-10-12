@@ -1,4 +1,4 @@
-name: Offline tests
+name: Checks
 
 on:
   pull_request:
@@ -8,18 +8,85 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request replaces its unfinished run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  tests:
+  lint:
+    name: lint, format and workflow audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+      - name: Install tools
+        run: python -m pip install ruff==0.16.8 zizmor==1.30.1
+      - name: Lint
+        run: ruff check scripts
+      - name: Format
+        run: ruff format --check scripts
+      - name: Audit workflows
+        run: zizmor --offline .github
+
+  tests:
+    name: tests and coverage (Python 3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install coverage
+        run: python -m pip install coverage==7.16.2
       - name: Run offline tests
-        run: python -B -m unittest discover -s scripts -v
+        run: python -B -m coverage run -m unittest discover -s scripts -v
+      - name: Require 85% coverage
+        run: python -m coverage report
+
+  macos:
+    name: tests (macOS system Python)
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Most Mac users have only the Python that ships with macOS (3.9), which is
+      # also the oldest version Top Mode supports. If a runner image ships another
+      # version, fail rather than silently stop testing 3.9.
+      - name: Run offline tests with /usr/bin/python3
+        run: |
+          /usr/bin/python3 -c 'import sys; print(sys.version); sys.exit(sys.version_info[:2] != (3, 9) and "System Python is no longer 3.9: test 3.9 in a job of its own.")'
+          /usr/bin/python3 -B -m unittest discover -s scripts
+
+  # The one check to require before merging: it fails if any job above failed
+  # or was skipped, so new jobs only need to be added to `needs`.
+  all-checks:
+    name: all checks
+    if: always()
+    needs: [lint, tests, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || exit 1
+          done

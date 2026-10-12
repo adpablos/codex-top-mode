@@ -5,6 +5,11 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-11
 
+- Lowered the minimum to Python 3.9, so the Python that ships with macOS works.
+  CI now checks lint, format and workflow security, runs the tests on Python
+  3.13 and on macOS's own Python 3.9, enforces 85% coverage, verifies
+  documentation links and that documented script flags exist, and reports one
+  `all checks` result to require before merging.
 - Added the [vision and principles](references/vision.md) that guide every change.
 - Renamed the project to Top Mode (repository `adpablos/top-mode`, skill
   `top-mode`). The private folder stays `~/.codex-top-mode` so saved setups

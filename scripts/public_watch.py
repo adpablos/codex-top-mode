@@ -18,9 +18,7 @@ from usage_monitor import epoch, number, write_private
 
 MAX_BYTES = 2_000_000
 ASSIGNMENT = re.compile(r"\$R\[(\d+)\]=")
-ENTRY = re.compile(
-    r'\$R\[\d+\]=(?=\{content:\$R\[\d+\]=\{__typename:"TimelineTimelineItem")'
-)
+ENTRY = re.compile(r'\$R\[\d+\]=(?=\{content:\$R\[\d+\]=\{__typename:"TimelineTimelineItem")')
 
 
 class SourceError(ValueError):
@@ -182,9 +180,7 @@ def profile_posts(source, approved_publisher, now):
     discovered = set(re.findall(r'entry_id:"tweet-(\d+)"', source))
     if discovered != set(identities):
         raise SourceError("Unrecognized public timeline entries")
-    return sorted(
-        posts.values(), key=lambda p: (p["publishedAt"], p["sourceUrl"]), reverse=True
-    )
+    return sorted(posts.values(), key=lambda p: (p["publishedAt"], p["sourceUrl"]), reverse=True)
 
 
 class EmbedReader(HTMLParser):
@@ -267,15 +263,17 @@ def verify_embed(payload, post):
         )
         day = f"{months[created.month - 1]} {created.day}, {created.year}"
         dated = any(
-            ("https://x.com" + urllib.parse.urlsplit(link).path).lower()
-            == post["sourceUrl"]
+            ("https://x.com" + urllib.parse.urlsplit(link).path).lower() == post["sourceUrl"]
             and text.strip() == day
             for link, text in parsed.dated_links
         )
-        normal = lambda text: " ".join(html.unescape(text).split())
-        matches_text = bool(parsed.paragraphs) and normal(
-            parsed.paragraphs[0]
-        ) == normal(post["text"])
+
+        def normal(text):
+            return " ".join(html.unescape(text).split())
+
+        matches_text = bool(parsed.paragraphs) and normal(parsed.paragraphs[0]) == normal(
+            post["text"]
+        )
         if not matches_text and post.get("_quotedPostId") and parsed.paragraph_links:
             # Official embeds append a short link for quotes absent from SSR full_text.
             # Accept only that anchored suffix; never discard arbitrary URLs or text.
@@ -285,8 +283,7 @@ def verify_embed(payload, post):
                 matches_text = (
                     re.fullmatch(r"https://t\.co/[A-Za-z0-9]{1,32}", href) is not None
                     and label == href
-                    and normal(parsed.paragraphs[0])
-                    == normal(post["text"] + " " + href)
+                    and normal(parsed.paragraphs[0]) == normal(post["text"] + " " + href)
                 )
         if post["sourceUrl"] not in links or not dated or not matches_text:
             raise SourceError("Official embed does not match the primary post")
@@ -321,9 +318,7 @@ def fetch(url):
         url, headers={"User-Agent": "Mozilla/5.0 (compatible; top-mode/0.1)"}
     )
     try:
-        with urllib.request.build_opener(PublicRedirects()).open(
-            request, timeout=15
-        ) as response:
+        with urllib.request.build_opener(PublicRedirects()).open(request, timeout=15) as response:
             data = response.read(MAX_BYTES + 1)
             if len(data) > MAX_BYTES:
                 raise SourceError("Public response too large")
@@ -474,9 +469,7 @@ def poll(config, state, now, reader=read_public):
         ordered = sorted(seen.items(), key=lambda item: (item[1], item[0]))
         evicted = ordered[: -config["retainedIds"]]
         if evicted:
-            record["replayFloor"] = max(
-                record.get("replayFloor", 0), max(at for _, at in evicted)
-            )
+            record["replayFloor"] = max(record.get("replayFloor", 0), max(at for _, at in evicted))
         record["seenPosts"] = dict(ordered[-config["retainedIds"] :])
     result["recentSignals"] = result.get("recentSignals", [])[-50:]
     return result, emitted
@@ -487,9 +480,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument(
-        "--once", action="store_true", help="One due public check, then exit"
-    )
+    mode.add_argument("--once", action="store_true", help="One due public check, then exit")
     mode.add_argument(
         "--status", action="store_true", help="Print state coverage; performs no HTTP"
     )
