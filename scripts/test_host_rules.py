@@ -110,7 +110,7 @@ class ExpectedRulesTests(unittest.TestCase):
 class SyncTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        root = Path(self.tmp.name)
+        root = Path(self.tmp.name).resolve()
         self.folder, self.private = root / "personal", root / "private"
         self.folder.mkdir()
         self.settings = self.folder / ".claude" / "settings.local.json"
@@ -206,7 +206,9 @@ class CodexRulesTests(unittest.TestCase):
         ):
             rules = codex_rules(profile(level), PACKAGE)
             with self.subTest(level):
-                self.assertEqual(decision(rules, "git", "push"), [push])
+                self.assertEqual(decision(rules, "git", "push", "origin"), [push])
+                self.assertEqual(decision(rules, "git", "push", "-u", "origin"), [push])
+                self.assertEqual(decision(rules, "git", "push"), [])
                 self.assertEqual(decision(rules, "gh", "pr", "merge"), [merge])
                 self.assertEqual(decision(rules, "git", "checkout", "-b"), ["allow"])
                 self.assertEqual(decision(rules, "git", "switch", ["-c", "--create"]), ["allow"])
@@ -261,7 +263,7 @@ class CodexRulesTests(unittest.TestCase):
 class CodexSyncTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.folder = Path(self.tmp.name)
+        self.folder = Path(self.tmp.name).resolve()
         self.path = self.folder / ".codex" / "rules" / "quota-coach.rules"
 
     def tearDown(self):
@@ -270,14 +272,14 @@ class CodexSyncTests(unittest.TestCase):
     def test_shows_writes_and_rewrites_when_the_level_changes(self):
         result = sync_codex(profile(), self.folder, False, PACKAGE)
         self.assertFalse(result["current"])
-        self.assertIn("git push", result["allow"])
+        self.assertIn("git push origin", result["allow"])
         self.assertIn("gh pr merge", result["prompt"])
         self.assertFalse(self.path.exists())
         self.assertTrue(sync_codex(profile(), self.folder, True, PACKAGE)["written"])
         self.assertTrue(sync_codex(profile(), self.folder, False, PACKAGE)["current"])
         self.assertFalse(sync_codex(profile("careful"), self.folder, False, PACKAGE)["current"])
         sync_codex(profile("careful"), self.folder, True, PACKAGE)
-        self.assertIn('["git", "push"], decision="prompt"', self.path.read_text())
+        self.assertIn('["git", "push", "origin"], decision="prompt"', self.path.read_text())
 
     def test_refuses_a_linked_file_or_folder(self):
         self.path.parent.mkdir(parents=True)
@@ -291,6 +293,18 @@ class CodexSyncTests(unittest.TestCase):
         (self.folder / ".codex").symlink_to(self.folder / "elsewhere")
         with self.assertRaisesRegex(ValueError, "is a link"):
             sync_codex(profile(), self.folder, False, PACKAGE)
+
+    def test_follows_a_linked_start_folder_to_check_git(self):
+        repo = self.folder / "repo"
+        (repo / "sub").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        start = self.folder / "start"
+        start.symlink_to(repo / "sub")
+        with self.assertRaisesRegex(ValueError, "Have Git ignore"):
+            sync_codex(profile(), start, True, PACKAGE)
+        with self.assertRaisesRegex(ValueError, "Have Git ignore"):
+            sync_claude(profile(), start, self.folder / "private", True, PACKAGE)
+        self.assertEqual(list((repo / "sub").iterdir()), [])
 
     def test_refuses_a_file_git_would_pick_up_even_when_it_is_current(self):
         self.assertTrue(sync_codex(profile(), self.folder, True, PACKAGE)["written"])

@@ -121,7 +121,12 @@ CODEX = {
         ["git", "checkout", "-b"],
         ["git", "worktree", "add"],
     ),
-    "publish_pr": (["git", "push"], ["gh", "pr", "create"]),
+    # Only the forms the run uses, so an option right after `push` is never allowed.
+    "publish_pr": (
+        ["git", "push", "origin"],
+        ["git", "push", "-u", "origin"],
+        ["gh", "pr", "create"],
+    ),
     "review": (["gh", "pr", ["review", "comment"]],),
     "merge": (["gh", "pr", "merge"],),
     "install": (
@@ -311,9 +316,14 @@ def apply(settings: dict, change: dict) -> dict:
     return {**settings, "permissions": permissions}
 
 
-def rules_path(folder: Path, *parts: str) -> Path:
+def start_folder(folder: Path) -> Path:
     folder = folder.expanduser()
     require(folder.is_absolute() and folder.is_dir(), "Use the absolute folder where you start")
+    # Follow a linked folder, so the Git check looks where the rules really land.
+    return folder.resolve()
+
+
+def rules_path(folder: Path, *parts: str) -> Path:
     for depth in range(1, len(parts) + 1):
         # A link anywhere below the folder would write somewhere else.
         path = folder.joinpath(*parts[:depth])
@@ -350,7 +360,7 @@ def write_json(path: Path, data: dict, mode: int) -> None:
 
 def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package=PACKAGE):
     """Compare the folder's Claude Code rules with the level; if asked, bring them in line."""
-    folder = folder.expanduser()
+    folder = start_folder(folder)
     path = rules_path(folder, ".claude", "settings.local.json")
     state_path = private_path(private / "host-rules.json", existing=False)
     if state_path.exists():
@@ -389,7 +399,7 @@ def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package
 
 def sync_codex(profile: dict, folder: Path, write: bool, package: Path = PACKAGE) -> dict:
     """Compare the folder's Codex rules file with the level; if asked, rewrite it."""
-    folder = folder.expanduser()
+    folder = start_folder(folder)
     path = rules_path(folder, ".codex", "rules", "quota-coach.rules")
     rules = codex_rules(profile, package)
     text = codex_text(rules)

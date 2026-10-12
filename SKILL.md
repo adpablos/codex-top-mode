@@ -203,8 +203,9 @@ While working:
   Codex thread seen from Claude Code, say), ask the user, or only read and
   diagnose.
 - Commit only on a working branch named `quota-coach/<task>`, never on the
-  default branch; the host rules allow pushing only those. At `autonomous`,
-  merge only after an independent review and with checks green.
+  default branch, and push it as `git push -u origin quota-coach/<task>`, the
+  form the host rules allow. At `autonomous`, merge only after an independent
+  review and with checks green.
 - Work outside the run you come across (a broken pull request, a stale branch):
   report it, don't touch it.
 - When something starts waiting on the user, tell them right away, with the
