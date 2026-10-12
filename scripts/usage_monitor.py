@@ -92,9 +92,7 @@ def expiry_advice(observation, warning_days=7):
     future = sorted({r["expiresAt"] for r in rows if r["expiresAt"] > now})
     due = [t for t in future if t - now <= warning_days * 86400]
     count = observation.get("availableResets")
-    known = len(
-        {(r.get("grantedAt"), r["expiresAt"]) for r in rows if r["expiresAt"] > now}
-    )
+    known = len({(r.get("grantedAt"), r["expiresAt"]) for r in rows if r["expiresAt"] > now})
     coverage = "unknown"
     if count is not None:
         coverage = "complete" if known >= count else "partial"
@@ -111,16 +109,12 @@ def expiry_advice(observation, warning_days=7):
 
 
 def weekly(observation):
-    return next(
-        (w for w in observation["windows"] if w["durationMinutes"] == 10080), None
-    )
+    return next((w for w in observation["windows"] if w["durationMinutes"] == 10080), None)
 
 
 def replenished(anchor, current, detect_low_usage_shift=False):
     decrease = anchor["usedPercent"] - current["usedPercent"]
-    strong_decrease = (
-        current["usedPercent"] <= max(2, anchor["usedPercent"] / 4) and decrease >= 5
-    )
+    strong_decrease = current["usedPercent"] <= max(2, anchor["usedPercent"] / 4) and decrease >= 5
     old_reset, new_reset = epoch(anchor.get("resetsAt")), epoch(current.get("resetsAt"))
     shifted_low_decrease = (
         detect_low_usage_shift
@@ -145,9 +139,6 @@ def observe(monitor, current):
     deadline = epoch(result.get("effectiveStopAt"))
     if deadline is None:
         raise ValueError("A valid authorized stop time is required")
-    conditional_deadline = epoch(result.get("bankedStopAt"))
-    if "bankedStopAt" in result and conditional_deadline is None:
-        raise ValueError("A valid conditional stop time is required")
     scheduled_stop = epoch(result.get("scheduledWeeklyStopAt"))
     if result.get("stopOnScheduledWeeklyRenewal") and scheduled_stop is None:
         anchor = weekly(result.get("baseline", result.get("last", {"windows": []})))
@@ -178,26 +169,21 @@ def observe(monitor, current):
     if previous:
         before_count = result.get("lastAvailableResets", previous["availableResets"])
         count = current["availableResets"]
-        count_increased = (
-            before_count is not None and count is not None and count > before_count
-        )
+        count_increased = before_count is not None and count is not None and count > before_count
         known_grants = result.get("seenGrantTimes", previous["grantTimes"])
         initial_time = epoch(result.get("baseline", previous)["observedAt"])
         new_grant = count != 0 and any(
             g > initial_time and g not in known_grants for g in current["grantTimes"]
         )
         if count_increased or new_grant:
+            # Reported, never used to extend the deadline.
             result["bankedResetObserved"] = True
-            if conditional_deadline is not None and conditional_deadline > deadline:
-                result["effectiveStopAt"] = result["bankedStopAt"]
             event = "banked_reset_added"
         old, new = result.get("lastWeekly", weekly(previous)), weekly(current)
         detect_low_usage_shift = result.get("detectLowUsageRenewalShift", False)
         candidate = result.get("pendingReplenishment")
         if candidate and new:
-            confirmed_drop = replenished(
-                candidate["anchor"], new, detect_low_usage_shift
-            )
+            confirmed_drop = replenished(candidate["anchor"], new, detect_low_usage_shift)
             age = now - candidate["firstSeenAt"]
             anchor_reset = candidate["anchor"]["resetsAt"]
             if anchor_reset is not None and now >= anchor_reset - 60:
@@ -256,9 +242,7 @@ def stop_new_work_at(monitor):
     if monitor.get("stopOnScheduledWeeklyRenewal"):
         scheduled = monitor.get("scheduledWeeklyStopAt")
         if epoch(scheduled) is None:
-            anchor = weekly(
-                monitor.get("baseline", monitor.get("last", {"windows": []}))
-            )
+            anchor = weekly(monitor.get("baseline", monitor.get("last", {"windows": []})))
             scheduled = anchor.get("resetsAt") if anchor else None
         if (
             epoch(scheduled) is not None

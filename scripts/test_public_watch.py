@@ -55,9 +55,7 @@ def page(p=None, author="example_pub", quote=None, quoted_id=None):
         },
     }
     if quote:
-        tweet["quoted_tweet"] = {
-            "details": {"created_at_ms": START * 1000, "full_text": quote}
-        }
+        tweet["quoted_tweet"] = {"details": {"created_at_ms": START * 1000, "full_text": quote}}
     if quoted_id:
         tweet["quoted_tweet_results"] = {
             "rest_id": quoted_id,
@@ -226,16 +224,12 @@ class ParserTests(unittest.TestCase):
     def test_quote_embed_suffix_is_cross_checked_without_leaking_parser_metadata(self):
         payload = embed()
         link = "https://t.co/synthetic"
-        payload["html"] = payload["html"].replace(
-            "</p>", f' <a href="{link}">{link}</a></p>'
-        )
+        payload["html"] = payload["html"].replace("</p>", f' <a href="{link}">{link}</a></p>')
         calls = []
 
         def get(url):
             calls.append(url)
-            return (
-                page(quoted_id="10000000009") if url == SOURCE else json.dumps(payload)
-            )
+            return page(quoted_id="10000000009") if url == SOURCE else json.dumps(payload)
 
         self.assertEqual(read_public(SOURCE, START, 5, get), [post()])
         self.assertEqual(len(calls), 2)
@@ -318,9 +312,7 @@ class WatchTests(unittest.TestCase):
         state, _ = poll(config(), {}, START, reader([post()]))
         next_check = state["publishers"][SOURCE]["nextCheckAt"]
         for now in (START - 1, START, next_check - 1):
-            new, output = poll(
-                config(), state, now, lambda *args: self.fail("Unexpected HTTP")
-            )
+            new, output = poll(config(), state, now, lambda *args: self.fail("Unexpected HTTP"))
             self.assertEqual(new, state)
             self.assertEqual(output, [])
 
@@ -339,9 +331,7 @@ class WatchTests(unittest.TestCase):
         state, output = poll(config(), state, slot + interval + 2, read)
         self.assertEqual(calls, [slot + 5, slot + interval + 2])
         self.assertEqual(output, [])
-        self.assertEqual(
-            state["publishers"][SOURCE]["nextCheckAt"], slot + 2 * interval + 2 - 1800
-        )
+        self.assertEqual(state["publishers"][SOURCE]["nextCheckAt"], slot + 2 * interval + 2 - 1800)
         saved = copy.deepcopy(state)
         for now in (
             slot + interval + 1,
@@ -366,9 +356,7 @@ class WatchTests(unittest.TestCase):
         state, output = poll(config(), state, slot + 3 * interval + 9, read)
         self.assertEqual(calls, [slot + 3 * interval + 9])
         self.assertEqual(output, [])
-        self.assertEqual(
-            state["publishers"][SOURCE]["nextCheckAt"], slot + 4 * interval + 9 - 1800
-        )
+        self.assertEqual(state["publishers"][SOURCE]["nextCheckAt"], slot + 4 * interval + 9 - 1800)
 
     def test_near_boundary_late_then_early_schedule_does_not_skip(self):
         interval = config()["intervalHours"] * 3600
@@ -401,16 +389,12 @@ class WatchTests(unittest.TestCase):
         c.update(maximumPosts=20, retainedIds=20)
         state, _ = poll(c, {}, START, reader([post()]))
         for cycle in range(1, 5):
-            posts = [
-                post(cycle * 20 + i, START + cycle * 14400 - 100 + i) for i in range(20)
-            ]
+            posts = [post(cycle * 20 + i, START + cycle * 14400 - 100 + i) for i in range(20)]
             state, output = poll(c, state, START + cycle * 14400, reader(posts))
             self.assertEqual(len(output), 20)
         self.assertEqual(len(state["publishers"][SOURCE]["seenPosts"]), 20)
         self.assertEqual(len(state["recentSignals"]), 50)
-        _, output = poll(
-            c, state, START + 5 * 14400, reader([post(20, START + 14400 - 100)])
-        )
+        _, output = poll(c, state, START + 5 * 14400, reader([post(20, START + 14400 - 100)]))
         self.assertEqual(output, [])
 
     def test_sustained_failure_alerts_once_then_recovery_still_seeds_baseline(self):

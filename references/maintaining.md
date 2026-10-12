@@ -1,10 +1,12 @@
-# Maintaining Codex Top Mode
+# Maintaining Top Mode
 
 This guide is for changing the package. To use it for your own work, start
 with the [README](../README.md) and [agent entry point](../AGENTS.md).
 
+Every change should fit the [vision and principles](vision.md).
 Keep changes focused and preserve the [skill](../SKILL.md) and
-[profile/event contract](profile-contract.md) as the operating sources.
+[profile, quota and report contract](profile-contract.md) as the operating
+sources; the optional announcement watch lives in [announcements](announcements.md).
 Keep review, merge, release and deployment authority separate.
 
 ## Optional maintainer review
@@ -28,7 +30,7 @@ checks pass, and its head is the exact full 40-character SHA you intend to revie
 Replace both placeholders below:
 
 ```sh
-gh workflow run .github/workflows/claude.yml --repo adpablos/codex-top-mode --ref main \
+gh workflow run .github/workflows/claude.yml --repo adpablos/top-mode --ref main \
   -f pr_number=PR_NUMBER -f head_sha=FULL_HEAD_SHA
 ```
 
@@ -45,19 +47,24 @@ for the new head. Diagnose failed runs before retrying.
 Record user-visible package changes in the [changelog](../CHANGELOG.md). Keep real
 run reports and metrics in private storage.
 
-Keep changes small; run the offline suite with synthetic fixtures and no real
-model/account calls:
+Keep changes small. From the package root, run the same checks as CI. They are
+offline, use synthetic fixtures and make no model or account calls:
 
 ```sh
-python3.13 -B -m unittest discover -s scripts -v
+python3 -B -m unittest discover -s scripts      # tests, including docs links
+ruff check scripts && ruff format --check scripts
+python3 -m coverage run -m unittest discover -s scripts && python3 -m coverage report
+zizmor --offline .github                        # workflow security audit
 ```
 
-Run it from the package root. Python 3.11+ is the runtime minimum; CI uses
-Python 3.13. [GitHub Actions](../.github/workflows/tests.yml) runs the same
-offline suite on pull requests and pushes to `main`, with Python 3.13, pinned
-official actions and read-only permissions. Verify the **Offline tests** run
-and its test count. Tests need no runtime dependency installation, X/model calls
-or repository secrets.
+The runtime has no dependencies and supports Python 3.9+ (the version macOS
+ships). `ruff` and `coverage` are only for contributors; their settings live in
+[pyproject.toml](../pyproject.toml). [GitHub Actions](../.github/workflows/tests.yml)
+runs lint, format and a workflow audit, the tests with an 85% coverage floor on
+Python 3.13, and the tests on macOS's own Python (3.9; the job fails if the
+runner ships another version), with pinned actions and read-only permissions. Its `all checks` job fails when any of them fails; it is
+the one check to require before merging. Dependabot proposes action updates
+after a 7-day cooldown.
 Preserve authorization, fixed deadlines, deduplication,
 coverage honesty, private storage and legacy observer behavior. Use supported
 public HTTP only. Do not include keys, cookies, account IDs, real profiles or

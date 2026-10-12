@@ -9,6 +9,43 @@ not a tagged release or evidence of live installation.
   lines. It keeps owner-only dispatch, read-only review, trusted instructions
   from `main`, a pinned CLI and head checks, and drops the unused timeout
   recovery, pass budget and incremental re-review.
+- Reset announcements now only notify. The watch and `check.py` report a new
+  post and the agent reads it and tells you what it says; only you start a run.
+  Removed the automatic start on announcements and its policy code, and saved
+  resets that appear during a run no longer extend its deadline. Existing
+  profiles stay valid; their announcement fields are ignored.
+  `scripts/capacity_policy.py` is now a small profile check that prints whether
+  the approval is active, the ready work and, if asked, one action's decision.
+- Added one-step install (`scripts/install.py`) that makes Top Mode a skill in
+  Codex and Claude Code, and `scripts/check.py`, a quiet check that combines
+  quota, expiring saved resets and announcements, speaks only when there is
+  something new and is meant to run on the agent's own scheduler.
+- Lowered the minimum to Python 3.9, so the Python that ships with macOS works.
+  CI now checks lint, format and workflow security, runs the tests on Python
+  3.13 and on macOS's own Python 3.9, enforces 85% coverage, verifies
+  documentation links and that documented script flags exist, and reports one
+  `all checks` result to require before merging.
+- Added the [vision and principles](references/vision.md) that guide every change.
+- Renamed the project to Top Mode (repository `adpablos/top-mode`, skill
+  `top-mode`). The private folder stays `~/.codex-top-mode` so saved setups
+  keep working.
+- Rewrote the README, AGENTS.md and skill in plain language around four jobs:
+  set up, check, run and report. Top Mode now targets Codex, Claude Code and
+  similar agents; announced Codex resets are an optional add-on with their own
+  [guide](references/announcements.md). Removed the unimplemented cloud mailbox
+  description.
+- Added `scripts/usage_report.py`: a quota suggestion (unused weekly allowance
+  near renewal, expiring saved resets) from Codex local logs, a native Codex
+  payload or a saved Claude Code status line, and token totals per agent, model
+  and effort from local Codex and Claude Code logs for run reports. Claude
+  advisor calls count under the advisor's model. It honors
+  `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, and a saved reading must carry its
+  capture time (the file's modification time is not trusted). A reading
+  without a weekly window is `unknown`, never `nothing_to_do`. Totals that may
+  miss usage (older-format Codex logs, which can leave out automatic
+  compactions, compressed Codex logs, which the stdlib cannot read, or Claude
+  responses logged before they finished) are marked as a possible lower bound.
+- Added a [fictional run report](examples/report.example.md).
 
 - Added a private profile reference that setup saves and later sessions recover,
   with a short activation request, explicit profile replacement and refusal of

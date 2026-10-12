@@ -8,7 +8,15 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from usage_monitor import epoch, expiry_advice, observe, snapshot
+from usage_monitor import (
+    epoch,
+    expiry_advice,
+    observe,
+    replenished,
+    snapshot,
+    stop_new_work_at,
+    weekly,
+)
 
 START = 2000000000
 
@@ -41,8 +49,22 @@ def policy():
     return {
         "mode": "top",
         "effectiveStopAt": START + 4 * 3600,
-        "bankedStopAt": START + 6 * 3600,
         "last": reading(),
+    }
+
+
+def run_window(current, stop_on_renewal=True):
+    """An eight-hour run started the way the manual-run contract describes."""
+    renewal = weekly(current)["resetsAt"] if weekly(current) else None
+    return {
+        "mode": "top",
+        "startedAt": current["observedAt"],
+        "effectiveStopAt": current["observedAt"] + 8 * 3600,
+        "baseline": current,
+        "last": current,
+        "stopOnScheduledWeeklyRenewal": stop_on_renewal,
+        "scheduledWeeklyStopAt": renewal,
+        "detectLowUsageRenewalShift": True,
     }
 
 
@@ -96,12 +118,10 @@ class MonitorTests(unittest.TestCase):
     def test_banked_count_is_authoritative_even_without_detail_rows(self):
         state, event = observe(policy(), reading(resets=4, now=START + 30))
         self.assertEqual(event, "banked_reset_added")
-        self.assertEqual(state["effectiveStopAt"], START + 6 * 3600)
+        self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
 
     def test_new_grant_can_coincide_with_expiration_and_no_net_count_change(self):
-        state, event = observe(
-            policy(), reading(resets=3, now=START + 30, grants=[START + 10])
-        )
+        state, event = observe(policy(), reading(resets=3, now=START + 30, grants=[START + 10]))
         self.assertEqual(event, "banked_reset_added")
         self.assertEqual(state["mode"], "top")
 
@@ -152,9 +172,13 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(event, "quota_replenishment_confirmed")
         self.assertEqual(state["mode"], "normal")
 
-    def test_credit_added_does_not_extend_beyond_six_hours(self):
-        state, _ = observe(policy(), reading(resets=4, now=START + 30))
-        state, event = observe(state, reading(resets=5, now=START + 6 * 3600))
+    def test_saved_resets_never_extend_the_deadline(self):
+        state = policy()
+        state["bankedStopAt"] = START + 6 * 3600  # left by older versions; ignored
+        state, event = observe(state, reading(resets=4, now=START + 30))
+        self.assertEqual(event, "banked_reset_added")
+        self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
+        state, event = observe(state, reading(resets=5, now=START + 4 * 3600))
         self.assertEqual(event, "time_window_ended")
         self.assertEqual(state["mode"], "normal")
 
@@ -174,13 +198,6 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["mode"], "top")
         self.assertIsNone(state["pendingReplenishment"])
 
-    def test_saved_credit_without_conditional_authority_keeps_original_deadline(self):
-        state = policy()
-        del state["bankedStopAt"]
-        state, event = observe(state, reading(resets=4, now=START + 30))
-        self.assertEqual(event, "banked_reset_added")
-        self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
-
     def test_naive_timestamp_cannot_depend_on_machine_timezone(self):
         self.assertIsNone(epoch("2033-05-18T03:33:20"))
         with self.assertRaises(ValueError):
@@ -189,9 +206,7 @@ class MonitorTests(unittest.TestCase):
     def test_explicit_per_limit_map_does_not_mix_with_legacy_bucket(self):
         legacy = {"primary": {"usedPercent": 0, "windowDurationMins": 10080}}
         for buckets in ({}, {"other": legacy}):
-            current = snapshot(
-                {"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30
-            )
+            current = snapshot({"rateLimitsByLimitId": buckets, "rateLimits": legacy}, START + 30)
             state, event = observe(policy(), current)
             self.assertEqual(event, "usage_unavailable")
             self.assertEqual(state["mode"], "top")
@@ -208,9 +223,7 @@ class MonitorTests(unittest.TestCase):
     def test_cli_preserves_envelope_and_writes_only_sanitized_usage(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
-            path.write_text(
-                json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"})
-            )
+            path.write_text(json.dumps({"usageMonitor": policy(), "scope": "synthetic-work"}))
             payload = {"accountId": "synthetic-private-id", "token": "synthetic-secret"}
             run = subprocess.run(
                 [
@@ -260,9 +273,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(state["baseline"]["observedAt"], START)
 
     def test_zero_authoritative_count_cannot_extend_from_stale_credit_detail(self):
-        state, event = observe(
-            policy(), reading(resets=0, now=START + 30, grants=[START + 5])
-        )
+        state, event = observe(policy(), reading(resets=0, now=START + 30, grants=[START + 5]))
         self.assertEqual(event, "unchanged")
         self.assertEqual(state["effectiveStopAt"], START + 4 * 3600)
 
@@ -303,9 +314,7 @@ class MonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
             path.write_text(
-                json.dumps(
-                    {"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600}
-                )
+                json.dumps({"usageMonitor": candidate, "stopNewWorkAt": START + 4 * 3600})
             )
             payload = {
                 "rateLimitsByLimitId": {
@@ -337,17 +346,13 @@ class MonitorTests(unittest.TestCase):
                 saved = json.loads(path.read_text())
                 self.assertEqual(saved["usageMonitor"]["mode"], "normal")
                 self.assertEqual(saved["stopNewWorkAt"], "2033-05-18T03:34:11Z")
-                self.assertEqual(
-                    saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600
-                )
+                self.assertEqual(saved["usageMonitor"]["effectiveStopAt"], START + 4 * 3600)
 
     def test_cli_reports_the_earlier_scheduled_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"
             monitor = policy()
-            monitor.update(
-                stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600
-            )
+            monitor.update(stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 3600)
             path.write_text(json.dumps({"usageMonitor": monitor}))
             payload = {
                 "rateLimitsByLimitId": {
@@ -432,6 +437,127 @@ class MonitorTests(unittest.TestCase):
         advice = expiry_advice(observation)
         self.assertEqual(advice["expiryCoverage"], "partial")
         self.assertEqual(advice["dueExpirations"], [START + 100])
+
+
+class BoundaryTests(unittest.TestCase):
+    """Exact limits: the moment a stop is due and the size of a real drop."""
+
+    def test_scheduled_renewal_stops_exactly_at_its_time(self):
+        monitor = policy()
+        monitor.update(stopOnScheduledWeeklyRenewal=True, scheduledWeeklyStopAt=START + 100)
+        state, event = observe(monitor, reading(now=START + 99))
+        self.assertEqual(state["mode"], "top")
+        _, event = observe(monitor, reading(now=START + 100))
+        self.assertEqual(event, "scheduled_weekly_renewal_due")
+        # A renewal at the deadline itself is still reported as the renewal.
+        monitor["scheduledWeeklyStopAt"] = monitor["effectiveStopAt"]
+        _, event = observe(monitor, reading(now=START + 4 * 3600))
+        self.assertEqual(event, "scheduled_weekly_renewal_due")
+
+    def test_confirmation_needs_a_second_read_20_seconds_to_30_minutes_later(self):
+        candidate, _ = observe(policy(), reading(0, now=START + 30))
+        for age, confirmed in ((19, False), (20, True), (1800, True), (1801, False)):
+            with self.subTest(age=age):
+                state, _ = observe(candidate, reading(1, now=START + 30 + age))
+                self.assertEqual(state["mode"] == "normal", confirmed)
+
+    def test_a_real_drop_is_at_least_five_points_down_to_two_percent(self):
+        def drop(before, after):
+            return replenished({"usedPercent": before}, {"usedPercent": after})
+
+        self.assertTrue(drop(6, 1))
+        self.assertFalse(drop(5.9, 1))
+        self.assertTrue(drop(7, 2))
+        self.assertFalse(drop(7, 2.1))
+
+    def test_snapshot_keeps_0_and_100_and_drops_impossible_values(self):
+        def windows(used):
+            limits = {"primary": {"usedPercent": used, "windowDurationMins": 10080}}
+            return snapshot({"rateLimits": limits}, START)["windows"]
+
+        self.assertTrue(windows(0) and windows(100))
+        self.assertFalse(windows(-1) or windows(101))
+        for count, kept in ((2, 2), (-1, None), (1.5, None)):
+            payload = {"rateLimitResetCredits": {"availableCount": count}}
+            self.assertEqual(snapshot(payload, START)["availableResets"], kept)
+
+
+class RunWindowTests(unittest.TestCase):
+    def test_the_earlier_of_deadline_and_scheduled_renewal_stops_the_run(self):
+        monitor = run_window(reading(now=START + 30, reset_at=START + 90))
+        self.assertEqual(stop_new_work_at(monitor), START + 90)
+        # The renewal stop holds even when later telemetry is missing.
+        monitor, event = observe(monitor, snapshot({}, START + 100))
+        self.assertEqual(event, "scheduled_weekly_renewal_due")
+        self.assertEqual(stop_new_work_at(monitor), START + 90)
+        monitor = run_window(reading(now=START + 30))
+        self.assertEqual(stop_new_work_at(monitor), START + 30 + 8 * 3600)
+        monitor, event = observe(monitor, reading(now=START + 86401))
+        self.assertEqual(event, "time_window_ended")
+        self.assertEqual(stop_new_work_at(monitor), START + 30 + 8 * 3600)
+
+    def test_unknown_renewal_still_requires_two_fresh_strong_drop_readings(self):
+        monitor = run_window(reading(60, now=START + 30, reset_at=None), stop_on_renewal=False)
+        monitor, event = observe(monitor, reading(0, now=START + 60, reset_at=None))
+        self.assertEqual(event, "confirm_replenishment_with_fresh_read")
+        monitor, event = observe(monitor, reading(0, now=START + 60, reset_at=None))
+        self.assertEqual(event, "stale_observation")
+        monitor, event = observe(monitor, reading(1, now=START + 81, reset_at=None))
+        self.assertEqual(event, "quota_replenishment_confirmed")
+        self.assertEqual(monitor["stopReason"], "weekly_quota_replenished")
+        self.assertEqual(stop_new_work_at(monitor), START + 81)
+
+    def test_low_usage_shift_requires_two_fresh_reads_before_stopping(self):
+        monitor = run_window(reading(1, now=START + 30))
+        shifted = START + 2 * 86400
+        monitor, event = observe(monitor, reading(0, now=START + 60, reset_at=shifted))
+        self.assertEqual(event, "confirm_replenishment_with_fresh_read")
+        self.assertEqual(monitor["mode"], "top")
+        monitor, _ = observe(monitor, reading(0, now=START + 70, reset_at=shifted))
+        self.assertEqual(monitor["mode"], "top")
+        monitor, event = observe(monitor, reading(0, now=START + 81, reset_at=shifted))
+        self.assertEqual(event, "quota_replenishment_confirmed")
+        self.assertEqual(stop_new_work_at(monitor), START + 81)
+
+    def assert_still_running(self, monitor, readings):
+        for current in readings:
+            monitor, _ = observe(monitor, current)
+            self.assertEqual(monitor["mode"], "top")
+            self.assertFalse(monitor.get("pendingReplenishment"))
+
+    def test_low_usage_alone_or_shift_without_decrease_is_not_replenishment(self):
+        for used, reset_at in (
+            (0, None),
+            (0, START + 86400),
+            (0, START + 86400 - 1),
+            (1, START + 2 * 86400),
+        ):
+            with self.subTest(used=used, reset_at=reset_at):
+                self.assert_still_running(
+                    run_window(reading(1, now=START + 30)),
+                    [reading(used, now=now, reset_at=reset_at) for now in (START + 60, START + 81)],
+                )
+
+    def test_low_shift_needs_known_anchor_and_persistent_confirmation_evidence(self):
+        shifted = START + 2 * 86400
+        self.assert_still_running(
+            run_window(reading(1, now=START + 30, reset_at=None), stop_on_renewal=False),
+            [reading(0, now=now, reset_at=shifted) for now in (START + 60, START + 81)],
+        )
+        for reset_at in (None, START + 86400):
+            monitor, _ = observe(
+                run_window(reading(1, now=START + 30)),
+                reading(0, now=START + 60, reset_at=shifted),
+            )
+            self.assert_still_running(monitor, [reading(0, now=START + 81, reset_at=reset_at)])
+
+    def test_legacy_monitor_keeps_strong_decrease_requirement(self):
+        monitor = run_window(reading(1, now=START + 30))
+        del monitor["detectLowUsageRenewalShift"]
+        self.assert_still_running(
+            monitor,
+            [reading(0, now=now, reset_at=START + 2 * 86400) for now in (START + 60, START + 81)],
+        )
 
 
 if __name__ == "__main__":
