@@ -14,6 +14,8 @@ HEADING = re.compile(r"^#{1,6} (.+)$", re.MULTILINE)
 SCRIPT = re.compile(r"scripts/([a-z_]+\.py)")
 MENTION = re.compile(r"\b([a-z_]+\.py)\b")
 FLAG = re.compile(r"(?<![\w-])--[a-z][a-z-]*")
+# Flags of other tools the docs use: ruff, zizmor and gh in the maintenance guide.
+OTHER_TOOLS = {"--check", "--offline", "--ref", "--repo"}
 
 
 def anchor(heading):
@@ -57,18 +59,21 @@ class DocumentationTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_documented_flags_exist(self):
-        """Each --flag written after a script's name is one that script accepts."""
-        scripts = {p.name for p in (ROOT / "scripts").glob("*.py")}
+        """A --flag after a script's name is one that script accepts; any other --flag,
+        in prose or on a continuation line, is one some documented script accepts."""
+        texts = {doc: doc.read_text(encoding="utf-8") for doc in DOCS}
+        named = {name for text in texts.values() for name in SCRIPT.findall(text)}
+        known = OTHER_TOOLS.union(*(flags_of(name) for name in named))
         unknown = []
-        for doc in DOCS:
-            text = doc.read_text(encoding="utf-8").replace("\\\n", " ")
-            for line in text.splitlines():
+        for doc, text in texts.items():
+            for line in text.replace("\\\n", " ").splitlines():
                 parts = MENTION.split(line)
                 # parts: text, name, text, name, text... flags belong to the name before them.
-                for name, after in zip(parts[1::2], parts[2::2]):
-                    for flag in FLAG.findall(after) if name in scripts else []:
-                        if flag not in flags_of(name):
-                            unknown.append(f"{doc.relative_to(ROOT)}: {name} {flag}")
+                for name, after in zip([None, *parts[1::2]], parts[0::2]):
+                    accepted = flags_of(name) if name in named else known
+                    for flag in FLAG.findall(after):
+                        if flag not in accepted:
+                            unknown.append(f"{doc.relative_to(ROOT)}: {name or 'prose'} {flag}")
         self.assertEqual(unknown, [])
 
 
