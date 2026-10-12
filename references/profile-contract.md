@@ -253,6 +253,40 @@ a local Claude Code Desktop scheduled task (a cloud routine cannot see this
 machine). Every 4 hours suits the announcement watch; daily is enough otherwise.
 Runs only happen while the machine is awake and the agent app is running.
 
+## Plan history
+
+`python3 -B scripts/usage_report.py plan` judges whether the Codex plan has been
+enough, from the weekly readings Codex writes into its local logs with each
+response: used percentage, renewal time and `plan_type`. It reads every log
+(about 10 seconds for six months), stores nothing and prints JSON, or a short
+summary with `--markdown`. Only the account's `codex` bucket and the
+10080-minute window count, whichever slot holds it.
+
+How the history is rebuilt, in [plan_fit.py](../scripts/plan_fit.py):
+
+- A subagent's log starts with a copy of its parent's history, stamped with one
+  exact time. Readings whose exact timestamp repeats within one log are skipped.
+- Readings whose renewal times are within ten minutes belong to one window. A
+  window renewed early when the next one started more than an hour before its
+  scheduled renewal: an announced reset, a saved reset or a plan change.
+- Two windows whose readings interleave for over an hour are two meters at once
+  (another account signed in on the machine, or a meter that stays near 0 %).
+  The one that used more is kept and the left-out readings are counted.
+- A plan change rescales the percentage; the jump is not use.
+- Use is the rise of each window's percentage. Replaying it through natural
+  weeks (each starts with the first use after the previous one ended) shows how
+  often the plan would have run out without early renewals. Where the real
+  window reached the limit, demand was higher than what was used, so that week
+  is marked `atLeast`.
+
+The verdict looks at the latest closed windows on the current plan (`--windows`,
+default 8; at least 4): `short` when the limit was reached in more than 1 of 4,
+`enough_thanks_to_early_renewals` when the replay runs out in more than 1 of 4
+weeks, otherwise `enough`; with fewer than 4 windows, `not_enough_history`. Top
+Mode runs are not recorded yet, so their use counts as the user's
+(`includesTopModeRuns`). Compressed logs (`.jsonl.zst`) cannot be read and are
+counted. There is no Claude Code history: its status line is not kept over time.
+
 ## Run report
 
 The coordinator closes a run with a private, portable Markdown report. Lead with
