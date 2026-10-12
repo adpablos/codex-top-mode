@@ -82,10 +82,6 @@ def codex_tokens(home, since, until):
     for path in recent_files(roots, "rollout-*.jsonl", since):
         model, effort, seen, used = "unknown", None, set(), False
         records = any(True for _ in lines(path, ('"token_usage_record"',)))
-        # The older format only keeps a cumulative counter, which can leave out
-        # automatic compactions, so totals that include it may be a lower bound.
-        if not records and any(True for _ in lines(path, ('"total_token_usage"',))):
-            older += 1
         previous = None
         for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
             kind, payload = row.get("type"), row.get("payload") or {}
@@ -122,6 +118,10 @@ def codex_tokens(home, since, until):
             responses += 1
             used = True
         sessions += used
+        if used and not records:
+            # The older format only keeps a cumulative counter, which can leave out
+            # automatic compactions, so a total that includes it may be a lower bound.
+            older += 1
     result = summary("codex", buckets, sessions, responses)
     result["olderLogs"] = older
     return result

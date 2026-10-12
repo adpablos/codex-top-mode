@@ -230,8 +230,8 @@ at closure. It reads local Codex session logs (`~/.codex/sessions`, or under
 under `CLAUDE_CONFIG_DIR`, including subagents), counts each
 response once, and groups usage by agent, model and effort. Codex logs in the
 older format (no per-response records) can leave out automatic compactions;
-`olderLogs` counts those written in the interval, and their totals may be a
-lower bound. It covers only this
+`olderLogs` counts those that add usage to the interval, and the total may then
+be a lower bound. It covers only this
 machine and every session in that interval, including work outside the run; say
 so in the report. Codex `cached input` is part of `input`; Claude cache reads and
 writes are separate fields and are included in its total. Otherwise the host

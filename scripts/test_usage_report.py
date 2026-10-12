@@ -137,8 +137,11 @@ class TokenTests(unittest.TestCase):
             },
         ]
         write_lines(self.home / "sessions/rollout-older.jsonl", older)
-        # A log that has not logged any usage yet is not evidence of either format.
+        # Only logs that add usage to the interval count: not one with no usage yet,
+        # nor one whose older-format usage all comes before the interval.
         write_lines(self.home / "sessions/rollout-empty.jsonl", older[:1])
+        earlier = [*older[:2], {**older[2], "timestamp": "2033-05-17T23:00:00Z"}]
+        write_lines(self.home / "sessions/rollout-earlier.jsonl", earlier)
         result = codex_tokens(self.home, SINCE, NOW)
         self.assertEqual((result["sessions"], result["olderLogs"]), (2, 1))
         report = {"since": "s", "until": "u", "providers": [result]}
