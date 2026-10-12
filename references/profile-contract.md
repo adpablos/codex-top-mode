@@ -226,13 +226,16 @@ are flags (`--min-unused`, `--within-hours`). It never starts work.
 the Codex local-log reading, a saved Claude Code status line
 (`~/.codex-top-mode/claude-status.json`), and the optional announcement watch
 when `~/.codex-top-mode/watch.json` exists. It prints one line per piece of news
-and nothing otherwise. Without `--verbose` it tells the same news at most once
-every 20 hours, remembered in `~/.codex-top-mode/check-state.json` (keys and
-times only); a watch that fails to run counts as news too. It refuses to run, before the watch writes anything, when its
-private folder is inside a Git worktree or one of its files is a link. Quota news needs the suggestion `consider_top_mode`, so a stale
-reading stays quiet until it is refreshed. `--verbose` always prints the full
-status, including which sources are missing, and `--json` gives the same for
-agents. It never starts work.
+and nothing otherwise. Run plain, as a scheduled check does, it tells the same
+news at most once every 20 hours, remembered in
+`~/.codex-top-mode/check-state.json` (keys and times only); a watch that fails to
+run counts as news too. It refuses to run, before the watch writes anything,
+when its private folder is inside a Git worktree or one of its files is a link.
+Quota news needs the suggestion `consider_top_mode`, so a stale reading stays
+quiet until it is refreshed. `--verbose` and `--json` are for asking on demand:
+they always print the full status (`--json` for agents), including which
+sources are missing, and do not use or update that once-a-day memory. It never
+starts work.
 
 Schedule it with the host's own scheduler, which wakes a model on every run even
 when the script is silent, so choose the cheapest model: a Codex automation, or

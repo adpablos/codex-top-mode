@@ -110,7 +110,10 @@ class CheckTests(unittest.TestCase):
         self.status(used=40, hours=30)
         self.assertNotEqual(self.run_check(), "")
         self.assertEqual(self.run_check(), "")
+        # Asking on demand always shows the full status.
         self.assertIn("Worth a Top Mode run", self.run_check("--verbose"))
+        self.assertIn("Worth a Top Mode run", self.run_check("--json"))
+        self.assertEqual(self.run_check(), "")
         self.now += 21 * 3600
         self.status(used=40, hours=9)
         self.assertIn("renews in 9 h", self.run_check())

@@ -138,7 +138,7 @@ def watch(script, config, state):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verbose", action="store_true", help="Also print the full status")
-    parser.add_argument("--json", action="store_true", help="Machine-readable output")
+    parser.add_argument("--json", action="store_true", help="The full status as JSON")
     parser.add_argument("--quota-file", type=Path, help="A saved reading with its capture time")
     parser.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
