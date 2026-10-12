@@ -128,7 +128,7 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [references/plans.json](references/plans.json) | Codex plan prices and sizes, with sources and the date they were checked. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
 | [scripts/run.py](scripts/run.py) | Keeps a private journal of each run: deadline, quota, tasks and sessions. Answers "status" and drafts the report. |
-| [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
+| [scripts/usage_monitor.py](scripts/usage_monitor.py) | Keeps only what a quota reading needs, never identity. |
 | [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, and what an action needs. |
 | [examples/](examples/) | Fictional setup and report examples. |
 

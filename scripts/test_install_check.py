@@ -1,6 +1,5 @@
 import contextlib
 import io
-import json
 import os
 import sys
 import tempfile
@@ -97,12 +96,19 @@ class CheckTests(unittest.TestCase):
         self.private = self.root / "private"
         self.private.mkdir()
         self.now = epoch("2033-05-18T12:00:00Z")
+        self.claude = None
 
-    def status(self, used, hours, age=0):
-        path = self.private / "claude-status.json"
-        limits = {"seven_day": {"used_percentage": used, "resets_at": self.now + hours * 3600}}
-        reading = {"observedAt": self.now - age * 3600, "payload": {"rate_limits": limits}}
-        path.write_text(json.dumps(reading))
+    def status(self, used, hours, age=0, minutes=10080):
+        """A Claude reading, as CodexBar would give it."""
+        window = {"slot": "secondary", "usedPercent": used, "durationMinutes": minutes}
+        self.claude = {
+            "source": "codexbar",
+            "observedAt": self.now - age * 3600,
+            "windows": [{**window, "resetsAt": self.now + hours * 3600}],
+            "availableResets": None,
+            "grantTimes": [],
+            "resetExpirations": [],
+        }
 
     def run_check(self, *argv):
         out = io.StringIO()
@@ -110,7 +116,9 @@ class CheckTests(unittest.TestCase):
         args += [str(self.private), *argv]
         argv_patch = patch.object(sys, "argv", args)
         clock = patch.object(check.time, "time", lambda: self.now)
-        with argv_patch, clock, contextlib.redirect_stdout(out):
+        reading = lambda agent, home: self.claude if agent == "claude" else None  # noqa: E731
+        quota = patch.object(check, "latest_quota", reading)
+        with argv_patch, clock, quota, contextlib.redirect_stdout(out):
             check.main()
         return out.getvalue()
 
@@ -142,14 +150,6 @@ class CheckTests(unittest.TestCase):
         if os.name == "posix":
             self.assertEqual(state.stat().st_mode & 0o077, 0)
 
-    def test_a_saved_reading_needs_its_own_capture_time(self):
-        path = self.private / "claude-status.json"
-        limits = {"seven_day": {"used_percentage": 40, "resets_at": self.now + 3600}}
-        path.write_text(json.dumps({"rate_limits": limits}))
-        os.utime(path, (self.now, self.now))
-        self.assertEqual(self.run_check(), "")
-        self.assertIn("Claude: no quota reading (", self.run_check("--verbose"))
-
     def test_a_stale_reading_asks_for_a_fresh_one_instead_of_a_run(self):
         self.status(used=40, hours=10, age=7)
         self.assertEqual(self.run_check(), "")
@@ -176,19 +176,17 @@ class CheckTests(unittest.TestCase):
                     self.run_check(*argv)
                 self.assertIn("outside Git worktrees", err.getvalue())
         written = {p.name for p in self.private.iterdir()}
-        self.assertEqual(written, {"claude-status.json"})
+        self.assertEqual(written, set())
 
     def test_a_reading_without_a_weekly_window_is_not_a_missing_reading(self):
-        path = self.private / "claude-status.json"
-        limits = {"five_hour": {"used_percentage": 10, "resets_at": self.now + 3600}}
-        path.write_text(json.dumps({"observedAt": self.now, "payload": {"rate_limits": limits}}))
+        self.status(used=10, hours=1, minutes=300)
         output = self.run_check("--verbose")
         self.assertIn("Claude: weekly allowance unknown", output)
         self.assertIn("Suggestion: unknown.", output)
 
     def test_never_follows_a_link_for_its_private_files(self):
         self.status(used=40, hours=10)
-        for name in ("check-state.json", "claude-status.json"):
+        for name in ("check-state.json",):
             with self.subTest(name=name):
                 path = self.private / name
                 saved = path.read_bytes() if path.is_file() else None

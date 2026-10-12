@@ -133,14 +133,11 @@ python3 -B <this folder>/scripts/check.py --verbose
 ```
 
 It reads the best quota source on this machine for each agent: CodexBar when it
-is installed, otherwise Codex's local logs or a saved Claude Code status line.
-Explain the answer in one
-or two sentences: how much of the weekly allowance is used, when it renews, and
+is installed, otherwise Codex's local logs. Explain the answer in one or two
+sentences: how much of the weekly allowance is used, when it renews, and
 whether a run is worth it. If there is no reading, say so and offer a run with a
 clock deadline only. Details per source are in
-[quota readings](references/profile-contract.md#quota-readings); a native Codex
-payload, which also lists saved resets, goes through
-`usage_report.py quota --file F --observed-at TIME`.
+[quota readings](references/profile-contract.md#quota-readings).
 
 **Proactive check.** When the user wants to be told, schedule a recurring task
 with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
@@ -167,9 +164,7 @@ rules. If no duration was given and none was approved as default, ask first. It
 refuses when the setup's approval is not active or another run is still open
 (finish that one first, as in [Stop](#4-stop)). It fixes the **deadline**: the
 hours asked, capped by `maximumHours`, `validUntil` and, when the setup says so,
-the weekly renewal; nothing extends it. On Codex with its own usage payload, save
-a fresh one and pass it as `--quota-file` here, on every `status` and on
-`close`, to notice an early renewal and measure the run with the same source.
+the weekly renewal; nothing extends it.
 
 Then:
 

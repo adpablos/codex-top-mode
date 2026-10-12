@@ -221,14 +221,11 @@ revocation remains valid only while the human has not revoked it.
 - `start --hours H --agents codex claude` refuses while another run is open,
   when the profile is invalid or its approval is not active, or when an agent
   the run spends has used up its weekly allowance. It takes each agent's newest
-  reading ([quota readings](#quota-readings); `--quota-file` replaces its
-  agent's usual source) and fixes `deadline`: start plus the hours, capped by
+  reading ([quota readings](#quota-readings)) and fixes `deadline`: start plus the hours, capped by
   `maximumHours`, `validUntil` and, with `stopOnScheduledWeeklyRenewal`, each
   spent agent's known future weekly renewal. `cappedBy` says which; a renewal
   it cannot know is listed in `unknown`. It records the `fingerprint`, level,
-  project labels and readings (`quotaBefore`). With Codex's own payload it also
-  starts the [usage_monitor.py](../scripts/usage_monitor.py) observer with
-  `detectLowUsageRenewalShift: true`.
+  project labels and readings (`quotaBefore`).
 - `task` and `session` record the work: tasks with project, objective, done
   criterion, owner and status (`planned`, `in_progress`, `done` with evidence,
   `blocked` with a blocker, both given again on each change, and `needsYou`,
@@ -242,11 +239,9 @@ revocation remains valid only while the human has not revoked it.
   coordinator and the larger of active sessions and tasks in progress; threads
   outside the run still count and only the operator knows them) and each agent's
   newest reading with its age. `stopNow` lists `stopReasons`: `deadline`, `profile_changed` (a
-  different fingerprint, or a missing or invalid profile), `authorization_ended`,
-  and `weekly_renewal` when Codex's own payload, passed with `--quota-file`,
-  confirms an early renewal with two fresh readings. Readings from logs or the
-  status line are shown but do not stop a run. A saved reset that appears shows
-  as `savedResetAdded` and in the report; it never extends the deadline.
+  different fingerprint, or a missing or invalid profile) and
+  `authorization_ended`. Readings are shown but do not stop a run; a renewal it
+  knew at start is already in the deadline.
 - `stop --reason R` records when new assignments stopped and why; `status` then
   keeps `stopNow`. After it, only checkpoints go in: existing tasks reaching
   `done` or `blocked` and sessions ending; new tasks, new sessions, moves
@@ -257,9 +252,7 @@ revocation remains valid only while the human has not revoked it.
 
 Nothing renews a deadline, also on resume. Without a quota reading a run has
 only its clock deadline and supervised checkpoints; never invent quota or claim
-reliable weekly stopping. A closed or paused host cannot observe resets. No cloud
-mailbox, service or account client is needed. Setups that call
-`usage_monitor.py --state ... --observed-at ...` directly keep working.
+reliable weekly stopping. No cloud mailbox, service or account client is needed.
 
 ## Quota readings
 
@@ -269,30 +262,23 @@ and say which one you used:
 
 | Host | Source | Command |
 | --- | --- | --- |
-| Any, with [CodexBar](https://codexbar.app) installed (preferred) | A live reading for Codex and Claude, including Codex's saved resets | Used first, automatically, by `check.py`, `run.py` and `usage_report.py quota` |
-| Codex with a native usage tool (`get_usage_limits`) | Fresh native payload, including saved resets | Save it and run `usage_report.py quota --file F --observed-at TIME`, or pass it to `usage_monitor.py` |
-| Codex without that tool | The latest reading Codex wrote into its local session logs | `python3 -B scripts/usage_report.py quota` |
-| Claude Code (Pro/Max) | The status-line JSON, if the user opted in to save it | `python3 -B scripts/usage_report.py quota --file ~/.codex-top-mode/claude-status.json` |
+| Any, with [CodexBar](https://codexbar.app) installed (preferred) | A live reading for Codex and Claude, including Codex's saved resets | Used first, automatically, by `check.py`, `run.py` and `usage_report.py quota --agent <codex or claude>` |
+| Codex without CodexBar | The latest reading Codex wrote into its local session logs | `python3 -B scripts/usage_report.py quota` |
 | Anything else | None | Ask the user, or use only a clock deadline |
 
-For native Codex payloads prefer `rateLimitsByLimitId.codex`; use the legacy
-`rateLimits` bucket only when the map is absent. `usedPercent` is consumed quota;
-remaining is `100 - usedPercent`. Identify weekly (10080 minutes) and five-hour
-(300 minutes) windows by duration; missing windows are unknown. Use
-`rateLimitResetCredits.availableCount` as the authoritative count of saved
-resets (detail rows may be partial) and actual expiry timestamps, never a
-presumed lifetime. `snapshot(payload, observed_at)` in
-[usage_monitor.py](../scripts/usage_monitor.py) keeps only window percentages,
-durations and renewal times, the saved-reset count and credit grant/expiry
-times. Do not read authentication files or add an account client.
+`usedPercent` is consumed quota; remaining is `100 - usedPercent`. Weekly
+(10080 minutes) and five-hour (300 minutes) windows are told apart by length;
+missing windows are unknown. A reading keeps only window percentages, lengths
+and renewal times, and the saved-reset count and expiries, never presuming a
+lifetime. Do not read authentication files or add an account client.
 
 CodexBar is optional and separate: Quota Coach only runs
 `codexbar usage --provider <codex or claude> --format json` (45 seconds at most)
 and keeps the weekly and five-hour windows, told apart by `windowMinutes`, and
 for Codex the saved-reset count and next expiry (`resetCredits`). Anything else
 in its output, such as the account's identity, is dropped. If it is missing,
-fails or answers something unexpected, the reading falls back to the sources
-below, and Claude without CodexBar or a saved status line is unknown.
+fails or answers something unexpected, Codex falls back to its logs and Claude
+is unknown: ask the user to read `/usage`, or use a clock deadline.
 
 Codex log readings are as fresh as the last Codex response on that machine;
 `usage_report.py` uses the newest one however old, reports its age and treats
@@ -301,25 +287,6 @@ A subagent's log starts with a copy of its parent's readings, all stamped with
 the copy's time; those are skipped.
 Codex compresses logs untouched for a week, and those are not read: after a week
 without Codex the reading is `unknown` until a new session reports its limits.
-
-Claude Code exposes `rate_limits.five_hour` and `rate_limits.seven_day` only to
-a [status-line command](https://code.claude.com/docs/en/statusline). With the
-user's approval, the status-line script can save its input, with the time it was
-taken, before printing. For example, start it with:
-
-```sh
-input=$(cat)
-printf '{"observedAt":%s,"payload":%s}\n' "$(date +%s)" "$input" \
-  > "$HOME/.codex-top-mode/claude-status.json"
-```
-
-and use `$input` instead of reading stdin again. A saved reading needs its
-capture time, either in that wrapper or as `--observed-at`; `usage_report.py`
-refuses one without it rather than trust the file's modification time, which
-copying or restoring the file changes.
-
-That changes the user's Claude Code settings, so it needs their explicit OK.
-Without it, ask the user to read `/usage`, or use a clock deadline.
 
 `usage_report.py quota` only suggests: `consider_top_mode` when at least 25%
 of the weekly allowance is unused within 36 hours of renewal, or when saved
@@ -333,12 +300,9 @@ are flags (`--min-unused`, `--within-hours`). It never starts work.
 
 ## Proactive check
 
-`python3 -B scripts/check.py` combines every signal available on this machine:
-the Codex local-log reading and a saved Claude Code status line
-(`~/.codex-top-mode/claude-status.json`). Local logs don't list saved resets:
-news about them needs `--quota-file` with a native payload saved in the
-`{"observedAt", "payload"}` wrapper above, which then replaces the other quota
-sources. It prints one line per piece of news and nothing otherwise. Run plain,
+`python3 -B scripts/check.py` reads each agent's quota as above: CodexBar when
+it is installed, otherwise Codex's local logs (which don't list saved resets).
+It prints one line per piece of news and nothing otherwise. Run plain,
 as a scheduled check does, it tells the same
 news at most once every 20 hours, remembered in
 `~/.codex-top-mode/check-state.json` (keys and times only). It refuses to run,
@@ -388,7 +352,7 @@ default 8; at least 4): `short` when the limit was reached in more than 1 of 4,
 weeks, otherwise `enough`; with fewer than 4 windows, `not_enough_history`. Top
 Mode runs are not recorded yet, so their use counts as the user's
 (`includesTopModeRuns`). Compressed logs (`.jsonl.zst`) cannot be read and are
-counted. There is no Claude Code history: its status line is not kept over time.
+counted. There is no Claude Code history yet: no Claude reading is kept over time.
 
 `plans` compares the same use with every plan in
 [plans.json](plans.json): its monthly price and its size as a multiple of Plus,

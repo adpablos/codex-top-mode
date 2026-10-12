@@ -66,4 +66,4 @@ Next, in small pull requests:
 
 1. **Plan advice from the journal.** Tell Top Mode's use apart from the user's
    own, say in `check` when the plan clearly doesn't fit, and do the same for
-   Claude Code once its status line is kept over time.
+   Claude Code by keeping CodexBar readings over time.
