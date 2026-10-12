@@ -87,6 +87,8 @@ jobs:
           GIT_ATTR_SOURCE="$empty_tree" git -C pr diff --no-ext-diff --no-textconv \
             --no-color --full-index --find-renames "$merge_base" "$HEAD_SHA" > review/diff.patch
           echo "MERGE_BASE=$merge_base" >> "$GITHUB_ENV"
+          echo "BASE_REF=$BASE" >> "$GITHUB_ENV"
+          echo "BASE_HEAD=$(git -C pr rev-parse "origin/$BASE")" >> "$GITHUB_ENV"
           # Make pr/ plain files: no Git metadata, and none of the PR's own
           # instruction files, so Claude Code can never load them as memory or
           # settings. Their changes stay visible in diff.patch.
@@ -155,8 +157,11 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }} # only to refuse publishing it
         run: |
           set -euo pipefail
-          current="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
-          [[ "$current" == "$HEAD_SHA" ]] || { echo "::error::The PR head moved during the review."; exit 1; }
+          current="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json headRefOid,baseRefName --jq '.headRefOid + " " + .baseRefName')"
+          current="$current $(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BASE_REF" --jq .object.sha)"
+          [[ "$current" == "$HEAD_SHA $BASE_REF $BASE_HEAD" ]] \
+            || { echo "::error::The PR head or base moved during the review."; exit 1; }
           python3 - <<'PY'
           import html, json, os, pathlib
 
@@ -186,11 +191,13 @@ jobs:
               "### Claude final review",
               "",
               f"Reviewer: `{env['CLAUDE_REVIEW_MODEL']}`",
+              f"Base head: {env['BASE_HEAD']}",
               f"Merge base: {env['MERGE_BASE']}",
               "",
           ]
           if ready:
               lines += ["No materially actionable findings.", ""]
+          shown = []
           for f in findings:
               where = text(f["path"]) + (f":{f['line']}" if f["line"] else "")
               lines += [
@@ -203,6 +210,13 @@ jobs:
                   f"**Smallest correction:** {text(f['correction'])}",
                   "",
               ]
+              # GitHub rejects comments over 65,536 characters; keep the end room.
+              if len("\n".join(lines)) > 60000:
+                  del lines[-8:]
+                  omitted = len(findings) - len(shown)
+                  lines += [f"{omitted} more findings did not fit in one comment.", ""]
+                  break
+              shown.append(f)
           run = f"{env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}"
           lines += [
               f"Reviewed head: {env['HEAD_SHA']}",
