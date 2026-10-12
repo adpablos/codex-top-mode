@@ -2,6 +2,13 @@
 
 Everything below is invented to show the format. It is not real data.
 
+## Waiting on you
+
+- **Notes app:** approve the release? Recommended: yes; the fix is tested,
+  reviewed and merged, and the notes session ships it once you approve.
+- **Fitness tracker:** give the export task access to your account? Recommended:
+  not yet; nothing else depends on it. Until then it stays blocked.
+
 ## What changed
 
 **Notes app**
@@ -26,6 +33,7 @@ Everything below is invented to show the format. It is not real data.
 | Started | 2033-05-18 18:00 UTC, by your request ("Top Mode for 2 hours") |
 | Deadline | 20:00 UTC |
 | Stopped | 19:52 UTC, all ready work done (deadline not reached) |
+| Closed | 19:55 UTC, after collecting checkpoints |
 | Weekly quota | 38% used at 17:58 → 71% at 19:53 (Codex local logs). Includes anything else you ran meanwhile. Renews 2033-05-20 04:00 UTC. |
 | Sessions | 3 started, 2 finished, 1 blocked (plus this coordinator) |
 

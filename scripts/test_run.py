@@ -143,15 +143,28 @@ class TaskAndSessionTests(unittest.TestCase):
         task = new_task(self.run, status="done", evidence="tests pass", at=NOW + 60)
         self.assertEqual(task["status"], "done")
 
+    def test_a_task_can_wait_on_the_user_only_while_blocked(self):
+        with self.assertRaisesRegex(ValueError, "goes with blocked"):
+            new_task(self.run, status="in_progress", needsYou=True)
+        merge = "Merge #186? It deploys to production; recommended"
+        task = new_task(self.run, status="blocked", blocker=merge, needsYou=True)
+        self.assertTrue(task["needsYou"])
+        # A new blocker that does not wait on the user clears the flag, in the journal too.
+        new_task(self.run, status="blocked", blocker="CI is running", at=NOW + 30)
+        self.assertNotIn("needsYou", self.run["tasks"][0])
+        new_task(self.run, status="blocked", blocker=merge, needsYou=True, at=NOW + 40)
+        new_task(self.run, status="done", evidence="merged", at=NOW + 60)
+        self.assertNotIn("needsYou", self.run["tasks"][0])
+
     def test_reaching_done_or_blocked_again_needs_fresh_words(self):
         new_task(self.run, status="done", evidence="old check")
-        task = new_task(self.run, status="in_progress", at=NOW + 60)
-        self.assertNotIn("evidence", task)
+        new_task(self.run, status="in_progress", at=NOW + 60)
+        self.assertNotIn("evidence", self.run["tasks"][0])
         with self.assertRaisesRegex(ValueError, "evidence"):
             new_task(self.run, status="done", at=NOW + 120)
         new_task(self.run, status="blocked", blocker="Needs your login", at=NOW + 120)
-        task = new_task(self.run, status="in_progress", at=NOW + 180)
-        self.assertNotIn("blocker", task)
+        new_task(self.run, status="in_progress", at=NOW + 180)
+        self.assertNotIn("blocker", self.run["tasks"][0])
         with self.assertRaisesRegex(ValueError, "blocker"):
             new_task(self.run, status="blocked", at=NOW + 240)
 
@@ -197,6 +210,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual((result["activeSessions"], result["freeThreads"]), (1, 1))
         self.assertEqual(result["quota"]["codex"]["minutesOld"], 30)
         self.assertNotIn("claude", result["quota"])
+        self.assertEqual(result["waitingOnYou"], [])
 
     def test_every_task_in_progress_takes_a_thread_and_owners_hide_session_ids(self):
         _, r = fresh(profile(maximumActiveThreads=3))
@@ -286,6 +300,8 @@ class StopAndReportTests(unittest.TestCase):
         _, r = fresh(found=found, agents=("codex", "claude"))
         new_task(r, status="done", evidence="2 new tests pass; merged")
         new_task(r, "alerts", project="website", status="blocked", blocker="Needs your login")
+        new_task(r, "merge", status="blocked", blocker="Merge #12? Recommended: yes", needsYou=True)
+        new_task(r, "ask", status="blocked", blocker="Grant access?", needsYou=True)
         new_task(r, "docs", status="in_progress", owner="you")
         new_task(r, "lint", status="in_progress", owner="w1")
         run.record_session(r, "w1", "codex", "worker", True, NOW)
@@ -300,6 +316,10 @@ class StopAndReportTests(unittest.TestCase):
             "- Not finished (in progress): Stop duplicate imports. Next: codex worker session.",
             "| Stopped | 2033-05-18 03:33 UTC: you asked to stop |",
             "| Closed | 2033-05-18 03:43 UTC, after collecting checkpoints |",
+            "## Waiting on you\n\n- **Notes app:** Stop duplicate imports. Merge #12? "
+            "Recommended: yes.",
+            "- **Notes app:** Stop duplicate imports. Grant access?\n\n## What changed",
+            "- Blocked: Stop duplicate imports. Merge #12? Recommended: yes. Next: you.",
             "| Weekly quota, codex | 38% used at 2033-05-18 03:33 UTC → 71% used at "
             "2033-05-18 04:33 UTC (Codex local logs). Includes anything else",
             "| Weekly quota, claude | unknown: no reading; save the Claude Code status line",
@@ -381,6 +401,11 @@ class CommandTests(unittest.TestCase):
         self.assertNotIn("private-id", json.dumps(session))
         task = self.cli("task", "fix", "--status", "done", "--owner", "private-id")
         self.assertEqual(task["owner"], "codex worker session")
+        self.cli(
+            "task", "pr", "--status", "blocked", "--project", "notes-app", "--objective", "Ship",
+            "--done-when", "merged", "--owner", "anyone", "--blocker", "Merge it?", "--needs-you",
+        )  # fmt: skip
+        self.assertEqual(self.cli("status")["waitingOnYou"][0]["id"], "pr")
         self.assertEqual(self.cli("status", at=NOW + 60)["tasks"]["done"][0]["id"], "fix")
         stopped = self.cli("stop", "--reason", "nothing_ready", at=NOW + HOUR)
         self.assertEqual(stopped["stoppedAt"], iso(NOW + HOUR))

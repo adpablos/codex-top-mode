@@ -163,7 +163,9 @@ Then:
    `run.py task <id> --status planned|in_progress|done|blocked`. A new task also
    takes `--project`, `--objective`, `--done-when` and `--owner`; each change to
    `done` needs new `--evidence` you checked yourself (tests, diff, file), and
-   each change to `blocked` a new `--blocker`.
+   each change to `blocked` a new `--blocker`. Add `--needs-you` when it waits on
+   the user (a merge, a login, a choice), with a blocker that asks the question
+   and gives your recommendation and its consequence.
 3. Record each session you start or reuse:
    `run.py session <id> --agent codex|claude --role worker|reviewer`, and again
    with `--ended` when it finishes. Its ID stays in the private journal. Name
@@ -186,6 +188,11 @@ While working:
   merge only after an independent review and with checks green.
 - Work outside the run you come across (a broken pull request, a stale branch):
   report it, don't touch it.
+- When something starts waiting on the user, tell them right away, with the
+  others already waiting (`status` lists them as `waitingOnYou`), and keep
+  working on other ready work. If only their decisions remain, ask once and wait
+  for the answer until the deadline instead of stopping with `nothing_ready`; act
+  on each answer within the setup's level.
 - Pick models by task shape, using the profile's `models` for your agent when
   given: an economical model for repeatable, easily checked work; stronger ones
   for ambiguity or after a failed check.
@@ -221,6 +228,8 @@ into a short report in the user's language, grouped by project, following the
 [run-report contract](references/profile-contract.md#run-report) and the
 [example](examples/report.example.md):
 
+- **Waiting on you** first: each decision with your recommendation and what
+  happens if they say yes.
 - **Before → after**, and why it matters. Keep attempted or blocked work separate
   from delivered work; tested, reviewed, merged and used in real life are
   different levels of evidence.

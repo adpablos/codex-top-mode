@@ -161,12 +161,14 @@ revocation remains valid only while the human has not revoked it.
   `detectLowUsageRenewalShift: true`.
 - `task` and `session` record the work: tasks with project, objective, done
   criterion, owner and status (`planned`, `in_progress`, `done` with evidence,
-  `blocked` with a blocker, both given again on each change) and the time of
-  each change; sessions of an agent named at `start`, with role, start, end and
+  `blocked` with a blocker, both given again on each change, and `needsYou`,
+  given again with each new blocker, when a blocked task waits on the user) and
+  the time of each change; sessions of an agent named at `start`, with role, start, end and
   their private ID, which never leaves the journal. An owner that matches a
   session ID shows as that session's agent and role.
 - `status` prints time left, tasks by status with their objective, owner,
-  evidence or blocker, active sessions, `freeThreads` (the limit minus the
+  evidence or blocker, `waitingOnYou` (blocked tasks that wait on the user),
+  active sessions, `freeThreads` (the limit minus the
   coordinator and the larger of active sessions and tasks in progress; threads
   outside the run still count and only the operator knows them) and each agent's
   newest reading with its age. `stopNow` lists `stopReasons`: `deadline`, `profile_changed` (a
@@ -345,8 +347,9 @@ limits:
 
 The coordinator closes a run with a private, portable Markdown report, starting
 from the skeleton `run.py close` writes from the journal: tasks per project, the
-run's times and stop reason, quota before and after, sessions and tokens. Lead with
-what improved and why it matters, grouped by project: before, verified after,
+run's times and stop reason, quota before and after, sessions and tokens. Open
+with what waits on the user, each with a recommendation. Then lead with what
+improved and why it matters, grouped by project: before, verified after,
 pending/blocker, and next step with an owner. Include attempted or blocked work
 separately from delivered or integrated outcomes. A passing test, independent
 review, merge and observed real use are distinct evidence. Link the applicable

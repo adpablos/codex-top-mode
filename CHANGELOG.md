@@ -5,6 +5,12 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- A task that waits on you (a merge, a login, a choice) is recorded with
+  `run.py task --needs-you`. The agent tells you right away instead of at the
+  end, keeps working on other ready work, and waits for your answer rather than
+  stopping when only your decisions remain. `status` lists these tasks as
+  `waitingOnYou`, and the report opens with them. Found in the second real run,
+  which stopped after 18 minutes because everything left was waiting on a merge.
 - Added `scripts/run.py`, a private journal of each Top Mode run
   (`~/.codex-top-mode/runs.json`). `start` fixes the deadline (the hours you
   asked, capped by your limits and, if you chose so, the weekly renewal) and
