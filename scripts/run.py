@@ -221,7 +221,7 @@ def quota_now(run: dict, found: dict, now: float) -> dict:
 
 
 def status(run: dict, profile, found: dict, now: float) -> dict:
-    """What is going on, and whether to stop assigning work. Feeds the observer."""
+    """What is going on, and whether to stop assigning work."""
     reasons = []
     if now >= epoch(run["deadline"]):
         reasons.append("deadline")
@@ -229,6 +229,13 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         reasons.append("profile_changed")
     elif not authorization_active(profile, now):
         reasons.append("authorization_ended")
+    # A journal from an older version may hold its renewal observer's final word.
+    legacy = run.get("usageMonitor") or {}
+    if (
+        legacy.get("mode") == "normal"
+        and legacy.get("stopReason") != "authorized_time_window_ended"
+    ):
+        reasons.append("weekly_renewal")
     active = [s for s in run["sessions"] if not s["endedAt"] and s["role"] != "coordinator"]
     working = [t for t in run["tasks"] if t["status"] == "in_progress"]
     # The coordinator is one thread; each task in progress counts, even two of one session.
@@ -365,6 +372,8 @@ def report(run: dict, tokens: str) -> str:
     if not any(s["role"] == "coordinator" for s in run["sessions"]):
         sessions = f"{sessions or 'none started'} (plus this coordinator)"
     out.append(f"| Sessions | {sessions} |")
+    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):  # older versions only
+        out.append("| Saved resets | A new one appeared during the run; it did not extend it. |")
     out += [
         "",
         "## Tokens",

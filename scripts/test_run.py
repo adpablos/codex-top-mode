@@ -323,6 +323,16 @@ class StopAndReportTests(unittest.TestCase):
         r["sessions"].append({"id": "c", "startedAt": iso(NOW), **coordinator})
         return r
 
+    def test_a_journal_from_an_older_version_keeps_its_observer_outcome(self):
+        p = profile()
+        _, r = fresh(p)
+        r["usageMonitor"] = {"mode": "normal", "stopReason": "weekly_quota_replenished"}
+        r["usageMonitor"]["bankedResetObserved"] = True
+        self.assertEqual(run.status(r, p, {}, NOW + 60)["stopReasons"], ["weekly_renewal"])
+        run.stop(r, "weekly_renewal", NOW + 60)
+        run.close(r, {}, NOW + 120)
+        self.assertIn("| Saved resets | A new one appeared during the run", run.report(r, ""))
+
 
 class CommandTests(unittest.TestCase):
     def setUp(self):
