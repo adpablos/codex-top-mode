@@ -86,14 +86,21 @@ A request that only reviews or changes this package does not need it.
      user rules out.
   2. Propose a short list: each project in one line, where its pending work
      lives, its three clearest pending items, and the commands that run its
-     checks (tests, lint) when you find them.
-  3. Ask what to leave out, the order of priority, the permission level
-     (careful, balanced or autonomous, as in the
-     [README](README.md#you-stay-in-control); balanced by default) with any
-     exceptions, a maximum run length, how many sessions may work at once
-     (two by default, counting yours), whether to stop when the weekly
-     allowance renews (yes by default), and until when the approval holds
-     (until they revoke it by default).
+     checks (tests, lint) when you find them. An item that looks already done
+     (an issue a merged pull request fixed, a roadmap line that exists in the
+     code) is marked so; ask before planning it.
+  3. Ask in two short rounds, never more than three questions at once, each in
+     one plain sentence with what it changes. First: what to leave out and the
+     order of priority. Then propose the rest with its defaults and ask them to
+     confirm or change any: the permission level (careful, balanced or
+     autonomous, as in the [README](README.md#you-stay-in-control); balanced by
+     default), the longest a run may last, how many sessions may work at once
+     (two, counting yours: more finishes sooner but spends quota faster),
+     whether to stop when the weekly allowance renews (yes, so a run never eats
+     into the new week) and how long the approval lasts (until they revoke it).
+     Offer exceptions in their words, such as "merge Dependabot updates once
+     the checks pass": the action goes in `actions` and any narrower limit in
+     that project's `notes`, which you follow.
   4. Say that their agent answers each command from its own rules, not from
      the level, and that you will offer to write the level into them once the
      setup is saved.
@@ -106,7 +113,8 @@ A request that only reviews or changes this package does not need it.
      not real; the fields are in the
      [contract](references/profile-contract.md#human-profile)), with
      `approvedAt` the time they approve it and `source` where they did. Show it
-     as a short plain summary, get explicit approval, save it owner-only
+     as a short plain summary and always get explicit approval, even when they
+     already answered everything; save it owner-only
      outside Git, then run `profile_binding.py bind --profile <path>`.
   7. For each agent the runs will use, run
      `python3 -B <this folder>/scripts/host_rules.py --agent <claude or codex> --folder <F>`,
@@ -203,6 +211,13 @@ While working:
   review and with checks green.
 - Work outside the run you come across (a broken pull request, a stale branch):
   report it, don't touch it.
+- Checks are green only when every check the default branch requires has
+  passed on the commit. Compare them with the branch protection or rulesets
+  (`gh api`) before saying so or asking for a merge; a required check that never
+  reported is a blocker ("check X never ran"), not green.
+- `review` includes publishing the review on GitHub. A 403 on Dependabot alerts
+  means they are not enabled, not an error. What you could not verify, report
+  as the probable cause, never as a fact.
 - When something starts waiting on the user, tell them right away, with the
   others already waiting (`status` lists them as `waitingOnYou`), and keep
   working on other ready work. If only their decisions remain, ask once and wait
@@ -210,7 +225,8 @@ While working:
   on each answer within the setup's level.
 - Pick models by task shape, using the profile's `models` for your agent when
   given: an economical model for repeatable, easily checked work; stronger ones
-  for ambiguity or after a failed check.
+  for ambiguity or after a failed check. Reasoning effort is the host's default
+  unless the profile's `models` says otherwise; the report says which you used.
 
 After an interruption (closed laptop, restarted agent), run `run.py status`
 before anything else: the deadline is frozen in the journal.
