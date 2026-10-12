@@ -66,10 +66,11 @@ jobs:
         with:
           persist-credentials: false
       # Most Mac users have only the Python that ships with macOS (3.9), which is
-      # also the oldest version Top Mode supports.
+      # also the oldest version Top Mode supports. If a runner image ships another
+      # version, fail rather than silently stop testing 3.9.
       - name: Run offline tests with /usr/bin/python3
         run: |
-          /usr/bin/python3 --version
+          /usr/bin/python3 -c 'import sys; print(sys.version); sys.exit(sys.version_info[:2] != (3, 9) and "System Python is no longer 3.9: test 3.9 in a job of its own.")'
           /usr/bin/python3 -B -m unittest discover -s scripts
 
   # The one check to require before merging: it fails if any job above failed

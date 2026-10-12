@@ -70,8 +70,8 @@ The runtime has no dependencies and supports Python 3.9+ (the version macOS
 ships). `ruff` and `coverage` are only for contributors; their settings live in
 [pyproject.toml](../pyproject.toml). [GitHub Actions](../.github/workflows/tests.yml)
 runs lint, format and a workflow audit, the tests with an 85% coverage floor on
-Python 3.13, and the tests on macOS's own Python (3.9), with pinned actions and
-read-only permissions. Its `all checks` job fails when any of them fails; it is
+Python 3.13, and the tests on macOS's own Python (3.9; the job fails if the
+runner ships another version), with pinned actions and read-only permissions. Its `all checks` job fails when any of them fails; it is
 the one check to require before merging. Dependabot proposes action updates
 after a 7-day cooldown.
 Preserve authorization, fixed deadlines, deduplication,
