@@ -87,8 +87,8 @@ COMMANDS = {
 # Options that destroy work, per command; each is denied as its own word
 # anywhere in the command. Combined short options (`-qC`) are not caught.
 DESTRUCTIVE = {
-    "git push": ("--force", "-f", "--delete", "-d"),
-    "git switch": ("--force", "-f", "--discard-changes", "-C"),
+    "git push": ("--force", "--force-with-lease", "-f", "--delete", "-d"),
+    "git switch": ("--force", "-f", "--discard-changes", "-C", "--force-create"),
     "git checkout": ("--force", "-f", "-B"),
     "git worktree add": ("--force", "-f", "-B"),
     "git branch": ("--force", "-f", "-D", "-M", "-C"),
@@ -133,15 +133,21 @@ CODEX = {
     ),
     "access": (
         ["gh", "auth"],
-        ["security", ["find-generic-password", "find-internet-password", "find-identity"]],
+        [
+            "security",
+            [
+                "find-generic-password",
+                "find-internet-password",
+                "find-identity",
+                "find-certificate",
+            ],
+        ],
     ),
     "destruction": (
-        ["git", "push", ["--force", "-f", "--delete"]],
+        # The same options as for Claude Code, but only right after the command.
+        *([*command.split(), list(options)] for command, options in DESTRUCTIVE.items()),
         ["git", "reset", "--hard"],
-        ["git", "switch", ["-f", "--force", "--discard-changes", "-C", "--force-create"]],
-        ["git", "checkout", "-B"],
         ["git", "clean"],
-        ["git", "branch", "-D"],
         ["rm", ["-rf", "-fr"]],
         ["gh", "repo", "delete"],
         ["gh", "release", "delete"],
@@ -308,8 +314,10 @@ def apply(settings: dict, change: dict) -> dict:
 def rules_path(folder: Path, *parts: str) -> Path:
     folder = folder.expanduser()
     require(folder.is_absolute() and folder.is_dir(), "Use the absolute folder where you start")
-    path = folder.joinpath(*parts)
-    require(not path.is_symlink(), f"{path} is a link: change the file it points to instead")
+    for depth in range(1, len(parts) + 1):
+        # A link anywhere below the folder would write somewhere else.
+        path = folder.joinpath(*parts[:depth])
+        require(not path.is_symlink(), f"{path} is a link: change what it points to instead")
     return path
 
 
@@ -356,8 +364,9 @@ def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package
     rules = expected(profile, package)
     change = changes(settings, rules, state["claude"].get(str(path), {}))
     current = not any(change["add"].values()) and not any(change["remove"].values())
-    if write and not current:
+    if write:
         outside_git(folder, path)
+    if write and not current:
         mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
         write_json(path, apply(settings, change), mode)
         mine = state["claude"].get(str(path), {})
@@ -385,8 +394,9 @@ def sync_codex(profile: dict, folder: Path, write: bool, package: Path = PACKAGE
     rules = codex_rules(profile, package)
     text = codex_text(rules)
     current = path.exists() and path.read_text(encoding="utf-8") == text
-    if write and not current:
+    if write:
         outside_git(folder, path)
+    if write and not current:
         write_text(path, text, 0o600)
     return {
         "agent": "codex",

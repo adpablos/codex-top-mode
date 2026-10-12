@@ -113,7 +113,10 @@ A request that only reviews or changes this package does not need it.
      it would set there: what stops asking, what keeps asking and what is
      blocked. Write it with `--write` only with their OK; Claude Code keeps
      their own rules, and Codex gets a file of its own, read when a session
-     starts from a folder they trust in Codex. Recommend protecting each
+     starts from a folder they trust in Codex. If F is in a Git repository,
+     the script refuses until Git ignores the rules file: with their OK, list
+     it in that repository's `.git/info/exclude`, which is never shared.
+     Recommend protecting each
      project's default branch on GitHub (no direct or forced pushes, checks
      required): rules match a command's words, not its effect. Change GitHub
      settings only with their OK.

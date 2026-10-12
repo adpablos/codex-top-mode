@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -187,6 +188,9 @@ class SyncTests(unittest.TestCase):
             self.sync(profile())
         (self.folder / ".gitignore").write_text(".claude/settings.local.json\n")
         self.assertTrue(self.sync(profile())["written"])
+        (self.folder / ".gitignore").unlink()
+        with self.assertRaisesRegex(ValueError, "Have Git ignore"):
+            self.sync(profile())
 
 
 def decision(rules: list, *pattern) -> list:
@@ -208,19 +212,29 @@ class CodexRulesTests(unittest.TestCase):
                 self.assertEqual(decision(rules, "git", "switch", ["-c", "--create"]), ["allow"])
                 self.assertEqual(decision(rules, "git", "switch"), [])
                 self.assertEqual(decision(rules, "brew", "install"), ["prompt"])
-                self.assertEqual(
-                    decision(rules, "git", "push", ["--force", "-f", "--delete"]), ["forbidden"]
-                )
+                rewrite = ["--force", "--force-with-lease", "-f", "--delete", "-d"]
+                self.assertEqual(decision(rules, "git", "push", rewrite), ["forbidden"])
                 self.assertEqual(
                     decision(rules, "git", "push", "origin", ["main", "master"]), ["forbidden"]
                 )
 
     def test_rewriting_a_branch_or_deleting_keychain_items_is_forbidden(self):
         rules = codex_rules(profile(), PACKAGE)
-        self.assertEqual(decision(rules, "git", "checkout", "-B"), ["forbidden"])
-        switch = [p for p, d, _ in rules if p[:2] == ["git", "switch"] and d == "forbidden"]
-        self.assertIn("-C", switch[0][2])
+        self.assertEqual(decision(rules, "git", "checkout", ["--force", "-f", "-B"]), ["forbidden"])
+        self.assertEqual(
+            decision(rules, "git", "worktree", "add", ["--force", "-f", "-B"]), ["forbidden"]
+        )
+        forbidden = [p for p, d, _ in rules if d == "forbidden"]
+        for command, option in (
+            ("switch", "-C"),
+            ("switch", "--discard-changes"),
+            ("branch", "-D"),
+        ):
+            with self.subTest(option):
+                matches = [p for p in forbidden if p[:2] == ["git", command] and option in p[2]]
+                self.assertEqual(len(matches), 1)
         keychain = [p for p, d, _ in rules if p[0] == "security"]
+        self.assertIn("find-certificate", keychain[0][1])
         self.assertTrue(all(w.startswith("delete-") for w in keychain[-1][1]))
 
     def test_the_users_exceptions_win_over_the_level(self):
@@ -265,17 +279,27 @@ class CodexSyncTests(unittest.TestCase):
         sync_codex(profile("careful"), self.folder, True, PACKAGE)
         self.assertIn('["git", "push"], decision="prompt"', self.path.read_text())
 
-    def test_refuses_a_linked_file_or_one_git_would_pick_up(self):
+    def test_refuses_a_linked_file_or_folder(self):
         self.path.parent.mkdir(parents=True)
         target = self.folder / "elsewhere.rules"
         target.write_text("")
         self.path.symlink_to(target)
         with self.assertRaisesRegex(ValueError, "is a link"):
             sync_codex(profile(), self.folder, True, PACKAGE)
-        self.path.unlink()
+        shutil.rmtree(self.folder / ".codex")
+        (self.folder / "elsewhere").mkdir()
+        (self.folder / ".codex").symlink_to(self.folder / "elsewhere")
+        with self.assertRaisesRegex(ValueError, "is a link"):
+            sync_codex(profile(), self.folder, False, PACKAGE)
+
+    def test_refuses_a_file_git_would_pick_up_even_when_it_is_current(self):
+        self.assertTrue(sync_codex(profile(), self.folder, True, PACKAGE)["written"])
         subprocess.run(["git", "init", "-q", str(self.folder)], check=True)
+        self.assertTrue(sync_codex(profile(), self.folder, False, PACKAGE)["current"])
         with self.assertRaisesRegex(ValueError, "Have Git ignore"):
             sync_codex(profile(), self.folder, True, PACKAGE)
+        (self.folder / ".git" / "info" / "exclude").write_text(".codex/\n")
+        self.assertFalse(sync_codex(profile(), self.folder, True, PACKAGE)["written"])
 
 
 class CommandLineTests(unittest.TestCase):
