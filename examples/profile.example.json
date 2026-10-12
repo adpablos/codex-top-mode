@@ -20,6 +20,7 @@
       "path": "/home/you/projects/notes-app",
       "work": ["github-issues", "github-prs", "ROADMAP.md"],
       "priority": 0,
+      "checks": ["npm test", "npm run lint"],
       "notes": "Done means merged with tests; releases wait for the owner."
     },
     "website": {

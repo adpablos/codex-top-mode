@@ -33,8 +33,9 @@ no task list and no run state. `schemaVersion: 2` has these fields and no others
 - `projects`, by stable name: `label`; `path`, the project's absolute folder;
   `work`, where its pending work lives (`github-issues`, `github-prs`,
   `github-alerts`, or files inside the project such as `ROADMAP.md`); `priority`,
-  0 or more, lower first; and optional `notes`, what the user said about it, such
-  as what done means. Without a working `gh`, read only the files and say so.
+  0 or more, lower first; optional `checks`, the commands that run its tests or
+  lint; and optional `notes`, what the user said about it, such as what done
+  means. Without a working `gh`, read only the files and say so.
 - `excluded` (optional): absolute folders never to touch or propose. No project
   may be inside one; paths with `..` are refused so that this holds.
 - `models` (optional): per agent (`codex`, `claude`), model names for
@@ -76,6 +77,53 @@ Native permissions, actual owner availability and
 state-bound approvals for authentication, access, installation, private data,
 finance and destruction still apply at action time. The code classifies work;
 it cannot authenticate consent, reserve worker slots or judge task complexity.
+
+## Host rules
+
+The agent answers each command from its own permission rules, not from the
+level. On Claude Code, `host_rules.py` turns the level and its exceptions into
+Claude Code's `allow`, `ask` and `deny` rules for the folder where the user
+starts Top Mode, in `<folder>/.claude/settings.local.json`. Claude Code
+applies it to every session whose project is that folder, remote ones
+included: sessions started there or, when the folder is a Git repository,
+anywhere inside it and in its worktrees. Start Top Mode from that same
+folder:
+
+```sh
+python3 -B scripts/host_rules.py --agent claude --folder /where/you/start
+```
+
+Without `--write` it changes nothing and prints `current`, and the rules it
+would `add` and `remove`. With `--write`, given only with the user's OK, it adds
+them and removes the ones it added before that the profile no longer gives. It
+never removes a rule it did not add: it keeps a record of its own in
+`~/.codex-top-mode/host-rules.json`. A stricter rule of the user's wins in
+Claude Code, as a narrower request does here. It refuses a settings file that is
+a link (change the file it points to) or that Git would pick up.
+
+| Rules | From |
+| --- | --- |
+| `git status`, `log`, `diff`, `show`, `fetch`; `gh pr` and `gh issue` reading; each project's folder | `read`, `edit` |
+| each project's `checks` | `checks` |
+| `git add`, `commit`, creating or switching to `quota-coach/*` branches, `git worktree add` | `commit` |
+| pushing `quota-coach/*` branches, `gh pr create` | `publish_pr` |
+| `gh pr review`, `gh pr comment` | `review` |
+| `gh pr merge` | `merge` |
+| package installs, `gh auth`, reading the keychain (`security find-*`) | `install`, `access` |
+| options that force, delete or reset branches (`-f`, `-d`, `-C`, `-B`, `-D` and their long forms) wherever they stand as their own word; hard resets, `git clean`, `rm -rf`, deleting repositories, releases or keychain items | `destruction` |
+| the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
+| pushing to `main` or `master`; reading or editing excluded folders with Claude Code's file tools | always denied |
+
+Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
+`deny` to `deny`. `finance` and `redeem_reset` have no commands to match, so
+the rules don't change with them; they stay with the agent and the profile.
+These rules match a command's words, not its effect (`git -C . push` is not
+`git push`, and combined options such as `-qC` slip past), so they are not a
+security boundary: protect each project's default branch on GitHub too. To
+keep that gap small, commands with destructive options are allowed only in the
+narrow forms a run needs. Commands allowed in a project see all of it, so an
+excluded folder inside a project is kept from the file tools only; exclude
+whole repositories. Network (UNC) folders are refused.
 
 ## Private profile binding
 

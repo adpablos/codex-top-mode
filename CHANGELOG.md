@@ -5,6 +5,12 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Added `scripts/host_rules.py`. It turns your permission level into Claude
+  Code's own rules for the folder where you start Top Mode, so Claude Code stops
+  asking for what your level allows, keeps asking for what it doesn't, and
+  blocks what it denies. It writes only with your OK and keeps your own rules.
+  The setup now also notes each project's check commands (`checks`), and run
+  branches are named `quota-coach/<task>`.
 - A task that waits on you (a merge, a login, a choice) is recorded with
   `run.py task --needs-you`. The agent tells you right away instead of at the
   end, keeps working on other ready work, and waits for your answer rather than

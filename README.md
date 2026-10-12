@@ -91,7 +91,9 @@ The check only suggests. Top Mode only starts when you say so.
   | **Balanced** (default) | the above, plus open a pull request and request a review | merge, install, use your accounts | money, deleting things |
   | Autonomous | the above, plus merge once an independent review and the checks pass | install, use your accounts | money, deleting things |
 
-  Your agent's own permission settings still apply on top of these.
+  On Claude Code, the setup can write your level into Claude Code's own
+  permission rules, with your OK, so it stops asking for what you allowed. On
+  other agents, their own permission settings still apply on top.
 - **Fixed deadline.** It stops at the time limit, if you revoke permission, or
   (when the agent can see your quota) when your weekly allowance renews.
 - **One coordinator.** One conversation keeps track of everything. It reuses
@@ -144,7 +146,8 @@ Full example: [examples/report.example.md](examples/report.example.md).
   by the multiples of Plus that OpenAI has announced, never in tokens. Prices
   and sizes change; the file says when they were checked.
 - These are instructions for an agent, not a sandbox. Your agent's own permission
-  settings still apply.
+  settings still apply, and its rules match a command's words, not what it does:
+  protecting your main branch on GitHub is the real guard.
 
 Contributing: start with the [vision and principles](references/vision.md), then
 the [maintenance guide](references/maintaining.md) and the [changelog](CHANGELOG.md).

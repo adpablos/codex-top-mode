@@ -150,6 +150,8 @@ class ValidationTests(unittest.TestCase):
             "negative priority": broken(lambda p: notes(p).update(priority=-1)),
             "priority as boolean": broken(lambda p: notes(p).update(priority=False)),
             "empty notes": broken(lambda p: notes(p).update(notes="")),
+            "checks as text": broken(lambda p: notes(p).update(checks="npm test")),
+            "empty check": broken(lambda p: notes(p).update(checks=[" "])),
             "unknown project field": broken(lambda p: notes(p).update(owner="me")),
             "unknown model tier": broken(lambda p: p["models"]["codex"].update(fast="x")),
             "empty model list": broken(lambda p: p["models"].update(claude={})),

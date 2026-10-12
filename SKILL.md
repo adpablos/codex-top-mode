@@ -14,8 +14,8 @@ details live in the [profile, quota and report contract](references/profile-cont
 
 The scripts live next to this file. Run them by full path,
 `python3 -B <this folder>/scripts/<name>.py` (`~/.quota-coach/scripts/` after the
-one-step install), never relative to the current folder, which is usually the
-user's project.
+one-step install, the path the host rules allow), never relative to the current
+folder, which is usually the user's project.
 
 ## 0. Install (when asked)
 
@@ -85,7 +85,8 @@ A request that only reviews or changes this package does not need it.
      issues, pull requests and security alerts when `gh` works. Skip folders the
      user rules out.
   2. Propose a short list: each project in one line, where its pending work
-     lives, and its three clearest pending items.
+     lives, its three clearest pending items, and the commands that run its
+     checks (tests, lint) when you find them.
   3. Ask what to leave out, the order of priority, the permission level
      (careful, balanced or autonomous, as in the
      [README](README.md#you-stay-in-control); balanced by default) with any
@@ -93,8 +94,9 @@ A request that only reviews or changes this package does not need it.
      (two by default, counting yours), whether to stop when the weekly
      allowance renews (yes by default), and until when the approval holds
      (until they revoke it by default).
-  4. Say that their agent's own permission settings still apply: at autonomous
-     it may still ask before a push or a merge.
+  4. Say that their agent answers each command from its own rules, not from
+     the level; on Claude Code you will offer to write the level into them once
+     the setup is saved.
   5. On Claude Code without a saved status line, offer to save it
      ([how](references/profile-contract.md#quota-readings)); it changes their
      settings, so only with their OK. Without it, Claude quota stays unknown.
@@ -105,6 +107,14 @@ A request that only reviews or changes this package does not need it.
      `approvedAt` the time they approve it and `source` where they did. Show it
      as a short plain summary, get explicit approval, save it owner-only
      outside Git, then run `profile_binding.py bind --profile <path>`.
+  7. On Claude Code, run
+     `python3 -B <this folder>/scripts/host_rules.py --agent claude --folder <F>`,
+     where F is the folder where they start Top Mode, and say in plain words what
+     it would add there: what stops asking, what keeps asking and what is
+     blocked. Write it with `--write` only with their OK; it keeps their own
+     rules. On any agent, recommend protecting each project's default branch on
+     GitHub (no direct or forced pushes, checks required): rules match a
+     command's words, not its effect. Change GitHub settings only with their OK.
 - **Broken or conflicting:** explain the one problem and fix only that with the
   user. Never fall back to an example, another profile or memory.
 
@@ -145,7 +155,10 @@ python3 -B <this folder>/scripts/run.py start --hours <H> --agents <codex and/or
 ```
 
 `--agents` names whose quota the run spends: yours and any agent you delegate
-to. If no duration was given and none was approved as default, ask first. It
+to. On Claude Code, first run `host_rules.py` as in the setup, without
+`--write`: if it says `current: false`, tell the user their agent may ask for
+things their level allows, or allow things it doesn't, and offer to update the
+rules. If no duration was given and none was approved as default, ask first. It
 refuses when the setup's approval is not active or another run is still open
 (finish that one first, as in [Stop](#4-stop)). It fixes the **deadline**: the
 hours asked, capped by `maximumHours`, `validUntil` and, when the setup says so,
@@ -184,7 +197,8 @@ While working:
   (`codex worker`), never its ID. If you cannot tell whether the owner is busy (a
   Codex thread seen from Claude Code, say), ask the user, or only read and
   diagnose.
-- Commit only on a working branch, never on the default branch. At `autonomous`,
+- Commit only on a working branch named `quota-coach/<task>`, never on the
+  default branch; the host rules allow pushing only those. At `autonomous`,
   merge only after an independent review and with checks green.
 - Work outside the run you come across (a broken pull request, a stale branch):
   report it, don't touch it.
