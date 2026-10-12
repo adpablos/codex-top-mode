@@ -2,7 +2,9 @@
 
 Technical reference for agents. People can start with the [README](../README.md);
 the operating workflow is in the [skill](../SKILL.md). Optional Codex reset
-announcements are in [announcements](announcements.md).
+announcements are in [announcements](announcements.md). Commands below run from
+the package folder; from anywhere else, including a scheduled task, give the
+script's full path (`~/.top-mode/scripts/` after the one-step install).
 
 ## Human profile
 

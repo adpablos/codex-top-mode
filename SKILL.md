@@ -11,7 +11,10 @@ plus installing the package when asked.
 The [README](README.md) shows how to explain this to people. Field and command
 details live in the [profile, quota and report contract](references/profile-contract.md).
 
-The scripts live next to this file: run them as `python3 -B <this folder>/scripts/<name>.py`.
+The scripts live next to this file. Run them by full path,
+`python3 -B <this folder>/scripts/<name>.py` (`~/.top-mode/scripts/` after the
+one-step install), never relative to the current folder, which is usually the
+user's project.
 
 ## 0. Install (when asked)
 
@@ -56,7 +59,7 @@ anything else. Tell the user to open a new session and ask to set up Top Mode.
 When the user asks to set up, check or run Top Mode, start with:
 
 ```sh
-python3 -B scripts/profile_binding.py locate
+python3 -B <this folder>/scripts/profile_binding.py locate
 ```
 
 A request that only reviews or changes this package does not need it.
@@ -79,7 +82,7 @@ A request that only reviews or changes this package does not need it.
 When the user asks, run:
 
 ```sh
-python3 -B scripts/check.py --verbose
+python3 -B <this folder>/scripts/check.py --verbose
 ```
 
 It reads every quota source on this machine (Codex local logs, a saved Claude
@@ -95,7 +98,7 @@ payload, which also lists saved resets, goes through
 with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
 scheduled task, not a cloud routine, which cannot see this machine). Use the
 cheapest model, every 4 hours if the announcement watch is set up and daily
-otherwise. The task runs `check.py` without `--verbose`. Empty output means end
+otherwise. The task runs `check.py` by full path, without `--verbose`. Empty output means end
 quietly; otherwise tell the user those lines and offer to start Top Mode. A
 scheduled check never starts work by itself.
 
@@ -152,7 +155,7 @@ and the [example](examples/report.example.md):
 - **Pending and next step**, with who acts next.
 - **The run:** start, deadline, actual stop and why; quota before and after with
   reading times; models and effort actually used; sessions started and finished.
-- **Tokens:** `python3 -B scripts/usage_report.py tokens --since <start> --markdown`.
+- **Tokens:** `python3 -B <this folder>/scripts/usage_report.py tokens --since <start> --markdown`.
   It counts every session on this machine in that interval; say so.
 
 Write `unknown` with the reason instead of guessing. Quota is account-wide, so
