@@ -172,6 +172,13 @@ def without_resets(found, plan, now, size=None):
     for week in weeks:
         week["atLeast"] = any(week["start"] <= t < week["start"] + WEEK for t in limits)
         week["ended"] = week["start"] + WEEK <= now
+        end = min(week["start"] + WEEK, now) - 1
+        times = size(plan, end) if size else None
+        if times and "plus" in week:
+            # A smaller size after the week's last use still fills the week's meter.
+            week["usedPercent"] = round(week["plus"] / times * 100, 3)
+            if week["usedPercent"] >= 100 and week["limitReachedAt"] is None:
+                week["limitReachedAt"] = end
     return weeks
 
 

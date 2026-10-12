@@ -299,7 +299,7 @@ limits:
 
 - A change of a plan's size rescales its percentage like a plan change; the
   jump is not use. A natural week adds up its use in Plus and measures it
-  against the size at each moment.
+  against the size at each moment, up to its end.
 - A grandfathered subscriber keeps a plan's earlier size until the date the file
   gives. It is inferred from the kept windows' readings on that plan during the
   eligibility period, never from a left-out meter; without them the new size is
