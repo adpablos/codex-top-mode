@@ -91,7 +91,7 @@ The check only suggests. Top Mode only starts when you say so.
   | **Balanced** (default) | the above, plus open a pull request and request a review | merge, install, use your accounts | money, deleting things |
   | Autonomous | the above, plus merge once an independent review and the checks pass | install, use your accounts | money, deleting things |
 
-  On Claude Code, the setup can write your level into Claude Code's own
+  On Claude Code and Codex, the setup can write your level into the agent's own
   permission rules, with your OK, so it stops asking for what you allowed. On
   other agents, their own permission settings still apply on top.
 - **Fixed deadline.** It stops at the time limit, if you revoke permission, or

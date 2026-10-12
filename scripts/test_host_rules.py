@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import host_rules
-from host_rules import expected, sync
+from host_rules import codex_rules, codex_text, expected, sync_claude, sync_codex
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples/profile.example.json"
 PACKAGE = Path("/home/you/.quota-coach")
@@ -71,6 +71,7 @@ class ExpectedRulesTests(unittest.TestCase):
         rules = expected(profile("autonomous", access="allowed"), PACKAGE)
         self.assertNotIn("Bash(git switch:*)", rules["allow"])
         self.assertIn("Bash(git switch -c quota-coach/*)", rules["allow"])
+        self.assertIn("Bash(git switch --create quota-coach/*)", rules["allow"])
         self.assertNotIn("Bash(security:*)", rules["allow"])
         self.assertIn("Bash(security find-*)", rules["allow"])
 
@@ -117,7 +118,7 @@ class SyncTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def sync(self, p, write=True):
-        return sync(p, self.folder, self.private, write, PACKAGE)
+        return sync_claude(p, self.folder, self.private, write, PACKAGE)
 
     def stored(self):
         return json.loads(self.settings.read_text())
@@ -188,6 +189,95 @@ class SyncTests(unittest.TestCase):
         self.assertTrue(self.sync(profile())["written"])
 
 
+def decision(rules: list, *pattern) -> list:
+    return [d for p, d, _ in rules if p == list(pattern)]
+
+
+class CodexRulesTests(unittest.TestCase):
+    def test_each_level_puts_push_and_merge_where_it_says(self):
+        for level, push, merge in (
+            ("careful", "prompt", "prompt"),
+            ("balanced", "allow", "prompt"),
+            ("autonomous", "allow", "allow"),
+        ):
+            rules = codex_rules(profile(level), PACKAGE)
+            with self.subTest(level):
+                self.assertEqual(decision(rules, "git", "push"), [push])
+                self.assertEqual(decision(rules, "gh", "pr", "merge"), [merge])
+                self.assertEqual(decision(rules, "git", "checkout", "-b"), ["allow"])
+                self.assertEqual(decision(rules, "git", "switch", ["-c", "--create"]), ["allow"])
+                self.assertEqual(decision(rules, "git", "switch"), [])
+                self.assertEqual(decision(rules, "brew", "install"), ["prompt"])
+                self.assertEqual(
+                    decision(rules, "git", "push", ["--force", "-f", "--delete"]), ["forbidden"]
+                )
+                self.assertEqual(
+                    decision(rules, "git", "push", "origin", ["main", "master"]), ["forbidden"]
+                )
+
+    def test_rewriting_a_branch_or_deleting_keychain_items_is_forbidden(self):
+        rules = codex_rules(profile(), PACKAGE)
+        self.assertEqual(decision(rules, "git", "checkout", "-B"), ["forbidden"])
+        switch = [p for p, d, _ in rules if p[:2] == ["git", "switch"] and d == "forbidden"]
+        self.assertIn("-C", switch[0][2])
+        keychain = [p for p, d, _ in rules if p[0] == "security"]
+        self.assertTrue(all(w.startswith("delete-") for w in keychain[-1][1]))
+
+    def test_the_users_exceptions_win_over_the_level(self):
+        rules = codex_rules(profile("autonomous", merge="deny", destruction="ask"), PACKAGE)
+        self.assertEqual(decision(rules, "gh", "pr", "merge"), ["forbidden"])
+        self.assertEqual(decision(rules, "git", "reset", "--hard"), ["prompt"])
+
+    def test_the_own_scripts_are_allowed_word_by_word(self):
+        rules = codex_rules(profile("careful"), PACKAGE)
+        script = "/home/you/.quota-coach/scripts/profile_binding.py"
+        self.assertEqual(decision(rules, "python3", "-B", script, "locate"), ["allow"])
+        self.assertFalse(any("install.py" in str(p) for p, _, _ in rules))
+
+    def test_the_file_is_one_prefix_rule_per_line(self):
+        rules = codex_rules(profile(), PACKAGE)
+        read = []
+        exec(  # The rules file is Starlark; this subset is also Python.
+            codex_text(rules),
+            {"prefix_rule": lambda **kw: read.append((kw["pattern"], kw["decision"]))},
+        )
+        self.assertEqual(read, [(p, d) for p, d, _ in rules])
+
+
+class CodexSyncTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name)
+        self.path = self.folder / ".codex" / "rules" / "quota-coach.rules"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_shows_writes_and_rewrites_when_the_level_changes(self):
+        result = sync_codex(profile(), self.folder, False, PACKAGE)
+        self.assertFalse(result["current"])
+        self.assertIn("git push", result["allow"])
+        self.assertIn("gh pr merge", result["prompt"])
+        self.assertFalse(self.path.exists())
+        self.assertTrue(sync_codex(profile(), self.folder, True, PACKAGE)["written"])
+        self.assertTrue(sync_codex(profile(), self.folder, False, PACKAGE)["current"])
+        self.assertFalse(sync_codex(profile("careful"), self.folder, False, PACKAGE)["current"])
+        sync_codex(profile("careful"), self.folder, True, PACKAGE)
+        self.assertIn('["git", "push"], decision="prompt"', self.path.read_text())
+
+    def test_refuses_a_linked_file_or_one_git_would_pick_up(self):
+        self.path.parent.mkdir(parents=True)
+        target = self.folder / "elsewhere.rules"
+        target.write_text("")
+        self.path.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "is a link"):
+            sync_codex(profile(), self.folder, True, PACKAGE)
+        self.path.unlink()
+        subprocess.run(["git", "init", "-q", str(self.folder)], check=True)
+        with self.assertRaisesRegex(ValueError, "Have Git ignore"):
+            sync_codex(profile(), self.folder, True, PACKAGE)
+
+
 class CommandLineTests(unittest.TestCase):
     def test_shows_then_writes_with_the_saved_setup(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -198,13 +288,16 @@ class CommandLineTests(unittest.TestCase):
             path.write_text(json.dumps(profile()))
             base = ["host_rules.py", "--agent", "claude", "--profile", str(path)]
             base += ["--folder", str(folder), "--private", str(private)]
-            for extra, written in (([], False), (["--write"], True), ([], False)):
-                out = io.StringIO()
-                with patch.object(sys, "argv", base + extra), contextlib.redirect_stdout(out):
-                    host_rules.main()
-                result = json.loads(out.getvalue())
-                self.assertEqual(result["written"], written)
-            self.assertTrue(result["current"])
+            for agent in ("claude", "codex"):
+                for extra, written in (([], False), (["--write"], True), ([], False)):
+                    argv = [*base, *extra]
+                    argv[2] = agent
+                    out = io.StringIO()
+                    with patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+                        host_rules.main()
+                    result = json.loads(out.getvalue())
+                    self.assertEqual((result["agent"], result["written"]), (agent, written))
+                self.assertTrue(result["current"])
 
     def test_a_relative_folder_is_refused(self):
         err = io.StringIO()

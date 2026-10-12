@@ -117,6 +117,21 @@ a link (change the file it points to) or that Git would pick up.
 Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
 `deny` to `deny`. `finance` and `redeem_reset` have no commands to match, so
 the rules don't change with them; they stay with the agent and the profile.
+
+On Codex, `--agent codex` writes `<folder>/.codex/rules/quota-coach.rules`,
+a file of its own that it rewrites whole; the user keeps their own rules in
+other files. Codex reads it when a session starts in that folder, once the user
+trusts the folder in Codex. Codex runs most commands in its sandbox without
+asking, so the file names only those that leave it: the Git, `gh` and install
+commands above, the run's own scripts and the always-denied pushes, each as
+`prefix_rule(pattern=[...], decision=...)`. `allowed` becomes `allow` (which
+runs the command outside the sandbox), `ask` becomes `prompt` and `deny`
+becomes `forbidden`; the strictest matching rule wins. Its prefixes are literal
+words in order, so it cannot tell run branches from others (`git push` follows
+`publish_pr`, and the default branch is guarded on GitHub), and it catches a
+destructive option only right after its command. Checks and the projects'
+files stay with the sandbox.
+
 These rules match a command's words, not its effect (`git -C . push` is not
 `git push`, and combined options such as `-qC` slip past), so they are not a
 security boundary: protect each project's default branch on GitHub too. To

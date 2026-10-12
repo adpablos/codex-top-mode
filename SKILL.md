@@ -95,8 +95,8 @@ A request that only reviews or changes this package does not need it.
      allowance renews (yes by default), and until when the approval holds
      (until they revoke it by default).
   4. Say that their agent answers each command from its own rules, not from
-     the level; on Claude Code you will offer to write the level into them once
-     the setup is saved.
+     the level, and that you will offer to write the level into them once the
+     setup is saved.
   5. On Claude Code without a saved status line, offer to save it
      ([how](references/profile-contract.md#quota-readings)); it changes their
      settings, so only with their OK. Without it, Claude quota stays unknown.
@@ -107,14 +107,16 @@ A request that only reviews or changes this package does not need it.
      `approvedAt` the time they approve it and `source` where they did. Show it
      as a short plain summary, get explicit approval, save it owner-only
      outside Git, then run `profile_binding.py bind --profile <path>`.
-  7. On Claude Code, run
-     `python3 -B <this folder>/scripts/host_rules.py --agent claude --folder <F>`,
+  7. For each agent the runs will use, run
+     `python3 -B <this folder>/scripts/host_rules.py --agent <claude or codex> --folder <F>`,
      where F is the folder where they start Top Mode, and say in plain words what
-     it would add there: what stops asking, what keeps asking and what is
-     blocked. Write it with `--write` only with their OK; it keeps their own
-     rules. On any agent, recommend protecting each project's default branch on
-     GitHub (no direct or forced pushes, checks required): rules match a
-     command's words, not its effect. Change GitHub settings only with their OK.
+     it would set there: what stops asking, what keeps asking and what is
+     blocked. Write it with `--write` only with their OK; Claude Code keeps
+     their own rules, and Codex gets a file of its own, read when a session
+     starts from a folder they trust in Codex. Recommend protecting each
+     project's default branch on GitHub (no direct or forced pushes, checks
+     required): rules match a command's words, not its effect. Change GitHub
+     settings only with their OK.
 - **Broken or conflicting:** explain the one problem and fix only that with the
   user. Never fall back to an example, another profile or memory.
 
@@ -155,7 +157,7 @@ python3 -B <this folder>/scripts/run.py start --hours <H> --agents <codex and/or
 ```
 
 `--agents` names whose quota the run spends: yours and any agent you delegate
-to. On Claude Code, first run `host_rules.py` as in the setup, without
+to. First run `host_rules.py` for those agents as in the setup, without
 `--write`: if it says `current: false`, tell the user their agent may ask for
 things their level allows, or allow things it doesn't, and offer to update the
 rules. If no duration was given and none was approved as default, ask first. It
