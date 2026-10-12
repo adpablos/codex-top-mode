@@ -6,6 +6,7 @@ Read-only. Prints counts only: no prompts, paths, session or account IDs.
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -21,6 +22,8 @@ CODEX_FIELDS = (
     "reasoning_output_tokens",
     "total_tokens",
 )
+# Codex names a rollout after its local start time, with no UTC offset.
+ROLLOUT_START = re.compile(r"rollout-(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)")
 CLAUDE_FIELDS = (
     "input_tokens",
     "cache_creation_input_tokens",
@@ -126,8 +129,19 @@ def codex_tokens(home, since, until):
     result = summary("codex", buckets, sessions, responses)
     result["olderLogs"] = older
     # Codex compresses logs untouched for a week (.jsonl.zst); stdlib Python cannot read them.
-    result["compressedLogs"] = len(recent_files(roots, "rollout-*.jsonl.zst", since))
+    packed = recent_files(roots, "rollout-*.jsonl.zst", since)
+    result["compressedLogs"] = sum(not started_after(path, until) for path in packed)
     return result
+
+
+def started_after(path, until):
+    """Whether a rollout's name proves it started after `until`.
+
+    The name gives local time without an offset; no offset exceeds 14 hours.
+    """
+    match = ROLLOUT_START.match(path.name)
+    start = match and epoch("{}T{}:{}:{}+00:00".format(*match.groups()))
+    return bool(start) and start - 14 * 3600 > until
 
 
 def claude_tokens(home, since, until):

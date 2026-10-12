@@ -100,15 +100,23 @@ class TokenTests(unittest.TestCase):
     def test_compressed_codex_logs_are_counted_as_unread(self):
         write_lines(self.home / "sessions/rollout-x.jsonl", codex_rows())
         self.assertEqual(codex_tokens(self.home, SINCE, NOW)["compressedLogs"], 0)
-        for name, modified in (("recent", NOW), ("earlier", SINCE - 1)):
+        names = (
+            ("recent", NOW),
+            ("earlier", SINCE - 1),
+            # Started after the interval: its name says so, beyond any UTC offset.
+            ("2033-05-19T02-00-01-id", NOW),
+            # Within 14 hours of its end, an offset could put it inside: counted.
+            ("2033-05-19T01-59-59-id", NOW),
+        )
+        for name, modified in names:
             path = self.home / f"archived_sessions/rollout-{name}.jsonl.zst"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"\x28\xb5\x2f\xfd")
             os.utime(path, (modified, modified))
         result = codex_tokens(self.home, SINCE, NOW)
-        self.assertEqual((result["compressedLogs"], result["totalTokens"]), (1, 140))
+        self.assertEqual((result["compressedLogs"], result["totalTokens"]), (2, 140))
         report = markdown({**REPORT, "providers": [result]})
-        self.assertIn("1 compressed logs that may cover this interval were not read", report)
+        self.assertIn("2 compressed logs that may cover this interval were not read", report)
 
     def test_codex_usage_outside_the_window_is_ignored(self):
         write_lines(
