@@ -132,7 +132,7 @@ python3 -B <this folder>/scripts/check.py --verbose
 ```
 
 It reads every quota source on this machine (Codex local logs, a saved Claude
-Code status line) plus the optional announcement watch. Explain the answer in one
+Code status line). Explain the answer in one
 or two sentences: how much of the weekly allowance is used, when it renews, and
 whether a run is worth it. If there is no reading, say so and offer a run with a
 clock deadline only. Details per source are in
@@ -143,12 +143,10 @@ payload, which also lists saved resets, goes through
 **Proactive check.** When the user wants to be told, schedule a recurring task
 with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
 scheduled task, not a cloud routine, which cannot see this machine). Use the
-cheapest model, every 4 hours if the announcement watch is set up and daily
-otherwise. The task runs `check.py` by full path, without `--verbose`. Empty
-output means end quietly; otherwise tell the user those lines and offer to start
-Top Mode. For a new announcement, first read the post and say what it announces
-([how](references/announcements.md#when-a-new-announcement-arrives)). A scheduled
-check never starts work by itself, whatever the news.
+cheapest model, once a day. The task runs `check.py` by full path, without
+`--verbose`. Empty output means end quietly; otherwise tell the user those lines
+and offer to start Top Mode. A scheduled check never starts work by itself,
+whatever the news.
 
 ## 3. Run
 
@@ -237,8 +235,8 @@ The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
 `authorization_ended` or `weekly_renewal`. After it the journal takes no new
 tasks or sessions, only how existing ones ended. Ask
 active owners for a short checkpoint and record each result with `run.py task`
-and `run.py session --ended`, then end the run with `run.py close`. Stopping Top Mode does not pause any
-separate scheduled watch; say which schedules, if any, are still active.
+and `run.py session --ended`, then end the run with `run.py close`. Stopping Top Mode does not pause a
+scheduled check; say whether one is still active.
 
 ## 5. Report
 

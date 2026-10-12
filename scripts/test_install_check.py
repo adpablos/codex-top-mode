@@ -155,23 +155,20 @@ class CheckTests(unittest.TestCase):
             self.run_check("--verbose"),
             "Codex: no quota reading (it appears once a Codex session reports its limits).\n"
             "Claude: no quota reading (save its status line as "
-            "references/profile-contract.md shows).\n"
-            "Announcements: watch not set up (optional).\n",
+            "references/profile-contract.md shows).\n",
         )
 
     def test_never_writes_its_state_inside_a_git_worktree(self):
         self.status(used=40, hours=10)
-        (self.private / "watch.json").write_text("{}")
         (self.root / ".git").mkdir()
         for argv in ((), ("--verbose",), ("--json",)):
             err = io.StringIO()
-            with self.subTest(argv=argv), patch.object(check.subprocess, "run") as run:
+            with self.subTest(argv=argv):
                 with self.assertRaises(SystemExit), contextlib.redirect_stderr(err):
                     self.run_check(*argv)
                 self.assertIn("outside Git worktrees", err.getvalue())
-                run.assert_not_called()  # the watch would write its lock and state there
         written = {p.name for p in self.private.iterdir()}
-        self.assertEqual(written, {"claude-status.json", "watch.json"})
+        self.assertEqual(written, {"claude-status.json"})
 
     def test_a_reading_without_a_weekly_window_is_not_a_missing_reading(self):
         path = self.private / "claude-status.json"
@@ -183,10 +180,8 @@ class CheckTests(unittest.TestCase):
 
     def test_never_follows_a_link_for_its_private_files(self):
         self.status(used=40, hours=10)
-        (self.private / "watch.json").write_text("{}")
-        names = ("check-state.json", "watch-state.json", "watch-state.json.lock")
-        for name in (*names, "claude-status.json", "watch.json"):
-            with self.subTest(name=name), patch.object(check.subprocess, "run") as run:
+        for name in ("check-state.json", "claude-status.json"):
+            with self.subTest(name=name):
                 path = self.private / name
                 saved = path.read_bytes() if path.is_file() else None
                 path.unlink(missing_ok=True)
@@ -194,35 +189,10 @@ class CheckTests(unittest.TestCase):
                 path.symlink_to(target)
                 with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                     self.run_check()
-                run.assert_not_called()
                 self.assertFalse(target.exists())
                 path.unlink()
                 if saved is not None:
                     path.write_bytes(saved)
-
-    def test_reports_new_announcements_from_the_watch(self):
-        (self.private / "watch.json").write_text("{}")
-        signal = {
-            "kind": "needs_interpretation",
-            "sourceUrl": "https://x.com/example_pub/status/1",
-            "text": "Reset coming   tomorrow",
-        }
-        done = type("Done", (), {"returncode": 0, "stdout": json.dumps({"signals": [signal]})})
-        with patch.object(check.subprocess, "run", return_value=done):
-            output = self.run_check("--json")
-        messages = json.loads(output)["messages"]
-        url = "https://x.com/example_pub/status/1"
-        self.assertEqual(messages, [f"New announcement to read: {url} (Reset coming tomorrow)"])
-
-    def test_a_failing_watch_is_told_once_a_day_like_other_news(self):
-        (self.private / "watch.json").write_text("{}")
-        failed = type("Failed", (), {"returncode": 1, "stdout": "", "stderr": "bad config"})
-        with patch.object(check.subprocess, "run", return_value=failed):
-            self.assertEqual(self.run_check(), "Announcement watch failed to run: bad config\n")
-            self.assertEqual(self.run_check(), "")
-            self.assertIn("failed to run", self.run_check("--verbose"))
-            self.now += 21 * 3600
-            self.assertIn("failed to run", self.run_check())
 
 
 if __name__ == "__main__":

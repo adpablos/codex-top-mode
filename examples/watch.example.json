@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "enabled": false,
-  "publishers": ["https://x.com/example_pub"],
-  "intervalHours": 4,
-  "failureNoticeHours": 8,
-  "maximumPosts": 5,
-  "retainedIds": 200
-}
