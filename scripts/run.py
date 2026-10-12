@@ -193,6 +193,10 @@ def record_session(run: dict, session_id, agent: str, role: str, ended: bool, no
         )
     session = next((s for s in run["sessions"] if s["id"] == session_id), None)
     require(session or "stoppedAt" not in run, "The run stopped: start no new sessions")
+    require(
+        session is None or (session["agent"], session["role"]) == (agent, role),
+        "That ID is another session's: give a different one",
+    )
     if session is None:
         session = {"id": session_id, "agent": agent, "role": role, "startedAt": iso(now)}
         session["endedAt"] = None

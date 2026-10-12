@@ -182,6 +182,9 @@ class TaskAndSessionTests(unittest.TestCase):
         self.assertEqual([first["id"], second["id"]], ["codex-worker-2", "codex-reviewer-1"])
         run.record_session(self.run, "codex-worker-2", "codex", "worker", True, NOW + 60)
         self.assertEqual(first["endedAt"], iso(NOW + 60))
+        with self.assertRaises(ValueError):
+            run.record_session(self.run, "codex-reviewer-1", "codex", "worker", True, NOW)
+        self.assertIsNone(second["endedAt"])
 
     def test_a_done_task_takes_newer_evidence(self):
         fields = {"project": "website", "objective": "Fix", "doneWhen": "CI", "owner": "me"}

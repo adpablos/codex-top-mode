@@ -262,11 +262,10 @@ The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
 `authorization_ended` or `weekly_renewal`. After it the journal takes no new
 tasks or sessions, only how existing ones ended. Ask
 active owners for a short checkpoint and record each result with `run.py task`
-and `run.py session --ended`. Leave each repository as you found it: back on the
-branch it was on, and without the worktrees you added (`git worktree remove`,
-which refuses one with uncommitted work: report that instead). Keep the
-`quota-coach/` branches; the report names them. Then end the run with
-`run.py close`. Stopping Top Mode does not pause a
+and `run.py session --ended`. Put each repository back on the branch it was on,
+and delete nothing: the report names the `quota-coach/` branches and the
+worktrees you added, which the user can remove (a worktree removal also deletes
+its ignored files). Then end the run with `run.py close`. Stopping Top Mode does not pause a
 scheduled check; say whether one is still active.
 
 ## 5. Report
