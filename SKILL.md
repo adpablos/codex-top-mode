@@ -45,7 +45,7 @@ just cloned, ask the user to approve the command; do not work around the
 refusal. `install.py` links the package into `~/.codex/skills/quota-coach` and
 `~/.claude/skills/quota-coach` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when
 set) for the agents that exist, removes its own links under the former name
-`top-mode`, replaces broken links (left by a moved folder), and never replaces
+`top-mode`, replaces broken links left by a moved Quota Coach folder, and never replaces
 anything else. The user's setup is never touched: it lives apart, in
 `~/.config/quota-coach`. Tell the user to open a new session and ask to set up
 Quota Coach, or, after an update, that the update applies in new sessions.

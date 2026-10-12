@@ -96,7 +96,7 @@ Without `--write` it changes nothing and prints `current`, and the rules it
 would `add` and `remove`. With `--write`, given only with the user's OK, it adds
 them and removes the ones it added before that the profile no longer gives. It
 never removes a rule it did not add: it keeps a record of its own in
-`~/.codex-top-mode/host-rules.json`. A stricter rule of the user's wins in
+`~/.config/quota-coach/host-rules.json`. A stricter rule of the user's wins in
 Claude Code, as a narrower request does here. It refuses a settings file, or a
 folder on its way, that is a link (change what it points to instead). It also
 refuses one that Git would pick up, even when the file is already current: with

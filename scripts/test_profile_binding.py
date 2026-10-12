@@ -45,6 +45,10 @@ class BindingTests(unittest.TestCase):
         (self.root / ".git").mkdir()
         self.assertEqual(private_folder(self.root), former)
         (self.root / ".git").rmdir()
+        (self.root / "dotfiles/.git").mkdir(parents=True)
+        (self.root / ".config").symlink_to(self.root / "dotfiles")
+        self.assertEqual(private_folder(self.root), former)
+        (self.root / ".config").unlink()
         with patch.object(Path, "symlink_to", side_effect=OSError("no links here")):
             self.assertEqual(private_folder(self.root), former)
         self.assertTrue(former.is_dir() and not former.is_symlink())

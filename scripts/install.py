@@ -3,8 +3,9 @@
 Links this package into each agent's personal skills folder (honoring
 CODEX_HOME and CLAUDE_CONFIG_DIR). Agents that are not installed are skipped;
 anything already at the destination that is not this package is left untouched,
-except a broken link, which is replaced. A link to this package (or a broken
-one) under the skill's former name is removed, so the skill is not listed twice.
+except a broken link left by a moved Quota Coach folder, which is replaced. Such
+a link, or one to this package, under the skill's former name is removed, so the
+skill is not listed twice.
 """
 
 import argparse
@@ -32,7 +33,12 @@ def ours(path):
 
 
 def broken(path):
-    return path.is_symlink() and not path.exists()
+    """A link to a missing Quota Coach (or Top Mode) folder, as a move leaves."""
+    return (
+        path.is_symlink()
+        and not path.exists()
+        and Path(os.readlink(path)).name.lstrip(".") in {NAME, FORMER, "codex-" + FORMER}
+    )
 
 
 def install(home, env, agents=None):

@@ -15,7 +15,7 @@ def private_folder(home=None) -> Path:
     folder, former = home / ".config" / "quota-coach", home / ".codex-top-mode"
     if folder.exists() or former.is_symlink() or not former.is_dir():
         return folder
-    if in_worktree(folder):
+    if in_worktree(folder.resolve()):
         return former
     try:
         folder.parent.mkdir(parents=True, exist_ok=True)
