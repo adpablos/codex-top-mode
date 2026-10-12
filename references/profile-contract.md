@@ -269,6 +269,7 @@ and say which one you used:
 
 | Host | Source | Command |
 | --- | --- | --- |
+| Any, with [CodexBar](https://codexbar.app) installed (preferred) | A live reading for Codex and Claude, including Codex's saved resets | Used first, automatically, by `check.py`, `run.py` and `usage_report.py quota` |
 | Codex with a native usage tool (`get_usage_limits`) | Fresh native payload, including saved resets | Save it and run `usage_report.py quota --file F --observed-at TIME`, or pass it to `usage_monitor.py` |
 | Codex without that tool | The latest reading Codex wrote into its local session logs | `python3 -B scripts/usage_report.py quota` |
 | Claude Code (Pro/Max) | The status-line JSON, if the user opted in to save it | `python3 -B scripts/usage_report.py quota --file ~/.codex-top-mode/claude-status.json` |
@@ -284,6 +285,14 @@ presumed lifetime. `snapshot(payload, observed_at)` in
 [usage_monitor.py](../scripts/usage_monitor.py) keeps only window percentages,
 durations and renewal times, the saved-reset count and credit grant/expiry
 times. Do not read authentication files or add an account client.
+
+CodexBar is optional and separate: Quota Coach only runs
+`codexbar usage --provider <codex or claude> --format json` (45 seconds at most)
+and keeps the weekly and five-hour windows, told apart by `windowMinutes`, and
+for Codex the saved-reset count and next expiry (`resetCredits`). Anything else
+in its output, such as the account's identity, is dropped. If it is missing,
+fails or answers something unexpected, the reading falls back to the sources
+below, and Claude without CodexBar or a saved status line is unknown.
 
 Codex log readings are as fresh as the last Codex response on that machine;
 `usage_report.py` uses the newest one however old, reports its age and treats

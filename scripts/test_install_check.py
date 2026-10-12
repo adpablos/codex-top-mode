@@ -10,7 +10,15 @@ from unittest.mock import patch
 
 import check
 import install
+import usage_report
 from usage_monitor import epoch
+
+
+def setUpModule():
+    # A CodexBar installed on the test machine must not change the results.
+    patcher = patch.object(usage_report, "CODEXBAR", "codexbar-not-installed")
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
 
 
 class InstallTests(unittest.TestCase):
@@ -154,8 +162,8 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(
             self.run_check("--verbose"),
             "Codex: no quota reading (it appears once a Codex session reports its limits).\n"
-            "Claude: no quota reading (save its status line as "
-            "references/profile-contract.md shows).\n",
+            "Claude: no quota reading (install CodexBar "
+            "(https://codexbar.app) to see it).\n",
         )
 
     def test_never_writes_its_state_inside_a_git_worktree(self):

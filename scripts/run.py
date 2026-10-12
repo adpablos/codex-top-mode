@@ -19,10 +19,11 @@ from usage_monitor import epoch, observe, weekly
 from usage_report import (
     agent_home,
     claude_tokens,
-    codex_quota,
     codex_tokens,
+    codexbar_quota,
     file_quota,
     iso,
+    latest_quota,
     markdown,
 )
 
@@ -32,6 +33,7 @@ SOURCES = {
     "codex_session_log": ("codex", "Codex local logs"),
     "codex_usage_payload": ("codex", "Codex usage payload"),
     "claude_status_line": ("claude", "Claude Code status line"),
+    "codexbar": (None, "CodexBar"),
 }
 STATUSES = ("planned", "in_progress", "done", "blocked")
 TASK_FIELDS = ("project", "objective", "doneWhen", "owner")
@@ -90,12 +92,14 @@ def current(data: dict):
 
 
 def readings(codex_home: Path, claude_status: Path, quota_file=None, observed_at=None) -> dict:
-    """The newest reading per agent; a saved file replaces its agent's usual source."""
+    """The best reading per agent; a saved file replaces its agent's usual source."""
+    claude = codexbar_quota("claude")
     try:
-        claude = file_quota(claude_status) if claude_status.is_file() else None
+        if claude is None and claude_status.is_file():
+            claude = file_quota(claude_status)
     except (OSError, ValueError):
         claude = None  # A saved line without its capture time is no reading.
-    found = {"codex": codex_quota(codex_home), "claude": claude}
+    found = {"codex": latest_quota("codex", codex_home), "claude": claude}
     if quota_file:
         reading = file_quota(quota_file, observed_at)
         found[SOURCES[reading["source"]][0]] = reading
@@ -312,7 +316,7 @@ def clock(stamp) -> str:
 
 def quota_row(agent: str, before, after) -> str:
     if not before and not after:
-        hint = "; save the Claude Code status line to see it" if agent == "claude" else ""
+        hint = "; install CodexBar to see it" if agent == "claude" else ""
         return f"unknown: no reading{hint}"
 
     def one(reading):
