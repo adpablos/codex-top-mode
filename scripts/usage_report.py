@@ -78,15 +78,14 @@ def add(bucket, usage, fields):
 def codex_tokens(home, since, until):
     """Sum per-response usage from Codex rollout logs, attributed to model/effort."""
     roots = [home / "sessions", home / "archived_sessions"]
-    buckets, sessions, responses, partial = {}, 0, 0, 0
+    buckets, sessions, responses, older = {}, 0, 0, 0
     for path in recent_files(roots, "rollout-*.jsonl", since):
         model, effort, seen, used = "unknown", None, set(), False
         records = any(True for _ in lines(path, ('"token_usage_record"',)))
-        # Older logs' cumulative counter leaves out automatic compactions.
-        compacted = not records and any(
-            row.get("type") == "compacted" and since <= (epoch(row.get("timestamp")) or 0) <= until
-            for row in lines(path, ('"compacted"',))
-        )
+        # The older format only keeps a cumulative counter, which can leave out
+        # automatic compactions, so totals that include it may be a lower bound.
+        if not records and any(True for _ in lines(path, ('"total_token_usage"',))):
+            older += 1
         previous = None
         for row in lines(path, ('"turn_context"', '"token_usage_record"', '"token_count"')):
             kind, payload = row.get("type"), row.get("payload") or {}
@@ -122,12 +121,9 @@ def codex_tokens(home, since, until):
             add(bucket, usage, CODEX_FIELDS)
             responses += 1
             used = True
-        # A compaction alone still used tokens, which this log does not show.
-        sessions += used or compacted
-        if compacted:
-            partial += 1
+        sessions += used
     result = summary("codex", buckets, sessions, responses)
-    result["partialSessions"] = partial
+    result["olderLogs"] = older
     return result
 
 
@@ -338,10 +334,10 @@ def markdown(report):
             f"- {provider['provider']}: {provider['sessions']} sessions, "
             f"{provider['totalTokens']:,} tokens"
         )
-        if provider.get("partialSessions"):
+        if provider.get("olderLogs"):
             out.append(
-                f"  {provider['partialSessions']} of them use older logs that leave out "
-                "automatic compactions, so this total is a lower bound."
+                f"  {provider['olderLogs']} of its logs in this interval use an older format "
+                "that can leave out automatic compactions, so this total may be a lower bound."
             )
     return "\n".join(out)
 

@@ -20,8 +20,9 @@ not a tagged release or evidence of live installation.
   and effort from local Codex and Claude Code logs for run reports. It honors
   `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, and a saved reading must carry its
   capture time (the file's modification time is not trusted). A reading
-  without a weekly window is `unknown`, never `nothing_to_do`. Totals from older
-  Codex logs that leave out automatic compactions are marked as a lower bound.
+  without a weekly window is `unknown`, never `nothing_to_do`. Totals that include
+  older-format Codex logs, which can leave out automatic compactions, are
+  marked as a possible lower bound.
 - Added a [fictional run report](examples/report.example.md).
 
 - Added a private profile reference that setup saves and later sessions recover,

@@ -124,36 +124,25 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(result["totalTokens"], 70)
         self.assertEqual(result["responses"], 2)
 
-    def test_older_codex_logs_with_compactions_are_a_lower_bound(self):
-        def rollout(name, extra):
-            rows = [{"type": "turn_context", "payload": {"model": "model-a"}}, *extra]
-            rows.append(
-                {
-                    "timestamp": "2033-05-18T01:00:00Z",
-                    "type": "event_msg",
-                    "payload": {
-                        "type": "token_count",
-                        "info": {"total_token_usage": usage(50)},
-                    },
-                }
-            )
-            write_lines(self.home / f"sessions/rollout-{name}.jsonl", rows)
-
-        rollout("plain", [])
-        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["partialSessions"], 0)
-        compaction = {"type": "compacted", "payload": {"message": "summary"}}
-        rollout("compacted-before", [{**compaction, "timestamp": "2033-05-17T23:00:00Z"}])
-        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["partialSessions"], 0)
-        rollout("compacted", [{**compaction, "timestamp": "2033-05-18T00:30:00Z"}])
+    def test_older_codex_logs_are_flagged_as_a_possible_lower_bound(self):
+        write_lines(self.home / "sessions/rollout-new.jsonl", codex_rows())
+        self.assertEqual(codex_tokens(self.home, SINCE, NOW)["olderLogs"], 0)
+        older = [
+            {"type": "turn_context", "payload": {"model": "model-a"}},
+            {"type": "compacted", "payload": {"message": "summary"}},
+            {
+                "timestamp": "2033-05-18T01:00:00Z",
+                "type": "event_msg",
+                "payload": {"type": "token_count", "info": {"total_token_usage": usage(50)}},
+            },
+        ]
+        write_lines(self.home / "sessions/rollout-older.jsonl", older)
+        # A log that has not logged any usage yet is not evidence of either format.
+        write_lines(self.home / "sessions/rollout-empty.jsonl", older[:1])
         result = codex_tokens(self.home, SINCE, NOW)
-        self.assertEqual((result["sessions"], result["partialSessions"]), (3, 1))
-        # A compaction with no other usage in the interval is still partial.
-        late = {**compaction, "timestamp": "2033-05-18T11:00:00Z"}
-        write_lines(self.home / "sessions/rollout-only-compaction.jsonl", [late])
-        result = codex_tokens(self.home, SINCE, NOW)
-        self.assertEqual((result["sessions"], result["partialSessions"]), (4, 2))
+        self.assertEqual((result["sessions"], result["olderLogs"]), (2, 1))
         report = {"since": "s", "until": "u", "providers": [result]}
-        self.assertIn("2 of them use older logs", markdown(report))
+        self.assertIn("1 of its logs in this interval use an older format", markdown(report))
 
     def test_claude_messages_count_once_and_skip_synthetic(self):
         def message(key, model="claude-x", stamp="2033-05-18T01:00:00Z"):
