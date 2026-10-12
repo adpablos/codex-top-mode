@@ -177,6 +177,7 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
             all(fields.get(k) for k in TASK_FIELDS),
             "A new task needs --project, --objective, --done-when and --owner",
         )
+    require(not fields.get("needsYou") or status == "blocked", "--needs-you goes with blocked")
     updated = {**(task or {"id": task_id, "status": None, "events": []})}
     updated.update({k: v for k, v in fields.items() if v and k != "status"})
     require(updated["project"] in run["projects"], "Unknown project: add it to the setup first")
@@ -188,8 +189,13 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
             updated.pop("evidence", None)
         if status != "blocked":
             updated.pop("blocker", None)
+            updated.pop("needsYou", None)
         updated["status"] = status
         updated["events"] = [*updated["events"], {"at": iso(now), "status": status}]
+    if status == "blocked" and fields.get("blocker"):
+        # A new blocker says again whether it waits on the user.
+        updated.pop("needsYou", None)
+        updated.update({"needsYou": True} if fields.get("needsYou") else {})
     if task is None:
         run["tasks"].append(updated)
     else:
@@ -220,7 +226,8 @@ def owner(run: dict, name: str) -> str:
 
 
 def task_view(run: dict, task: dict) -> dict:
-    view = {k: task[k] for k in ("id", "project", "objective", "evidence", "blocker") if k in task}
+    keys = ("id", "project", "objective", "evidence", "blocker", "needsYou")
+    view = {k: task[k] for k in keys if k in task}
     return {**view, "owner": owner(run, task["owner"])}
 
 
@@ -267,6 +274,7 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         "tasks": {
             s: [task_view(run, t) for t in run["tasks"] if t["status"] == s] for s in STATUSES
         },
+        "waitingOnYou": [task_view(run, t) for t in run["tasks"] if t.get("needsYou")],
         "activeSessions": len(active),
         "freeThreads": max(0, run["maximumActiveThreads"] - busy),
         "quota": quota_now(run, found, now),
@@ -290,6 +298,10 @@ def close(run: dict, found: dict, now: float) -> dict:
     run["endedAt"] = iso(now)
     run["quotaAfter"] = {agent: found.get(agent) for agent in run["agents"]}
     return run
+
+
+def sentence(text: str) -> str:
+    return text if text.endswith((".", "?", "!")) else f"{text}."
 
 
 def clock(stamp) -> str:
@@ -324,26 +336,37 @@ def report(run: dict, tokens: str) -> str:
     out = [
         f"# Top Mode report, {clock(run['startedAt'])}",
         "",
-        "<!-- Skeleton from the run journal. Rewrite it in the user's language: for each",
-        "project, before and verified after, why it matters, what is pending and who acts",
-        "next. Keep the facts in the tables. -->",
-        "",
-        "## What changed",
+        "<!-- Skeleton from the run journal. Rewrite it in the user's language: first what",
+        "waits on the user, each with your recommendation; then for each project, before",
+        "and verified after, why it matters, what is pending and who acts next. Keep the",
+        "facts in the tables. -->",
         "",
     ]
+    waiting = [t for t in run["tasks"] if t.get("needsYou")]
+    if waiting:
+        out += ["## Waiting on you", ""]
+        for t in waiting:
+            label = run["projects"][t["project"]]
+            out.append(f"- **{label}:** {sentence(t['objective'])} {sentence(t['blocker'])}")
+        out.append("")
+    out += ["## What changed", ""]
     for project, label in run["projects"].items():
         tasks = [t for t in run["tasks"] if t["project"] == project]
         if tasks:
             out.append(f"**{label}**")
         for t in tasks:
-            who = owner(run, t["owner"])
+            who = "you" if t.get("needsYou") else owner(run, t["owner"])
             if t["status"] == "done":
-                out.append(f"- Done: {t['objective']}. Verified: {t['evidence']}.")
+                out.append(
+                    f"- Done: {sentence(t['objective'])} Verified: {sentence(t['evidence'])}"
+                )
             elif t["status"] == "blocked":
-                out.append(f"- Blocked: {t['objective']}. {t['blocker']}. Next: {who}.")
+                out.append(
+                    f"- Blocked: {sentence(t['objective'])} {sentence(t['blocker'])} Next: {who}."
+                )
             else:
                 state = t["status"].replace("_", " ")
-                out.append(f"- Not finished ({state}): {t['objective']}. Next: {who}.")
+                out.append(f"- Not finished ({state}): {sentence(t['objective'])} Next: {who}.")
         if tasks:
             out.append("")
     if not run["tasks"]:
@@ -428,6 +451,9 @@ def main() -> None:
     work.add_argument("--status", choices=STATUSES, required=True)
     for name in ("project", "objective", "done-when", "owner", "evidence", "blocker"):
         work.add_argument(f"--{name}")
+    work.add_argument(
+        "--needs-you", action="store_true", help="Blocked on the user's decision or action"
+    )
     one = commands.add_parser("session", parents=[private], help="Record a session the run uses")
     one.add_argument("id")
     one.add_argument("--agent", choices=AGENTS, required=True)
@@ -468,6 +494,7 @@ def main() -> None:
                 "owner": args.owner,
                 "evidence": args.evidence,
                 "blocker": args.blocker,
+                "needsYou": args.needs_you,
             }
             task = record_task(run, args.id, fields, now)
             result = {**task, "owner": owner(run, task["owner"])}
