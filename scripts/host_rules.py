@@ -257,7 +257,8 @@ def codex_rules(profile: dict, package: Path = PACKAGE) -> list:
         for action, patterns in CODEX.items()
         for pattern in patterns
     ]
-    # Checking host_rules.py runs in the sandbox; writing leaves it, so Codex asks.
+    # host_rules.py gets no rule: checking runs in the sandbox, and writing touches
+    # the private record or .codex, which the sandbox protects, so Codex asks.
     rules += [
         (["python3", "-B", f"{folder}/scripts/{script}", *rest], "allow", "Quota Coach itself")
         for folder in package_folders(package)
@@ -382,8 +383,6 @@ def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package
     if write:
         outside_git(folder, path)
     if write and not current:
-        mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
-        write_json(path, apply(settings, change), mode)
         mine = state["claude"].get(str(path), {})
         state["claude"][str(path)] = {
             k: sorted(
@@ -391,8 +390,12 @@ def sync_claude(profile: dict, folder: Path, private: Path, write: bool, package
             )
             for k in rules
         }
+        # The record first: it lives outside the project, so a sandboxed agent
+        # (Codex) is stopped here and asks before the settings change.
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         write_json(state_path, state, 0o600)
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
+        write_json(path, apply(settings, change), mode)
     return {
         "agent": "claude",
         "settings": str(path),

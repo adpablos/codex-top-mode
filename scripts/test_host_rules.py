@@ -180,6 +180,12 @@ class SyncTests(unittest.TestCase):
         self.sync(profile())
         self.assertEqual((self.private / "host-rules.json").stat().st_mode & 0o077, 0)
 
+    def test_nothing_changes_when_the_private_record_cannot_be_written(self):
+        self.private.write_text("")  # A file where the folder should be.
+        with self.assertRaises(OSError):
+            self.sync(profile())
+        self.assertFalse(self.settings.exists())
+
     def test_refuses_a_linked_settings_file_or_a_broken_one(self):
         self.settings.parent.mkdir()
         target = Path(self.tmp.name) / "elsewhere.json"
