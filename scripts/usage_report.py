@@ -1,4 +1,5 @@
-"""Read local agent logs: token totals per model and a quota-based suggestion.
+"""Read local agent logs: token totals per model, a quota-based suggestion and
+whether the Codex plan has been enough.
 
 Read-only. Prints counts only: no prompts, paths, session or account IDs.
 """
@@ -12,9 +13,12 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import plan_fit
 from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
 
 WEEK_MINUTES = 10080
+# Plan sizes and prices, with their sources and the date they were checked.
+PLANS = Path(__file__).resolve().parent.parent / "references" / "plans.json"
 CODEX_FIELDS = (
     "input_tokens",
     "cached_input_tokens",
@@ -230,6 +234,51 @@ def summary(provider, buckets, sessions, responses):
     }
 
 
+def quota_rows(path):
+    """(timestamp, rate_limits) for each reading of the account's allowance in one log.
+
+    A subagent's log starts with a copy of its parent's history: bursts of old
+    readings that share one exact timestamp. A timestamp that repeats in the
+    same log marks such a copy, so those readings are left out.
+    """
+    rows = []
+    for row in lines(path, ('"rate_limits"',)):
+        limits = (row.get("payload") or {}).get("rate_limits")
+        if (
+            isinstance(limits, dict)
+            # Model-specific buckets (codex_<model>) are not the account's allowance.
+            and limits.get("limit_id") in (None, "codex")
+            and epoch(row.get("timestamp"))
+        ):
+            rows.append((row["timestamp"], limits))
+    repeated = Counter(text for text, _ in rows)
+    return [(text, limits) for text, limits in rows if repeated[text] == 1]
+
+
+def load_plans(path=PLANS):
+    """The plans file, or None if it cannot be read: the advice then skips the comparison."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def codex_weekly_readings(home):
+    """Every weekly reading in Codex's local logs: (time, used %, renewal time, plan)."""
+    found = []
+    roots = [home / "sessions", home / "archived_sessions"]
+    for path in recent_files(roots, "rollout-*.jsonl", 0):
+        for text, limits in quota_rows(path):
+            for slot in ("primary", "secondary"):
+                window = limits.get(slot)
+                if not isinstance(window, dict) or window.get("window_minutes") != WEEK_MINUTES:
+                    continue
+                used, renews = number(window.get("used_percent")), number(window.get("resets_at"))
+                if used is not None and renews is not None:
+                    found.append((epoch(text), used, renews, limits.get("plan_type")))
+    return found
+
+
 def codex_quota(home):
     """Newest weekly/5-hour reading that Codex wrote into its local session logs.
 
@@ -243,18 +292,9 @@ def codex_quota(home):
     for path in recent_files(roots, "rollout-*.jsonl", 0):
         if best and path.stat().st_mtime < best[0]:
             break
-        found = []
-        for row in lines(path, ('"rate_limits"',)):
-            limits = (row.get("payload") or {}).get("rate_limits")
-            # Model-specific buckets (codex_<model>) are not the account's allowance.
-            if isinstance(limits, dict) and limits.get("limit_id") in (None, "codex"):
-                found.append((row.get("timestamp"), limits))
-        # A subagent's log starts with a copy of its parent's history, written at once:
-        # those readings share one time, which is not when they were taken.
-        times = Counter(text for text, _ in found)
-        for text, limits in found:
+        for text, limits in quota_rows(path):
             stamp = epoch(text)
-            if stamp and times[text] == 1 and (best is None or stamp > best[0]):
+            if best is None or stamp > best[0]:
                 best = (stamp, text, limits)
     if best is None:
         return None
@@ -427,7 +467,10 @@ def main():
     quota.add_argument("--observed-at", help="When --file was captured, if it doesn't say")
     quota.add_argument("--min-unused", type=float, default=25)
     quota.add_argument("--within-hours", type=float, default=36)
-    for command in (tokens, quota):
+    plan = commands.add_parser("plan", help="Has the Codex plan been enough? History and verdict")
+    plan.add_argument("--windows", type=int, default=plan_fit.WINDOWS, help="How many to judge")
+    plan.add_argument("--markdown", action="store_true")
+    for command in (tokens, quota, plan):
         command.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
         command.add_argument(
             "--claude-home", type=Path, default=agent_home("CLAUDE_CONFIG_DIR", ".claude")
@@ -448,6 +491,16 @@ def main():
             ],
         }
         print(markdown(report) if args.markdown else json.dumps(report, indent=2))
+        return
+    if args.command == "plan":
+        if args.windows < plan_fit.MINIMUM:
+            parser.error(f"--windows needs at least {plan_fit.MINIMUM}")
+        readings = codex_weekly_readings(args.codex_home)
+        advice = plan_fit.advise_plan(readings, now, args.windows, load_plans())
+        roots = [args.codex_home / "sessions", args.codex_home / "archived_sessions"]
+        # Unreadable without extra libraries; the history may be shorter than it looks.
+        advice["compressedLogs"] = len(recent_files(roots, "rollout-*.jsonl.zst", 0))
+        print(plan_fit.markdown(advice) if args.markdown else json.dumps(advice, indent=2))
         return
     if args.file:
         if args.observed_at and epoch(args.observed_at) is None:

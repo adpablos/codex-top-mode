@@ -1,6 +1,6 @@
 # Vision and principles
 
-Read this before changing Top Mode. Every change should move toward this picture
+Read this before changing Quota Coach. Every change should move toward this picture
 and keep these principles; when one conflicts with another, the earlier one wins.
 
 ## Goal
@@ -11,7 +11,7 @@ without babysitting and **without losing control**.
 
 ## The user's journey
 
-1. **Install once.** One step makes Top Mode available in Codex and Claude Code.
+1. **Install once.** One step makes Quota Coach available in Codex and Claude Code.
 2. **Set up once, by conversation.** The agent looks at the user's workspace,
    proposes projects, priorities and a permission level, and the user approves.
    The setup stays private and is updated as things change.
@@ -21,6 +21,9 @@ without babysitting and **without losing control**.
 4. **Start with one sentence.** "Start Top Mode for 2 hours."
 5. **Know what happened.** Every run ends with a short report: before and after,
    what is pending, and what it used.
+6. **Know if your plan fits.** Ask, and get a verdict on the plan from its own
+   weekly history, with the evidence, how the other plans compare and what a
+   coming change would mean.
 
 ## Principles
 
@@ -42,7 +45,7 @@ without babysitting and **without losing control**.
 
 ## Not goals
 
-- A task manager: Top Mode reads priorities from where the user already keeps them.
+- A task manager: Quota Coach reads priorities from where the user already keeps them.
 - Automatic model routing: the agent picks models within the host's options.
 - A hosted service, cloud checker or anything that needs an extra account.
 - Spending quota for its own sake: useful outcomes come first.
@@ -53,11 +56,15 @@ Done: plain-language docs, private setup that later sessions recover, quota
 suggestion and token report from local logs, manual runs with deadlines and
 reports, an experimental watch for announced Codex resets that only notifies,
 quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
-documentation links, macOS), one-step install for Codex and Claude Code, and a
-quiet `check` command to schedule with the agent's own scheduler.
+documentation links, macOS), one-step install for Codex and Claude Code, a
+quiet `check` command to schedule with the agent's own scheduler, a verdict
+on whether the Codex plan has been enough, from its weekly history, compared
+with the other Codex plans, and a guided setup: the agent discovers projects and
+where their work lives, and the user picks one of three permission levels.
 
 Next, in small pull requests:
 
-1. **Guided setup.** The agent discovers projects and pending work from the
-   workspace; three permission levels with optional detail; the profile points
-   to where work lives instead of copying task lists.
+1. **Run journal.** `run.py` records each run's deadline, quota, tasks and
+   sessions privately, answers "status" from it and writes the report's
+   skeleton, so the report comes from data and the plan advice can tell Top
+   Mode's use apart from the user's own.

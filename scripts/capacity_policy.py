@@ -1,27 +1,36 @@
-"""Check a human-approved Top Mode profile: is it valid, what is ready, what may an action do."""
+"""Check a human-approved Quota Coach profile: is it valid, and what may an action do."""
 
 import argparse
 import hashlib
 import json
 import time
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from usage_monitor import epoch, number
 
-ACTIONS = {
-    "read",
-    "edit",
-    "checks",
-    "commit",
-    "publish_pr",
-    "review",
-    "merge",
-    "install",
-    "access",
-    "finance",
-    "destruction",
-    "redeem_reset",
+CAREFUL = {
+    "read": "allowed",
+    "edit": "allowed",
+    "checks": "allowed",
+    "commit": "allowed",
+    "publish_pr": "ask",
+    "review": "ask",
+    "merge": "ask",
+    "install": "ask",
+    "access": "ask",
+    "finance": "deny",
+    "destruction": "deny",
+    "redeem_reset": "ask",
 }
+LEVELS = {
+    "careful": CAREFUL,
+    "balanced": {**CAREFUL, "publish_pr": "allowed", "review": "allowed"},
+    "autonomous": {**CAREFUL, "publish_pr": "allowed", "review": "allowed", "merge": "allowed"},
+}
+ACTIONS = set(CAREFUL)
+DECISIONS = {"allowed", "ask", "deny"}
+GITHUB = {"github-issues", "github-prs", "github-alerts"}
+TIERS = {"repeatable", "ordinary", "difficult"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -33,148 +42,143 @@ def text(value) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def fields(section: dict, required: set, optional: set, where: str) -> None:
+    missing, unknown = required - set(section), set(section) - required - optional
+    require(not missing, f"Missing in {where}: {', '.join(sorted(missing))}")
+    require(not unknown, f"Unknown in {where}: {', '.join(sorted(unknown))}")
+
+
+def absolute(value) -> bool:
+    """An absolute path with no `..`, so comparing folders by name is safe."""
+    return text(value) and PurePath(value).is_absolute() and ".." not in PurePath(value).parts
+
+
+def work_source(value) -> bool:
+    """A GitHub source, or a file inside the project such as ROADMAP.md."""
+    if not text(value):
+        return False
+    path = PurePath(value)
+    return value in GITHUB or (not path.is_absolute() and ".." not in path.parts)
+
+
 def validate_profile(profile: dict) -> None:
+    require(isinstance(profile, dict), "The profile must be a JSON object")
     require(
-        isinstance(profile, dict)
-        and type(profile.get("schemaVersion")) is int
-        and profile["schemaVersion"] == 1,
+        not (type(profile.get("schemaVersion")) is int and profile["schemaVersion"] == 1),
+        "This setup uses the old format (schemaVersion 1). Set it up again; "
+        "the agent can carry over its projects, exclusions and limits",
+    )
+    require(
+        type(profile.get("schemaVersion")) is int and profile["schemaVersion"] == 2,
         "Unsupported profile version",
     )
-    for key in ("authorization", "sources", "projects", "actions", "limits"):
-        require(isinstance(profile.get(key), dict), f"Missing profile section: {key}")
+    fields(
+        profile,
+        {"schemaVersion", "authorization", "level", "limits", "projects"},
+        {"actions", "excluded", "models"},
+        "the profile",
+    )
     auth = profile["authorization"]
-    approved, expires = epoch(auth.get("approvedAt")), epoch(auth.get("validUntil"))
+    require(isinstance(auth, dict), "Invalid authorization")
+    fields(auth, {"source", "approvedAt", "validUntil"}, set(), "authorization")
+    approved, expires = epoch(auth["approvedAt"]), epoch(auth["validUntil"])
     require(
-        text(auth.get("source"))
+        text(auth["source"])
         and approved is not None
-        and "validUntil" in auth
         and (auth["validUntil"] is None or (expires is not None and approved < expires)),
-        "Human authorization needs an explicit expiration policy",
-    )
-    # Older profiles may still carry announcement fields; they are ignored.
-    backlog_sources = profile["sources"].get("backlog")
-    require(
-        isinstance(backlog_sources, list)
-        and backlog_sources
-        and all(text(v) for v in backlog_sources),
-        "Missing backlog sources",
-    )
-    projects = profile["projects"]
-    require(bool(projects), "At least one named project is required")
-    for project, config in projects.items():
-        require(
-            text(project)
-            and isinstance(config, dict)
-            and text(config.get("label"))
-            and isinstance(config.get("contextSources"), list)
-            and all(text(v) for v in config["contextSources"]),
-            "Invalid project context",
-        )
-    excluded = profile.get("excludedProjects")
-    require(
-        isinstance(excluded, list) and all(text(p) and p in projects for p in excluded),
-        "Exclusions must name registered projects",
-    )
-    actions = profile["actions"]
-    require(
-        bool(actions)
-        and all(
-            k in ACTIONS and isinstance(v, str) and v in {"allowed", "ask", "deny"}
-            for k, v in actions.items()
-        ),
-        "Invalid action policy",
+        "Human authorization needs a source, an approval time and an explicit expiry or null",
     )
     require(
-        actions.get("redeem_reset", "deny") != "allowed",
+        isinstance(profile["level"], str) and profile["level"] in LEVELS,
+        "The level must be careful, balanced or autonomous",
+    )
+    actions = profile.get("actions", {})
+    require(
+        isinstance(actions, dict)
+        and all(k in ACTIONS and isinstance(v, str) and v in DECISIONS for k, v in actions.items()),
+        "Invalid action exception",
+    )
+    require(
+        actions.get("redeem_reset") != "allowed",
         "Reset redemption always requires current human confirmation",
     )
     limits = profile["limits"]
-    hours = number(limits.get("maximumHours"))
+    require(isinstance(limits, dict), "Invalid limits")
+    fields(
+        limits,
+        {"maximumHours", "maximumActiveThreads", "stopOnScheduledWeeklyRenewal"},
+        set(),
+        "limits",
+    )
+    hours = number(limits["maximumHours"])
     require(hours is not None and hours > 0, "Invalid limit: maximumHours")
     require(
-        type(limits.get("maximumActiveThreads")) is int and limits["maximumActiveThreads"] > 0,
+        type(limits["maximumActiveThreads"]) is int and limits["maximumActiveThreads"] > 0,
         "Invalid active-thread limit",
     )
     require(
-        type(limits.get("stopOnScheduledWeeklyRenewal")) is bool,
+        type(limits["stopOnScheduledWeeklyRenewal"]) is bool,
         "The scheduled-weekly-renewal policy must be explicit",
     )
-    tiers = limits.get("modelTiers")
+    excluded = profile.get("excluded", [])
     require(
-        isinstance(tiers, dict)
-        and set(tiers) == {"repeatable", "ordinary", "difficult"}
-        and all(text(v) for v in tiers.values()),
-        "Three model tiers are required",
+        isinstance(excluded, list) and all(absolute(p) for p in excluded),
+        "Exclusions must be absolute folder paths without ..",
     )
-    backlog = profile.get("backlog")
-    require(isinstance(backlog, list), "A backlog list is required")
-    ids = set()
-    for task in backlog:
-        require(isinstance(task, dict), "Invalid backlog item")
+    projects = profile["projects"]
+    require(isinstance(projects, dict) and projects, "At least one project is required")
+    for name, project in projects.items():
+        where = f"project {name}"
+        require(text(name) and isinstance(project, dict), f"Invalid {where}")
+        fields(project, {"label", "path", "work", "priority"}, {"notes"}, where)
+        require(text(project["label"]), f"{where} needs a label")
+        require(absolute(project["path"]), f"{where} needs an absolute path without ..")
+        path = PurePath(project["path"])
         require(
-            all(
-                text(task.get(k))
-                for k in ("id", "project", "objective", "benefit", "doneWhen", "owner")
-            ),
-            "Backlog items require a goal, benefit, completion criterion and owner",
+            not any(PurePath(p) == path or PurePath(p) in path.parents for p in excluded),
+            f"{where} is inside an excluded folder",
         )
         require(
-            task["id"] not in ids and task["project"] in projects,
-            "Task IDs must be unique and projects registered",
-        )
-        ids.add(task["id"])
-        require(
-            type(task.get("ready")) is bool
-            and "blocker" in task
-            and (task.get("blocker") is None or text(task["blocker"])),
-            "Invalid readiness",
+            isinstance(project["work"], list)
+            and project["work"]
+            and all(work_source(s) for s in project["work"]),
+            f"{where} needs work sources: GitHub ones or files inside the project",
         )
         require(
-            isinstance(task.get("status"), str)
-            and task["status"] in {"pending", "in_progress", "done"}
-            and type(task.get("priority")) is int
-            and task["priority"] >= 0,
-            "Invalid task status or priority",
+            type(project["priority"]) is int and project["priority"] >= 0,
+            f"{where} needs a priority (0 or more, lower first)",
         )
+        require(text(project.get("notes", "-")), f"{where} has empty notes")
+    models = profile.get("models", {})
+    require(
+        isinstance(models, dict)
+        and all(
+            text(agent)
+            and isinstance(tiers, dict)
+            and tiers
+            and all(t in TIERS and text(m) for t, m in tiers.items())
+            for agent, tiers in models.items()
+        ),
+        "Models are optional: per agent, repeatable, ordinary or difficult model names",
+    )
+
+
+def effective_actions(profile: dict) -> dict:
+    """The level's decisions with the user's exceptions on top."""
+    return {**LEVELS[profile["level"]], **profile.get("actions", {})}
 
 
 def action_decision(profile: dict, project: str, action: str) -> str:
     """A policy ceiling, never a replacement for action-specific consent."""
     validate_profile(profile)
-    if project not in profile["projects"] or project in profile["excludedProjects"]:
+    if project not in profile["projects"]:
         return "deny"
-    return profile["actions"].get(action, "deny")
-
-
-def ready_work(profile: dict) -> list[str]:
-    busy = {t["owner"] for t in profile["backlog"] if t["status"] == "in_progress"}
-    slots = max(
-        0,
-        profile["limits"]["maximumActiveThreads"]
-        - sum(t["status"] == "in_progress" for t in profile["backlog"]),
-    )
-    if not slots:
-        return []
-    chosen = []
-    for task in sorted(profile["backlog"], key=lambda t: (t["priority"], t["id"])):
-        if (
-            task["status"] == "pending"
-            and task["ready"]
-            and not task["blocker"]
-            and task["project"] not in profile["excludedProjects"]
-            and task["owner"] not in busy
-        ):
-            chosen.append(task["id"])
-            busy.add(task["owner"])
-            if len(chosen) == slots:
-                break
-    return chosen
+    return effective_actions(profile).get(action, "deny")
 
 
 def fingerprint(profile: dict) -> str:
-    """Changes when anything the human approved changes; backlog progress does not."""
-    approved = {key: value for key, value in profile.items() if key != "backlog"}
-    return hashlib.sha256(json.dumps(approved, sort_keys=True).encode()).hexdigest()[:16]
+    """Changes whenever anything the human approved changes."""
+    return hashlib.sha256(json.dumps(profile, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def main() -> None:
@@ -195,7 +199,8 @@ def main() -> None:
     result = {
         "authorizationActive": epoch(auth["approvedAt"]) <= now
         and (expires is None or now < expires),
-        "readyWork": ready_work(profile),
+        "level": profile["level"],
+        "actions": effective_actions(profile),
         "fingerprint": fingerprint(profile),
     }
     if args.action:

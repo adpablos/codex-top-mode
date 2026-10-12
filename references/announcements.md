@@ -1,6 +1,6 @@
 # Reset announcements (optional, Codex)
 
-Top Mode works without this. It is an optional, experimental watch for one kind
+Quota Coach works without this. It is an optional, experimental watch for one kind
 of news: OpenAI staff sometimes announce on X that Codex usage will be reset.
 An announcement that arrives before the reset is the one signal that lets you
 use what is left before it is restored anyway.
