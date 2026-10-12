@@ -59,12 +59,12 @@ quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
 documentation links, macOS), one-step install for Codex and Claude Code, a
 quiet `check` command to schedule with the agent's own scheduler, a verdict
 on whether the Codex plan has been enough, from its weekly history, compared
-with the other Codex plans, and a guided setup: the agent discovers projects and
-where their work lives, and the user picks one of three permission levels.
+with the other Codex plans, a guided setup (the agent discovers projects and
+where their work lives, and the user picks one of three permission levels), and
+a private journal of each run that answers "status" and drafts the report.
 
 Next, in small pull requests:
 
-1. **Run journal.** `run.py` records each run's deadline, quota, tasks and
-   sessions privately, answers "status" from it and writes the report's
-   skeleton, so the report comes from data and the plan advice can tell Top
-   Mode's use apart from the user's own.
+1. **Plan advice from the journal.** Tell Top Mode's use apart from the user's
+   own, say in `check` when the plan clearly doesn't fit, and do the same for
+   Claude Code once its status line is kept over time.

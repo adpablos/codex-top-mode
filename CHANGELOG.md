@@ -5,6 +5,13 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Added `scripts/run.py`, a private journal of each Top Mode run
+  (`~/.codex-top-mode/runs.json`). `start` fixes the deadline (the hours you
+  asked, capped by your limits and, if you chose so, the weekly renewal) and
+  takes the quota baseline; `task` and `session` record the work; `status`
+  answers from the journal and says when to stop; `stop` closes the run and
+  writes the report's skeleton, with quota before and after and tokens, so the
+  report comes from data instead of the agent's memory.
 - Guided setup with a smaller profile (`schemaVersion: 2`). The agent looks at
   the folders you point it to, proposes your projects and where their pending
   work lives (GitHub issues, pull requests and security alerts, or files such as

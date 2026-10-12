@@ -137,25 +137,41 @@ check never starts work by itself, whatever the news.
 
 ## 3. Run
 
-Before the first assignment:
+A private journal keeps each run's deadline, quota, tasks and sessions, so
+status and the report come from data. Start with:
 
-1. Confirm the request is covered by the approved profile and note the
-   **start time** and the profile's `fingerprint` from `capacity_policy.py`. Set the **deadline**: start + requested duration, capped by
-   `limits.maximumHours` and `authorization.validUntil`. If no duration is given
-   and none was approved as default, ask.
-2. Take a **quota baseline** with the same source as in step 2, if any.
-3. Read each project's `work` sources, most important project first, and list
+```sh
+python3 -B <this folder>/scripts/run.py start --hours <H> --agents <codex and/or claude>
+```
+
+`--agents` names whose quota the run spends: yours and any agent you delegate
+to. If no duration was given and none was approved as default, ask first. It
+refuses when the setup's approval is not active or another run is still open
+(close that one with `run.py stop`). It fixes the **deadline**: the hours asked,
+capped by `maximumHours`, `validUntil` and, when the setup says so, the weekly
+renewal; nothing extends it. On Codex with its own usage payload, pass it saved
+as `--quota-file` here and on every `status`, to notice an early renewal.
+
+Then:
+
+1. Read each project's `work` sources, most important project first, and list
    ready work: objective, benefit, done criteria, owner, blocker. Finish pending
    work before starting new work. Show the plan in three to five lines and start;
    the user can change it or stop at any time.
+2. Record each task when you plan it and whenever its state changes:
+   `run.py task <id> --status planned|in_progress|done|blocked`. A new task also
+   takes `--project`, `--objective`, `--done-when` and `--owner`; `done` needs
+   `--evidence` you checked yourself (tests, diff, file), `blocked` a `--blocker`.
+3. Record each session you start or reuse:
+   `run.py session <id> --agent codex|claude --role worker|reviewer`, and again
+   with `--ended` when it finishes. Its ID stays in the private journal.
+4. Before each assignment, run `run.py status`. Stop when it says `stopNow`
+   (deadline, setup changed, approval ended, weekly allowance renewed). Delegate
+   only while `freeThreads` is above zero, and check the action's decision with
+   `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`.
 
-Then, until the deadline or another stop:
+While working:
 
-- Before each assignment check: time left, the action's decision from
-  `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`,
-  the owner is free, and active sessions (including yours) stay within
-  `maximumActiveThreads`. A different `fingerprint` than at the start means the
-  profile changed: stop.
 - Prefer continuing a session that already owns the task. Delegate only bounded,
   independent work, through your host's supported tools; otherwise work serially.
 - An owner is a person, "anyone", or a session you can see. If you cannot tell
@@ -168,31 +184,35 @@ Then, until the deadline or another stop:
 - Pick models by task shape, using the profile's `models` for your agent when
   given: an economical model for repeatable, easily checked work; stronger ones
   for ambiguity or after a failed check.
-- At each checkpoint verify the outcome yourself (tests, diff, file) before
-  marking it done; keep blockers and the next owner.
-- On Codex with native quota, feed each fresh reading to the observer described
-  in the [run contract](references/profile-contract.md#run); it
-  stops the run when the weekly allowance renews early or on schedule.
 
-After an interruption (closed laptop, restarted agent), check the frozen deadline
-and permissions before anything else; never renew a deadline on resume.
+After an interruption (closed laptop, restarted agent), run `run.py status`
+before anything else: the deadline is frozen in the journal.
 
-Answer "status" at any time with: deadline and time left, what is verified done,
-what is in progress and by whom, blockers, and the latest quota reading with its age.
+Answer "status" from `run.py status`: deadline and time left, what is verified
+done, what is in progress and by whom, blockers, and the latest quota reading
+with its age.
 
 ## 4. Stop
 
-Stop assigning new work when the deadline arrives, the user says stop or revokes
-permission, the profile changes, or the quota observer says the allowance renewed.
-Ask active owners for a short checkpoint, collect results, and keep everything
-needed to resume. Stopping Top Mode does not pause any separate scheduled watch;
-say which schedules, if any, are still active.
+Stop assigning new work when `status` says so or the user says stop. Ask active
+owners for a short checkpoint, collect results and record them, then close the
+run:
+
+```sh
+python3 -B <this folder>/scripts/run.py stop --reason <reason>
+```
+
+The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
+`authorization_ended` or `weekly_renewal`. Stopping Top Mode does not pause any
+separate scheduled watch; say which schedules, if any, are still active.
 
 ## 5. Report
 
-Finish every run with a short report in the user's language, grouped by project,
-following the [run-report contract](references/profile-contract.md#run-report)
-and the [example](examples/report.example.md):
+`stop` writes the report's skeleton in the private folder and prints its path:
+the tasks, the run's times, quota before and after, sessions and tokens. Turn it
+into a short report in the user's language, grouped by project, following the
+[run-report contract](references/profile-contract.md#run-report) and the
+[example](examples/report.example.md):
 
 - **Before → after**, and why it matters. Keep attempted or blocked work separate
   from delivered work; tested, reviewed, merged and used in real life are
@@ -200,10 +220,9 @@ and the [example](examples/report.example.md):
 - **Pending and next step**, with who acts next.
 - **Setup changes** you noticed (a new project, a finished roadmap, a source
   that moved): propose them; change the profile only with the user's approval.
-- **The run:** start, deadline, actual stop and why; quota before and after with
-  reading times; models and effort actually used; sessions started and finished.
-- **Tokens:** `python3 -B <this folder>/scripts/usage_report.py tokens --since <start> --markdown`.
-  It counts every session on this machine in that interval; say so.
+- **The run** facts as the skeleton gives them, plus the models and effort
+  actually used. Tokens count every session on this machine in that interval;
+  say so.
 
 Write `unknown` with the reason instead of guessing. Quota is account-wide, so
 never present its change as this run's exact cost. Keep reports private.

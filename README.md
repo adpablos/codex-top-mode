@@ -123,6 +123,7 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [scripts/plan_fit.py](scripts/plan_fit.py) | Rebuilds weekly windows from quota readings, judges the plan and compares the others. |
 | [references/plans.json](references/plans.json) | Codex plan prices and sizes, with sources and the date they were checked. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
+| [scripts/run.py](scripts/run.py) | Keeps a private journal of each run: deadline, quota, tasks and sessions. Answers "status" and drafts the report. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
 | [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, and what an action needs. |
 | [scripts/public_watch.py](scripts/public_watch.py) | Optional: watches for announced Codex resets and only tells you. |
@@ -138,8 +139,8 @@ Full example: [examples/report.example.md](examples/report.example.md).
 - Token counts come from local logs on this machine. Work done elsewhere isn't counted.
 - Quota is shared by everything on your account, so before/after numbers include
   any other work you did meanwhile. The report says so.
-- Plan advice covers Codex only for now, and counts Top Mode runs as your own use
-  until runs are recorded. Providers publish no exact limits: plans are compared
+- Plan advice covers Codex only for now and still counts Top Mode runs as your
+  own use. Providers publish no exact limits: plans are compared
   by the multiples of Plus that OpenAI has announced, never in tokens. Prices
   and sizes change; the file says when they were checked.
 - These are instructions for an agent, not a sandbox. Your agent's own permission

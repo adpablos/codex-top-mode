@@ -1,0 +1,448 @@
+"""Keep a private journal of each Top Mode run and answer from it.
+
+`start` fixes the deadline and takes the quota baseline, `task` and `session`
+record the work, `status` says what is going on and whether to stop, and `stop`
+closes the run and writes the report's skeleton. Never assigns work by itself.
+"""
+
+import argparse
+import json
+import os
+import tempfile
+import time
+from pathlib import Path
+
+from capacity_policy import authorization_active, fingerprint, require, validate_profile
+from profile_binding import locate, private_path
+from usage_monitor import epoch, observe, weekly
+from usage_report import (
+    agent_home,
+    claude_tokens,
+    codex_quota,
+    codex_tokens,
+    file_quota,
+    iso,
+    markdown,
+)
+
+PRIVATE = Path.home() / ".codex-top-mode"
+AGENTS = ("codex", "claude")
+SOURCES = {
+    "codex_session_log": ("codex", "Codex local logs"),
+    "codex_usage_payload": ("codex", "Codex usage payload"),
+    "claude_status_line": ("claude", "Claude Code status line"),
+}
+STATUSES = ("planned", "in_progress", "done", "blocked")
+ROLES = ("coordinator", "worker", "reviewer")
+# Why a run stopped, as the report says it.
+REASONS = {
+    "deadline": "the deadline arrived",
+    "user": "you asked to stop",
+    "nothing_ready": "no ready work was left",
+    "profile_changed": "the setup changed",
+    "authorization_ended": "the approval ended",
+    "weekly_renewal": "the weekly allowance renewed",
+}
+# A different renewal time than this means another weekly window.
+SAME_WINDOW_SECONDS = 600
+
+
+def write_text(path: Path, text: str) -> Path:
+    """Atomically write an owner-only file in an owner-only folder outside Git."""
+    path = private_path(path, existing=False)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix":
+        require(not path.parent.stat().st_mode & 0o077, "Use an owner-only private folder")
+    handle, name = tempfile.mkstemp(prefix=".run-", dir=path.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(text)
+        os.replace(name, path)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+    return path
+
+
+def load(path: Path) -> dict:
+    if not path.exists() and not path.is_symlink():
+        return {"schemaVersion": 1, "runs": []}
+    data = json.loads(private_path(path, existing=True).read_text(encoding="utf-8"))
+    require(
+        isinstance(data, dict)
+        and data.get("schemaVersion") == 1
+        and isinstance(data.get("runs"), list),
+        "Unsupported run journal",
+    )
+    return data
+
+
+def save(path: Path, data: dict) -> None:
+    write_text(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def current(data: dict):
+    """The open run, if any: only the latest can be open."""
+    runs = data["runs"]
+    return runs[-1] if runs and not runs[-1].get("endedAt") else None
+
+
+def readings(codex_home: Path, claude_status: Path, quota_file=None, observed_at=None) -> dict:
+    """The newest reading per agent; a saved file replaces its agent's usual source."""
+    try:
+        claude = file_quota(claude_status) if claude_status.is_file() else None
+    except (OSError, ValueError):
+        claude = None  # A saved line without its capture time is no reading.
+    found = {"codex": codex_quota(codex_home), "claude": claude}
+    if quota_file:
+        reading = file_quota(quota_file, observed_at)
+        found[SOURCES[reading["source"]][0]] = reading
+    return {
+        agent: {**r, "observedAt": iso(epoch(r["observedAt"]))} if r else None
+        for agent, r in found.items()
+    }
+
+
+def start(data: dict, profile: dict, hours: float, agents: list, found: dict, now: float):
+    require(current(data) is None, "A run is still open; close it with `run.py stop` first")
+    require(hours > 0, "Give the run a positive number of hours")
+    agents = list(dict.fromkeys(agents))
+    require(authorization_active(profile, now), "The setup's approval is not active now")
+    for agent in agents:
+        week = weekly(found[agent]) if found[agent] else None
+        require(
+            not week or week["usedPercent"] < 100 or (week["resetsAt"] or now + 1) <= now,
+            f"{agent} has used up its weekly allowance; wait for it to renew",
+        )
+    limits, auth = profile["limits"], profile["authorization"]
+    candidates = [(now + hours * 3600, None), (now + limits["maximumHours"] * 3600, "maximumHours")]
+    if auth["validUntil"] is not None:
+        candidates.append((epoch(auth["validUntil"]), "validUntil"))
+    unknown = []
+    for agent in agents if limits["stopOnScheduledWeeklyRenewal"] else ():
+        week = weekly(found[agent]) if found[agent] else None
+        if week and week["resetsAt"] and week["resetsAt"] > now:
+            candidates.append((week["resetsAt"], f"{agent} weekly renewal"))
+        else:
+            unknown.append(f"{agent}: renewal time unknown, so the run could not stop at it")
+    deadline, capped = min(candidates, key=lambda candidate: candidate[0])
+    run = {
+        "startedAt": iso(now),
+        "requestedHours": hours,
+        "deadline": iso(deadline),
+        "cappedBy": capped,
+        "agents": agents,
+        "level": profile["level"],
+        "fingerprint": fingerprint(profile),
+        "projects": {name: p["label"] for name, p in profile["projects"].items()},
+        "maximumActiveThreads": limits["maximumActiveThreads"],
+        "quotaBefore": {agent: found[agent] for agent in agents},
+        "unknown": unknown,
+        "tasks": [],
+        "sessions": [],
+    }
+    native = found.get("codex")
+    if "codex" in agents and native and native["source"] == "codex_usage_payload":
+        week = weekly(native)
+        # The observer that notices an early renewal needs Codex's own payload.
+        run["usageMonitor"] = {
+            "mode": "top",
+            "startedAt": iso(now),
+            "effectiveStopAt": iso(deadline),
+            "baseline": native,
+            "last": native,
+            "stopOnScheduledWeeklyRenewal": limits["stopOnScheduledWeeklyRenewal"],
+            "scheduledWeeklyStopAt": week["resetsAt"] if week else None,
+            "detectLowUsageRenewalShift": True,
+        }
+    data["runs"].append(run)
+    return run
+
+
+def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
+    """Add a task or record its progress; a refused change leaves the run as it was."""
+    task = next((t for t in run["tasks"] if t["id"] == task_id), None)
+    if task is None:
+        require(
+            all(fields.get(k) for k in ("project", "objective", "doneWhen", "owner")),
+            "A new task needs --project, --objective, --done-when and --owner",
+        )
+    updated = {**(task or {"id": task_id, "status": None, "events": []})}
+    updated.update({k: v for k, v in fields.items() if v and k != "status"})
+    require(updated["project"] in run["projects"], "Unknown project: add it to the setup first")
+    status = fields["status"]
+    require(status != "done" or updated.get("evidence"), "Say how it was verified: --evidence")
+    require(status != "blocked" or updated.get("blocker"), "Say what blocks it: --blocker")
+    if status != updated["status"]:
+        updated["status"] = status
+        updated["events"] = [*updated["events"], {"at": iso(now), "status": status}]
+    if task is None:
+        run["tasks"].append(updated)
+    else:
+        task.update(updated)
+    return updated
+
+
+def record_session(run: dict, session_id: str, agent: str, role: str, ended: bool, now: float):
+    session = next((s for s in run["sessions"] if s["id"] == session_id), None)
+    if session is None:
+        session = {"id": session_id, "agent": agent, "role": role, "startedAt": iso(now)}
+        session["endedAt"] = None
+        run["sessions"].append(session)
+    if ended and not session["endedAt"]:
+        session["endedAt"] = iso(now)
+    return session
+
+
+def quota_now(run: dict, found: dict, now: float) -> dict:
+    result = {}
+    for agent in run["agents"]:
+        reading = found.get(agent)
+        week = weekly(reading) if reading else None
+        result[agent] = reading and {
+            "weeklyUsedPercent": week["usedPercent"] if week else None,
+            "observedAt": reading["observedAt"],
+            "minutesOld": round((now - epoch(reading["observedAt"])) / 60),
+        }
+    return result
+
+
+def status(run: dict, profile, found: dict, now: float) -> dict:
+    """What is going on, and whether to stop assigning work. Feeds the observer."""
+    reasons = []
+    if now >= epoch(run["deadline"]):
+        reasons.append("deadline")
+    if profile is None or fingerprint(profile) != run["fingerprint"]:
+        reasons.append("profile_changed")
+    elif not authorization_active(profile, now):
+        reasons.append("authorization_ended")
+    monitor, reading = run.get("usageMonitor"), found.get("codex")
+    if monitor and reading and reading["source"] == "codex_usage_payload":
+        run["usageMonitor"], _ = observe(monitor, reading)
+    monitor = run.get("usageMonitor") or {}
+    if monitor.get("mode") == "normal" and monitor["stopReason"] != "authorized_time_window_ended":
+        reasons.append("weekly_renewal")
+    active = [s for s in run["sessions"] if not s["endedAt"] and s["role"] != "coordinator"]
+    return {
+        "active": True,
+        "startedAt": run["startedAt"],
+        "deadline": run["deadline"],
+        "minutesLeft": max(0, round((epoch(run["deadline"]) - now) / 60)),
+        "stopNow": bool(reasons),
+        "stopReasons": reasons,
+        "tasks": {s: [t["id"] for t in run["tasks"] if t["status"] == s] for s in STATUSES},
+        "activeSessions": len(active),
+        # The coordinator counts as one thread.
+        "freeThreads": max(0, run["maximumActiveThreads"] - 1 - len(active)),
+        "quota": quota_now(run, found, now),
+        "savedResetAdded": bool(monitor.get("bankedResetObserved")),
+    }
+
+
+def stop(run: dict, reason: str, found: dict, now: float) -> dict:
+    require(
+        reason != "deadline" or now >= epoch(run["deadline"]) - 60,
+        "The deadline has not arrived; give the real reason",
+    )
+    run.update(endedAt=iso(now), stopReason=reason)
+    run["quotaAfter"] = {agent: found.get(agent) for agent in run["agents"]}
+    return run
+
+
+def clock(stamp) -> str:
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(epoch(stamp)))
+
+
+def quota_row(agent: str, before, after) -> str:
+    if not before and not after:
+        hint = "; save the Claude Code status line to see it" if agent == "claude" else ""
+        return f"unknown: no reading{hint}"
+
+    def one(reading):
+        if not reading:
+            return "unknown"
+        week = weekly(reading)
+        used = f"{week['usedPercent']:g}% used" if week else "weekly window unknown"
+        return f"{used} at {clock(reading['observedAt'])}"
+
+    sources = sorted({SOURCES[r["source"]][1] for r in (before, after) if r})
+    text = f"{one(before)} → {one(after)} ({', '.join(sources)})."
+    weeks = [weekly(r) if r else None for r in (before, after)]
+    if not all(weeks):
+        return text
+    renewals = [w["resetsAt"] for w in weeks]
+    if None not in renewals and abs(renewals[0] - renewals[1]) > SAME_WINDOW_SECONDS:
+        return text + " The allowance renewed in between, so the difference is not this run's use."
+    renews = f" Renews {clock(renewals[1])}." if renewals[1] else ""
+    return text + " Includes anything else on the account meanwhile." + renews
+
+
+def report(run: dict, tokens: str) -> str:
+    out = [
+        f"# Top Mode report, {clock(run['startedAt'])}",
+        "",
+        "<!-- Skeleton from the run journal. Rewrite it in the user's language: for each",
+        "project, before and verified after, why it matters, what is pending and who acts",
+        "next. Keep the facts in the tables. -->",
+        "",
+        "## What changed",
+        "",
+    ]
+    for project, label in run["projects"].items():
+        tasks = [t for t in run["tasks"] if t["project"] == project]
+        if tasks:
+            out.append(f"**{label}**")
+        for t in tasks:
+            if t["status"] == "done":
+                out.append(f"- Done: {t['objective']}. Verified: {t['evidence']}.")
+            elif t["status"] == "blocked":
+                out.append(f"- Blocked: {t['objective']}. {t['blocker']}. Next: {t['owner']}.")
+            else:
+                state = t["status"].replace("_", " ")
+                out.append(f"- Not finished ({state}): {t['objective']}. Next: {t['owner']}.")
+        if tasks:
+            out.append("")
+    if not run["tasks"]:
+        out += ["No tasks were recorded.", ""]
+    capped = f", capped by {run['cappedBy']}" if run["cappedBy"] else ""
+    out += [
+        "## The run",
+        "",
+        "| | |",
+        "| --- | --- |",
+        f"| Started | {clock(run['startedAt'])}, for {run['requestedHours']:g} h |",
+        f"| Deadline | {clock(run['deadline'])}{capped} |",
+        f"| Stopped | {clock(run['endedAt'])}: {REASONS[run['stopReason']]} |",
+        f"| Level | {run['level']} |",
+    ]
+    for agent in run["agents"]:
+        before, after = run["quotaBefore"].get(agent), run["quotaAfter"].get(agent)
+        out.append(f"| Weekly quota, {agent} | {quota_row(agent, before, after)} |")
+    groups = {}
+    for s in run["sessions"]:
+        counts = groups.setdefault(f"{s['agent']} {s['role']}", [0, 0])
+        counts[0] += 1
+        counts[1] += bool(s["endedAt"])
+    sessions = "; ".join(f"{k}: {v[0]} started, {v[1]} finished" for k, v in groups.items())
+    if not any(s["role"] == "coordinator" for s in run["sessions"]):
+        sessions = f"{sessions or 'none started'} (plus this coordinator)"
+    out.append(f"| Sessions | {sessions} |")
+    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):
+        out.append("| Saved resets | A new one appeared during the run; it did not extend it. |")
+    out += [
+        "",
+        "## Tokens",
+        "",
+        tokens,
+        "",
+        "Every session on this machine in that interval counts, including work outside",
+        "the run. Token counts are not your bill.",
+    ]
+    if run["unknown"]:
+        out += ["", "## Unknown", ""] + [f"- {item}" for item in run["unknown"]]
+    return "\n".join(out) + "\n"
+
+
+def load_profile(args) -> dict:
+    path = args.profile or Path(locate(args.private / "binding.json")["profilePath"])
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    validate_profile(profile)
+    return profile
+
+
+def main() -> None:
+    private = argparse.ArgumentParser(add_help=False)
+    private.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
+    sources = argparse.ArgumentParser(add_help=False, parents=[private])
+    sources.add_argument("--profile", type=Path, help="Default: the saved setup")
+    sources.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
+    sources.add_argument(
+        "--claude-home", type=Path, default=agent_home("CLAUDE_CONFIG_DIR", ".claude")
+    )
+    sources.add_argument("--quota-file", type=Path, help="A saved native reading")
+    sources.add_argument("--observed-at", help="When --quota-file was captured, if it doesn't say")
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    begin = commands.add_parser("start", parents=[sources], help="Start a run")
+    begin.add_argument("--hours", type=float, required=True)
+    begin.add_argument(
+        "--agents", nargs="+", choices=AGENTS, required=True, help="Whose quota the run spends"
+    )
+    work = commands.add_parser("task", parents=[private], help="Record a task or its progress")
+    work.add_argument("id")
+    work.add_argument("--status", choices=STATUSES, required=True)
+    for name in ("project", "objective", "done-when", "owner", "evidence", "blocker"):
+        work.add_argument(f"--{name}")
+    one = commands.add_parser("session", parents=[private], help="Record a session the run uses")
+    one.add_argument("id")
+    one.add_argument("--agent", choices=AGENTS, required=True)
+    one.add_argument("--role", choices=ROLES, default="worker")
+    one.add_argument("--ended", action="store_true")
+    commands.add_parser("status", parents=[sources], help="Where the run stands; stop or not")
+    end = commands.add_parser("stop", parents=[sources], help="Close the run, write the report")
+    end.add_argument("--reason", choices=REASONS, required=True)
+    args = parser.parse_args()
+    now = time.time()
+    try:
+        journal = args.private / "runs.json"
+        data = load(journal)
+        run = current(data)
+        if args.command == "status" and run is None:
+            keys = ("startedAt", "endedAt", "stopReason", "report")
+            last = {k: data["runs"][-1].get(k) for k in keys} if data["runs"] else None
+            print(json.dumps({"active": False, "lastRun": last}))
+            return
+        require(args.command == "start" or run is not None, "No run is open")
+        if args.command in ("start", "status", "stop"):
+            found = readings(
+                args.codex_home,
+                args.private / "claude-status.json",
+                args.quota_file,
+                args.observed_at,
+            )
+        if args.command == "start":
+            run = start(data, load_profile(args), args.hours, args.agents, found, now)
+            result = {k: run[k] for k in ("startedAt", "deadline", "cappedBy", "level", "unknown")}
+        elif args.command == "task":
+            fields = {
+                "status": args.status,
+                "project": args.project,
+                "objective": args.objective,
+                "doneWhen": args.done_when,
+                "owner": args.owner,
+                "evidence": args.evidence,
+                "blocker": args.blocker,
+            }
+            result = record_task(run, args.id, fields, now)
+        elif args.command == "session":
+            session = record_session(run, args.id, args.agent, args.role, args.ended, now)
+            result = {k: v for k, v in session.items() if k != "id"}
+        elif args.command == "status":
+            try:
+                profile = load_profile(args)
+            except (OSError, ValueError):
+                profile = None  # Missing or broken now: either way, not what was approved.
+            result = status(run, profile, found, now)
+        else:
+            stop(run, args.reason, found, now)
+            since = epoch(run["startedAt"])
+            tokens = {
+                "since": iso(since),
+                "until": iso(now),
+                "providers": [
+                    codex_tokens(args.codex_home, since, now),
+                    claude_tokens(args.claude_home, since, now),
+                ],
+            }
+            name = time.strftime("%Y-%m-%d-%H%M%S.md", time.gmtime(since))
+            path = write_text(args.private / "reports" / name, report(run, markdown(tokens)))
+            run["report"] = str(path)
+            result = {"report": str(path), "stopReason": args.reason}
+        save(journal, data)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(json.dumps(result))
+
+
+if __name__ == "__main__":
+    main()
