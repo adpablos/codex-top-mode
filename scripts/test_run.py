@@ -12,8 +12,7 @@ from unittest.mock import patch
 import run
 import usage_report
 from capacity_policy import fingerprint
-from usage_monitor import snapshot
-from usage_report import iso
+from usage_report import iso, quota_reading, window
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples/profile.example.json"
 NOW = 2000000000.0  # 2033-05-18T03:33:20Z
@@ -28,9 +27,7 @@ def profile(**limits):
 
 
 def log_reading(used=40, at=NOW, renews=NOW + 30 * HOUR):
-    window = {"usedPercent": used, "windowDurationMins": 10080, "resetsAt": renews}
-    payload = {"rateLimitsByLimitId": {"codex": {"primary": window}}}
-    return {"source": "codex_session_log", **snapshot(payload, iso(at))}
+    return quota_reading("codex_session_log", iso(at), [window("primary", used, 10080, renews)])
 
 
 def fresh(p=None, hours=2, agents=("codex",), found=None):
@@ -340,16 +337,6 @@ class StopAndReportTests(unittest.TestCase):
         coordinator = {"agent": "codex", "role": "coordinator", "endedAt": iso(NOW)}
         r["sessions"].append({"id": "c", "startedAt": iso(NOW), **coordinator})
         return r
-
-    def test_a_journal_from_an_older_version_keeps_its_observer_outcome(self):
-        p = profile()
-        _, r = fresh(p)
-        r["usageMonitor"] = {"mode": "normal", "stopReason": "weekly_quota_replenished"}
-        r["usageMonitor"]["bankedResetObserved"] = True
-        self.assertEqual(run.status(r, p, {}, NOW + 60)["stopReasons"], ["weekly_renewal"])
-        run.stop(r, "weekly_renewal", NOW + 60)
-        run.close(r, {}, NOW + 120)
-        self.assertIn("| Saved resets | A new one appeared during the run", run.report(r, ""))
 
 
 class CommandTests(unittest.TestCase):

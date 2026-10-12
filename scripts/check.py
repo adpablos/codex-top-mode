@@ -10,8 +10,8 @@ import json
 import time
 from pathlib import Path
 
+from common import write_private
 from profile_binding import private_folder, private_path
-from usage_monitor import write_private
 from usage_report import advise, agent_home, latest_quota
 
 QUIET_SECONDS = 20 * 3600

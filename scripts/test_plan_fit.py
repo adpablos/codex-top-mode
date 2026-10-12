@@ -1,7 +1,7 @@
 import unittest
 
+from common import epoch
 from plan_fit import WEEK, advise_plan, markdown, times_plus, windows
-from usage_monitor import epoch
 
 DAY = 24 * 3600
 START = epoch("2033-05-02T00:00:00Z")

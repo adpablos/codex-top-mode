@@ -14,8 +14,8 @@ import time
 from pathlib import Path
 
 from capacity_policy import authorization_active, fingerprint, require, validate_profile
+from common import epoch, weekly
 from profile_binding import locate, private_folder, private_path
-from usage_monitor import epoch, weekly
 from usage_report import (
     agent_home,
     claude_tokens,
@@ -240,13 +240,6 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         reasons.append("profile_changed")
     elif not authorization_active(profile, now):
         reasons.append("authorization_ended")
-    # A journal from an older version may hold its renewal observer's final word.
-    legacy = run.get("usageMonitor") or {}
-    if (
-        legacy.get("mode") == "normal"
-        and legacy.get("stopReason") != "authorized_time_window_ended"
-    ):
-        reasons.append("weekly_renewal")
     active = [s for s in run["sessions"] if not s["endedAt"] and s["role"] != "coordinator"]
     working = [t for t in run["tasks"] if t["status"] == "in_progress"]
     # The coordinator is one thread; each task in progress counts, even two of one session.
@@ -383,8 +376,6 @@ def report(run: dict, tokens: str) -> str:
     if not any(s["role"] == "coordinator" for s in run["sessions"]):
         sessions = f"{sessions or 'none started'} (plus this coordinator)"
     out.append(f"| Sessions | {sessions} |")
-    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):  # older versions only
-        out.append("| Saved resets | A new one appeared during the run; it did not extend it. |")
     out += [
         "",
         "## Tokens",

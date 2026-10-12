@@ -66,8 +66,7 @@ runner ships another version), with pinned actions and read-only permissions. It
 the one check to require before merging. Dependabot proposes action updates
 after a 7-day cooldown.
 Preserve authorization, fixed deadlines, deduplication,
-coverage honesty, private storage and legacy observer behavior. Use supported
-public HTTP only. Do not include keys, cookies, account IDs, real profiles or
+coverage honesty and private storage. Do not include keys, cookies, account IDs, real profiles or
 private conversations in fixtures, issues or patches. Do not publish sensitive
 reports as issues: use a maintainer's private contact if available, otherwise
 request one without disclosing the material. No private reporting endpoint is

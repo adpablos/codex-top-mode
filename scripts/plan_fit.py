@@ -9,7 +9,7 @@ comparison with other plans. Nothing here reads files.
 import statistics
 import time
 
-from usage_monitor import epoch
+from common import epoch
 
 WEEK = 7 * 24 * 3600
 # Readings of one window give its renewal time to within seconds.

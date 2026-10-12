@@ -10,7 +10,7 @@ from unittest.mock import patch
 import check
 import install
 import usage_report
-from usage_monitor import epoch
+from common import epoch
 
 
 def setUpModule():

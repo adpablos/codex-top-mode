@@ -16,9 +16,10 @@ from collections import Counter
 from pathlib import Path
 
 import plan_fit
-from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
+from common import epoch, number, weekly
 
 WEEK_MINUTES = 10080
+WEEK = WEEK_MINUTES * 60
 CODEXBAR = "codexbar"
 # CodexBar can take a while: for Claude it asks Claude's own CLI.
 CODEXBAR_SECONDS = 45
@@ -49,6 +50,31 @@ def agent_home(variable, folder):
 
 def iso(seconds):
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(seconds))
+
+
+def window(slot, used, minutes, resets_at):
+    """One quota window, or None when its numbers are missing or impossible."""
+    used, minutes = number(used), number(minutes)
+    if used is None or not 0 <= used <= 100 or not minutes or minutes <= 0:
+        return None
+    return {
+        "slot": slot,
+        "usedPercent": used,
+        "durationMinutes": minutes,
+        "resetsAt": epoch(resets_at),
+    }
+
+
+def quota_reading(source, observed_at, windows, resets=None, expires=None):
+    """Keep only what a quota reading needs: window percentages, lengths and
+    renewal times, and the saved-reset count and next expiry; never identity."""
+    return {
+        "source": source,
+        "observedAt": observed_at,
+        "windows": [w for w in windows if w],
+        "availableResets": resets,
+        "resetExpirations": [{"expiresAt": expires}] if resets and expires else [],
+    }
 
 
 def lines(path, markers):
@@ -304,20 +330,12 @@ def codex_quota(home):
     if best is None:
         return None
     _, stamp, limits = best
-    payload = {
-        "rateLimitsByLimitId": {
-            "codex": {
-                slot: {
-                    "usedPercent": window.get("used_percent"),
-                    "windowDurationMins": window.get("window_minutes"),
-                    "resetsAt": window.get("resets_at"),
-                }
-                for slot in ("primary", "secondary")
-                if isinstance(window := limits.get(slot), dict)
-            }
-        }
-    }
-    return {"source": "codex_session_log", **snapshot(payload, stamp)}
+    windows = [
+        window(slot, w.get("used_percent"), w.get("window_minutes"), w.get("resets_at"))
+        for slot in ("primary", "secondary")
+        if isinstance(w := limits.get(slot), dict)
+    ]
+    return quota_reading("codex_session_log", stamp, windows)
 
 
 def codexbar_quota(provider, run=subprocess.run):
@@ -354,40 +372,22 @@ def codexbar_reading(rows, provider):
     if not isinstance(usage, dict):
         return None
     observed = epoch(usage.get("updatedAt"))
-    windows = []
-    for slot in ("primary", "secondary", "tertiary"):
-        window = usage.get(slot)
-        if not isinstance(window, dict):
-            continue
-        used, minutes = number(window.get("usedPercent")), number(window.get("windowMinutes"))
-        if used is not None and 0 <= used <= 100 and minutes and minutes > 0:
-            windows.append(
-                {
-                    "slot": slot,
-                    "usedPercent": used,
-                    "durationMinutes": minutes,
-                    "resetsAt": epoch(window.get("resetsAt")),
-                }
-            )
-    if observed is None or not windows:
+    windows = [
+        window(slot, w.get("usedPercent"), w.get("windowMinutes"), w.get("resetsAt"))
+        for slot in ("primary", "secondary", "tertiary")
+        if isinstance(w := usage.get(slot), dict)
+    ]
+    if observed is None or not any(windows):
         return None
     credits = row.get("resetCredits", usage.get("resetCredits"))
     credits = credits if isinstance(credits, dict) else {}
     count = number(credits.get("available"))
     if count is not None and (count < 0 or count != int(count)):
         count = None
-    expires = epoch(credits.get("nextExpiresAt"))
-    return {
-        "source": "codexbar",
-        "observedAt": iso(observed),
-        "windows": windows,
-        "availableResets": count,
-        "grantTimes": [],
-        # Only the next expiry is known, enough to warn before it.
-        "resetExpirations": [{"grantedAt": None, "expiresAt": expires}]
-        if count and expires
-        else [],
-    }
+    # Only the next expiry is known, enough to warn before it.
+    return quota_reading(
+        "codexbar", iso(observed), windows, count, epoch(credits.get("nextExpiresAt"))
+    )
 
 
 def latest_quota(agent, codex_home, run=subprocess.run):
@@ -437,10 +437,12 @@ def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
         hours is not None and 0 < hours <= within_hours and 100 - week["usedPercent"] >= min_unused
     ):
         result["reasons"].append("unused_weekly_quota_before_reset")
-    expiring = expiry_advice({**reading, "observedAt": now})
-    if expiring["dueExpirations"]:
+    due = sorted(
+        {r["expiresAt"] for r in reading["resetExpirations"] if 0 < r["expiresAt"] - now <= WEEK}
+    )
+    if reading["availableResets"] != 0 and due:
         result["reasons"].append("saved_resets_expiring_soon")
-        result["expiringResets"] = [iso(t) for t in expiring["dueExpirations"]]
+        result["expiringResets"] = [iso(t) for t in due]
     good = {"unused_weekly_quota_before_reset", "saved_resets_expiring_soon"}
     blocked = {
         "weekly_limit_reached",
