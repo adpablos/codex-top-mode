@@ -297,11 +297,18 @@ reached the user's limit and would fit a bigger plan, so their real need is
 unknown. Plans without a confirmed size are listed in `notCompared`. Rules and
 limits:
 
+- A change of a plan's size rescales its percentage like a plan change; the
+  jump is not use.
 - A grandfathered subscriber keeps a plan's earlier size until the date the file
-  gives. It is inferred from readings on that plan during the eligibility
-  period; without them the new size is assumed.
-- `change` warns of a change to the user's plan within 30 days: the new size,
-  the same figures and the verdict it would give.
+  gives. It is inferred from the kept windows' readings on that plan during the
+  eligibility period, never from a left-out meter; without them the new size is
+  assumed.
+- A natural week still running counts once it reaches a plan's limit, and its
+  use so far counts against the 80 % room below. Each row's `weeks` says how
+  many natural weeks it counted.
+- `change` warns of a change to the user's plan within 30 days, even with too
+  little history: the new size and, with at least 4 windows, the same figures
+  and the verdict it would give.
 - `could_go_lower` replaces `enough` when a cheaper plan would have stayed below
   80 % in every window and natural week, with no unknown window. It names
   `lowerPlan`; the monthly saving follows from the prices.

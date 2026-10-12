@@ -34,17 +34,22 @@ def day(seconds):
     return time.strftime("%Y-%m-%d", time.gmtime(seconds))
 
 
-def summarize(readings):
+def summarize(readings, size=None):
     """One window from its readings in time order.
 
-    A plan change rescales the percentage to the new plan, so the jump is not
-    use: the new plan's percentage already includes what was used before.
+    A plan change rescales the percentage to the new plan, and so does a change
+    of the plan's size when `size(plan, time)` gives it, so the jump is not use:
+    the new percentage already includes what was used before.
     """
-    plan, peak, limit, steps, changed = None, 0.0, None, [], False
+    plan, scale, peak, limit, steps, changed = None, None, 0.0, None, [], False
     for stamp, used, _, kind in readings:
         if kind and plan and kind != plan:
-            changed, peak, limit = True, used, None
+            changed = True
         plan = kind or plan
+        rescaled = (plan, size(plan, stamp) if size else None)
+        if scale and scale[0] and rescaled != scale:
+            peak, limit = used, None
+        scale = rescaled
         if used > peak:
             steps.append((stamp, used - peak, plan))
             peak = used
@@ -60,6 +65,7 @@ def summarize(readings):
         "limitReachedAt": limit,
         "steps": steps,
         "times": [reading[0] for reading in readings],
+        "readings": readings,
     }
 
 
@@ -75,7 +81,7 @@ def parallel(one, other):
     return all(sum(start <= t <= end for t in w["times"]) >= INTERLEAVED for w in (one, other))
 
 
-def windows(readings, now):
+def windows(readings, now, size=None):
     """The account's weekly windows in time order, and how many readings were left out.
 
     Some logs carry a second weekly meter at the same time: one that stays near
@@ -90,7 +96,7 @@ def windows(readings, now):
             groups[-1].append(reading)
         else:
             groups.append([reading])
-    found = [summarize(sorted(group, key=lambda reading: reading[0])) for group in groups]
+    found = [summarize(sorted(group, key=lambda reading: reading[0]), size) for group in groups]
 
     def rank(window):
         # Renewal times differ between groups, so exactly one of two parallel windows wins.
@@ -135,10 +141,9 @@ def without_resets(found, plan, now):
     """Replay the use on this plan through natural weeks, with no early renewal.
 
     A natural window starts with the first use after the previous one ended and
-    lasts a week. Only weeks that have ended, or already reached the limit,
-    count. Where the real window hit
-    the limit, real demand was higher than what was used, so the replay is a
-    lower bound for that week.
+    lasts a week; `ended` tells whether it has. Where the real window hit the
+    limit, real demand was higher than what was used, so the replay is a lower
+    bound for that week.
     """
     steps = []
     for window in reversed(found):
@@ -158,7 +163,8 @@ def without_resets(found, plan, now):
             week["limitReachedAt"] = stamp
     for week in weeks:
         week["atLeast"] = any(week["start"] <= t < week["start"] + WEEK for t in limits)
-    return [w for w in weeks if w["start"] + WEEK <= now or w["limitReachedAt"] is not None]
+        week["ended"] = week["start"] + WEEK <= now
+    return weeks
 
 
 def judge(windows_count, windows_at_limit, weeks_count, weeks_at_limit):
@@ -196,6 +202,23 @@ def grandfathered(plan, readings):
     return any(r[3] == plan["planType"] and start <= r[0] < end for r in readings)
 
 
+def sizing(plans, found):
+    """Plans by type, the grandfathered ones, and each plan's size at a time.
+
+    Grandfathering is inferred from the account's own windows only, not from a
+    parallel meter that may belong to another account.
+    """
+    by_type = {p["planType"]: p for p in plans["plans"] if p.get("planType")}
+    own = [reading for window in found for reading in window["readings"]]
+    kept = {kind for kind, p in by_type.items() if grandfathered(p, own)}
+
+    def size(kind, when):
+        known = by_type.get(kind)
+        return times_plus(known, when, kind in kept) if known else None
+
+    return by_type, kept, size
+
+
 def plus_weeks(steps, size, fallback):
     """Use in whole weeks of Plus, or None when a plan's size is unknown."""
     total = 0.0
@@ -208,40 +231,52 @@ def plus_weeks(steps, size, fallback):
 
 
 def fit(demand, weeks, times):
-    """The same use against a plan that includes `times` Plus."""
+    """The same use against a plan that includes `times` Plus.
+
+    `weeks` pairs each natural week's use with whether it has ended. A week
+    still running counts once it has reached this plan's limit, and its use so
+    far always counts against the room left.
+    """
     # Rounded so that converting between plan sizes adds no floating-point noise.
     percents = [round(d / times * 100, 3) for d, _ in demand]
-    weekly = [round(w / times * 100, 3) for w in weeks]
+    weekly = [(round(w / times * 100, 3), ended) for w, ended in weeks]
+    counted = [p for p, ended in weekly if ended or p >= 100]
     return {
         "medianPercent": round(statistics.median(percents)),
-        "mostPercent": round(max(percents + weekly)),
+        "mostPercent": round(max(percents + [p for p, _ in weekly])),
         "windowsAtLimit": sum(p >= 100 for p in percents),
         # Windows that reached your limit used less than they needed, so a
         # bigger plan may or may not have been enough for them.
         "unknownWindows": sum(bool(hit) and p < 100 for p, (_, hit) in zip(percents, demand)),
-        "weeksAtLimit": sum(p >= 100 for p in weekly),
+        "weeks": len(counted),
+        "weeksAtLimit": sum(p >= 100 for p in counted),
     }
 
 
-def compare_plans(plans, readings, plan, recent, weeks, now):
-    """The same use on each plan at its size today, and any coming change to yours."""
+def coming_change(current, grandfathered, now):
+    """The first change to the plan's size within SOON: (time, size today, new size)."""
+    today = times_plus(current, now, grandfathered)
+    dates = [epoch(p["from"]) for p in current.get("timesPlus") or [] if p["from"]]
+    if grandfathered:
+        dates.append(epoch(current["grandfathered"]["previousUntil"]))
+    for when in sorted(d for d in dates if now < d <= now + SOON):
+        times = times_plus(current, when, grandfathered)
+        if times != today:
+            return when, today, times
+    return None
+
+
+def compare_plans(plans, sized, plan, recent, weeks, now):
+    """The same use on each plan at its size today, and any coming change to yours.
+
+    The coming change is reported even without enough history for the rest.
+    """
+    by_type, kept, size = sized
     out = {"checked": plans["checked"]}
     out["stale"] = now - epoch(plans["checked"] + "T00:00:00+00:00") > STALE_DAYS * 86400
-    by_type = {p["planType"]: p for p in plans["plans"] if p.get("planType")}
     current = by_type.get(plan)
     if current is None:
         out["note"] = f'plan type "{plan}" is not in the plans file'
-        return out
-    kept = {kind for kind, p in by_type.items() if grandfathered(p, readings)}
-
-    def size(kind, when):
-        known = by_type.get(kind)
-        return times_plus(known, when, kind in kept) if known else None
-
-    demand = [(plus_weeks(w["steps"], size, w["plan"]), w["limitReachedAt"]) for w in recent]
-    used = [plus_weeks(w["steps"], size, plan) for w in weeks]
-    if any(d is None for d, _ in demand) or None in used:
-        out["note"] = "the size of a plan you used is not in the plans file"
         return out
     out.update(
         current=current["name"],
@@ -251,6 +286,17 @@ def compare_plans(plans, readings, plan, recent, weeks, now):
         notCompared=[],
         change=None,
     )
+    change = coming_change(current, plan in kept, now)
+    if change:
+        when, today, times = change
+        out["change"] = {"date": day(when), "timesPlus": times, "previousTimesPlus": today}
+    if len(recent) < MINIMUM:
+        return out
+    demand = [(plus_weeks(w["steps"], size, w["plan"]), w["limitReachedAt"]) for w in recent]
+    used = [(plus_weeks(w["steps"], size, plan), w["ended"]) for w in weeks]
+    if any(d is None for d, _ in demand + used):
+        out["note"] = "the size of a plan you used is not in the plans file"
+        return out
     for other in plans["plans"]:
         yours = other is current
         times = times_plus(other, now, yours and plan in kept)
@@ -259,19 +305,12 @@ def compare_plans(plans, readings, plan, recent, weeks, now):
             continue
         entry = {"name": other["name"], "usdPerMonth": other["usdPerMonth"], "timesPlus": times}
         out["comparison"].append({**entry, "yours": yours, **fit(demand, used, times)})
-    today = times_plus(current, now, plan in kept)
-    dates = [epoch(p["from"]) for p in current.get("timesPlus") or [] if p["from"]]
-    if plan in kept:
-        dates.append(epoch(current["grandfathered"]["previousUntil"]))
-    for when in sorted(d for d in dates if now < d <= now + SOON):
-        times = times_plus(current, when, plan in kept)
-        if times != today:
-            change = {"date": day(when), "timesPlus": times, **fit(demand, used, times)}
-            change["verdict"] = judge(
-                len(recent), change["windowsAtLimit"], len(weeks), change["weeksAtLimit"]
-            )
-            out["change"] = change
-            break
+    if change:
+        then = out["change"]
+        then.update(fit(demand, used, change[2]))
+        then["verdict"] = judge(
+            len(recent), then["windowsAtLimit"], then["weeks"], then["weeksAtLimit"]
+        )
     return out
 
 
@@ -299,15 +338,24 @@ def advise_plan(readings, now, count=WINDOWS, plans=None):
     `could_go_lower`.
     """
     found, left_out = windows(readings, now)
+    sized = None
+    if plans:
+        # Rebuilt knowing each plan's size, so that a change of size is not use.
+        sized = sizing(plans, found)
+        found, left_out = windows(readings, now, sized[2])
     plan, stretch = current_stretch(found)
     recent = stretch[-count:]
-    weeks = without_resets(found, plan, now)[-count:]
+    replay = without_resets(found, plan, now)
+    # A week counts once it has ended or already reached the limit.
+    weeks = [w for w in replay if w["ended"] or w["limitReachedAt"] is not None][-count:]
     hits = [w for w in recent if w["limitReachedAt"]]
     short_weeks = [w for w in weeks if w["limitReachedAt"]]
     verdict = judge(len(recent), len(hits), len(weeks), len(short_weeks))
     compared = None
-    if plans and verdict != "not_enough_history":
-        compared = compare_plans(plans, readings, plan, recent, weeks, now)
+    if plans and plan:
+        # The week still running is a floor for that week on any plan.
+        running = [w for w in replay[-1:] if not w["ended"] and w["limitReachedAt"] is None]
+        compared = compare_plans(plans, sized, plan, recent, weeks + running, now)
     lower = cheapest_that_fits(compared) if verdict == "enough" else None
     if lower:
         verdict = "could_go_lower"
@@ -362,47 +410,56 @@ SHORT_VERDICTS = {
 }
 
 
-def plan_lines(compared, windows_count, weeks_count):
+def outcome(row, windows_count):
+    text = (
+        f"median {row['medianPercent']} %, limit in {row['windowsAtLimit']} of "
+        f"{windows_count} windows ({row['weeksAtLimit']} of {row['weeks']} weeks "
+        "without early renewals)"
+    )
+    if row["unknownWindows"]:
+        text += f"; {row['unknownWindows']} more reached your limit, so what they needed is unknown"
+    return text
+
+
+def change_lines(compared, windows_count):
+    """A coming change to the user's plan, with what it would mean when known."""
+    change = (compared or {}).get("change")
+    if not change:
+        return []
+    why = " (your grandfathered size ends)" if compared["grandfathered"] else ""
+    text = (
+        f"- Coming change: from {change['date']}, {compared['current']} includes "
+        f"{change['timesPlus']}x Plus instead of {change['previousTimesPlus']}x{why}."
+    )
+    if "verdict" in change:
+        text += (
+            f" The same use: {outcome(change, windows_count)}. "
+            f"Verdict then: {SHORT_VERDICTS[change['verdict']]}."
+        )
+    return [text]
+
+
+def plan_lines(compared, windows_count):
     """The comparison with other plans and any coming change, as summary lines."""
     if not compared:
         return []
-    if "note" in compared:
-        return [f"- Not compared with other plans: {compared['note']}."]
-    stale = "; over 60 days ago, they may have changed" if compared["stale"] else ""
-    out = [
-        "- The same use on each plan at its size today (multiples of Plus that OpenAI "
-        f"has announced, checked {compared['checked']}{stale}):"
-    ]
-
-    def outcome(row):
-        text = (
-            f"median {row['medianPercent']} %, limit in {row['windowsAtLimit']} of "
-            f"{windows_count} windows ({row['weeksAtLimit']} of {weeks_count} weeks "
-            "without early renewals)"
+    out = []
+    if compared.get("comparison"):
+        stale = "; over 60 days ago, they may have changed" if compared["stale"] else ""
+        out.append(
+            "- The same use on each plan at its size today (multiples of Plus that OpenAI "
+            f"has announced, checked {compared['checked']}{stale}):"
         )
-        if row["unknownWindows"]:
-            text += (
-                f"; {row['unknownWindows']} more reached your limit, so what they needed is unknown"
+        for row in compared["comparison"]:
+            yours = " (yours)" if row["yours"] else ""
+            out.append(
+                f"  - {row['name']}{yours}, ${row['usdPerMonth']}/month, "
+                f"{row['timesPlus']}x Plus: {outcome(row, windows_count)}."
             )
-        return text
-
-    for row in compared["comparison"]:
-        yours = " (yours)" if row["yours"] else ""
-        out.append(
-            f"  - {row['name']}{yours}, ${row['usdPerMonth']}/month, "
-            f"{row['timesPlus']}x Plus: {outcome(row)}."
-        )
-    out += [f"  - {name}: not compared, no confirmed size." for name in compared["notCompared"]]
-    change = compared["change"]
-    if change:
-        today = next(row["timesPlus"] for row in compared["comparison"] if row["yours"])
-        why = " (your grandfathered size ends)" if compared["grandfathered"] else ""
-        out.append(
-            f"- Coming change: from {change['date']}, {compared['current']} includes "
-            f"{change['timesPlus']}x Plus instead of {today}x{why}. The same use: "
-            f"{outcome(change)}. Verdict then: {SHORT_VERDICTS[change['verdict']]}."
-        )
-    return out
+        out += [f"  - {name}: not compared, no confirmed size." for name in compared["notCompared"]]
+    if "note" in compared:
+        out.append(f"- Not compared with other plans: {compared['note']}.")
+    return out + change_lines(compared, windows_count)
 
 
 def markdown(advice):
@@ -411,10 +468,11 @@ def markdown(advice):
     if not recent:
         if advice["historySince"] is None:
             return "Codex: no weekly quota readings in the local logs yet."
-        return (
+        text = (
             f"Codex: no closed weekly window on the current plan yet (readings since "
             f"{advice['historySince']}). A verdict needs {MINIMUM}."
         )
+        return "\n".join([text, *change_lines(advice.get("plans"), 0)])
     compared = advice.get("plans") or {}
     name = ""
     if compared.get("current"):
@@ -446,7 +504,7 @@ def markdown(advice):
             f"{'at least ' if most['atLeast'] else ''}{most['usedPercent']} %, "
             f"week from {most['start']})."
         )
-    out += plan_lines(advice.get("plans"), len(recent), len(weeks))
+    out += plan_lines(advice.get("plans"), len(recent))
     out.append("- Includes Top Mode runs: they cannot be told apart from your own use yet.")
     if advice["parallelReadingsLeftOut"]:
         out.append(

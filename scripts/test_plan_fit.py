@@ -241,6 +241,61 @@ class PlanTests(unittest.TestCase):
         reached = [w["reachedLimit"] for w in advice["withoutEarlyRenewals"]]
         self.assertEqual(yours["weeksAtLimit"], reached.count(True))
 
+    def test_a_change_of_size_on_the_same_plan_is_not_use(self):
+        resized = {"from": "2033-06-24T00:00:00Z", "value": 5}
+        pro100 = {**PLANS["plans"][1], "timesPlus": [{"from": None, "value": 10}, resized]}
+        plans = {**PLANS, "plans": [PLANS["plans"][0], pro100, *PLANS["plans"][2:]]}
+        readings = weeks(*[40] * 7, plan="prolite")
+        start, renews = START + 7 * WEEK, START + 8 * WEEK
+        # 40 % of 10x Plus shows as 80 % of 5x Plus once the plan shrinks; then 5 % more.
+        readings += [
+            (start + 3 * DAY, 40.0, renews, "prolite"),
+            (start + 4 * DAY + 3600, 80.0, renews, "prolite"),
+            (start + 5 * DAY, 85.0, renews, "prolite"),
+        ]
+        advice = advise_plan(readings, NOW, plans=plans)
+        self.assertEqual(advice["windows"][-1]["peakPercent"], 85)
+        yours = self.rows(advice)["Pro 100"]
+        self.assertEqual((yours["timesPlus"], yours["mostPercent"]), (5, 85))
+        self.assertEqual(yours["windowsAtLimit"], 0)
+
+    def test_the_week_still_running_counts_against_the_room_left(self):
+        readings = weeks(*[3] * 8)
+        # Then a window renewed every day: 2 % each, 6 % of Pro 200 in one running week.
+        for d in range(3):
+            readings += window(START + 8 * WEEK + d * DAY, 2, hours=20)
+        advice = advise_plan(readings, NOW, plans=PLANS)
+        self.assertEqual(self.rows(advice)["Plus"]["mostPercent"], 120)
+        self.assertEqual(
+            (advice["verdict"], advice["plans"]["lowerPlan"]), ("could_go_lower", "Pro 100")
+        )
+
+    def test_a_coming_change_is_shown_even_with_little_history(self):
+        advice = advise_plan(weeks(40, 40, first=START + 5 * WEEK), NOW, plans=PLANS)
+        self.assertEqual(advice["verdict"], "not_enough_history")
+        self.assertEqual(advice["plans"]["change"]["date"], "2033-07-15")
+        line = (
+            "- Coming change: from 2033-07-15, Pro 200 includes 10x Plus instead of 20x "
+            "(your grandfathered size ends)."
+        )
+        self.assertIn(line, markdown(advice))
+        opened = window(epoch("2033-06-10T00:00:00Z"), 10, hours=24)
+        text = markdown(advise_plan(opened, epoch("2033-06-16T00:00:00Z"), plans=PLANS))
+        self.assertIn("no closed weekly window", text)
+        self.assertIn(line, text)
+
+    def test_grandfathering_ignores_another_accounts_meter(self):
+        readings = weeks(*[40] * 4)
+        readings += window(epoch("2033-06-05T00:00:00Z"), 40, hours=71)
+        readings += weeks(40, 40, first=epoch("2033-06-15T00:00:00Z"))
+        # Another account's meter, on Pro during the eligibility week, beside this one.
+        begins = epoch("2033-06-06T00:00:00Z")
+        meter = [(begins + m * 600, 0.0, begins + WEEK, "pro") for m in range(3 * 24 * 6)]
+        advice = advise_plan(readings + meter, NOW, plans=PLANS)
+        self.assertEqual(advice["parallelReadingsLeftOut"], len(meter))
+        self.assertFalse(advice["plans"]["grandfathered"])
+        self.assertEqual(self.rows(advice)["Pro 200"]["timesPlus"], 10)
+
     def test_a_cheaper_plan_that_would_have_been_enough(self):
         advice = advise_plan(weeks(*[3] * 8), NOW, plans=PLANS)
         self.assertEqual(
@@ -282,7 +337,11 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(
             advice["plans"]["note"], "the size of a plan you used is not in the plans file"
         )
-        self.assertIsNone(advise_plan(weeks(40, 40), NOW, plans=PLANS)["plans"])
+        # Too little history to compare plans, but the plan is still named.
+        short = advise_plan(weeks(40, 40), NOW, plans=PLANS)["plans"]
+        self.assertEqual(
+            (short["current"], short["comparison"], short["change"]), ("Pro 200", [], None)
+        )
 
 
 if __name__ == "__main__":

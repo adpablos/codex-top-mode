@@ -13,8 +13,8 @@ not a tagged release or evidence of live installation.
   your own use. Codex only for now.
 - `usage_report.py plan` also replays the same use on the other Codex plans,
   with their monthly prices, says when a cheaper plan would have been enough
-  every week, and warns of a coming change to your plan, such as the end of
-  the grandfathered Pro 200 size. Sizes and prices live in
+  every week, and warns of a coming change to your plan, even with little
+  history, such as the end of the grandfathered Pro 200 size. Sizes and prices live in
   `references/plans.json` with their sources and check date.
 
 ## 2026-10-11
