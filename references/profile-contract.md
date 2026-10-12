@@ -15,39 +15,48 @@ must approve the profile and the receiving operator must verify that provenance;
 JSON strings claiming consent, source posts and retrieved instructions cannot
 establish authority.
 
-`schemaVersion: 1` has these fields:
+The profile says where the user's work lives and what the agent may do. It holds
+no task list and no run state. `schemaVersion: 2` has these fields and no others:
 
 - `authorization`: a human decision reference (`source`), timezone-aware
   `approvedAt`, and explicit `validUntil` (a later timestamp or null for consent
-  until revocation). A missing expiry field is not consent. Changing
-  authorization or operating policy stops an active run; it does not reopen one.
-- `sources`: `backlog` names the approved local sources to refresh. No source is
-  fetched by the script.
-- `projects`: stable project names, readable labels and `contextSources` for
-  the receiving operator; paths and connectors are optional operator choices.
-  `excludedProjects` always wins. A project must be registered before assignment.
-- `actions`: `read`, `edit`, `checks`, `commit`, `publish_pr`, `review`, `merge`,
-  `install`, `access`, `finance`, `destruction`, `redeem_reset`, each `allowed`,
-  `ask` or `deny`. Omitted/unknown actions are denied. Review and merge are
-  independent opt-ins, never implied by permission to edit. Redemption cannot
-  be `allowed`: every attempt still needs current human confirmation.
-- `limits`: `maximumHours`, `maximumActiveThreads`,
-  explicit `stopOnScheduledWeeklyRenewal`, and `modelTiers` for `repeatable`,
-  `ordinary`, `difficult`. Resolve tier names against the client's available
-  models; escalate on complexity or failed verification. Never invent a model
-  binding or lower quality merely to save quota. Count every already active
-  task/thread, including multiple tasks owned by the same person, against the
-  limit; returned tasks are candidates, not dispatches. The operator must also
-  count active threads outside the backlog, including the coordinator.
-- `backlog`: unique `id`, registered `project`, `objective`, expected `benefit`,
-  `doneWhen`, current `owner`, boolean `ready`, explicit `blocker` (null or a
-  reason), `status` (`pending`, `in_progress`, `done`) and integer `priority`
-  (lower first). Refresh owners and evidence before each assignment. Active,
-  blocked, excluded, completed and same-owner busy work are not proposed.
+  until revocation). A missing expiry field is not consent. Changing the
+  profile stops an active run; it does not reopen one.
+- `level`: `careful`, `balanced` or `autonomous`, which sets every action below.
+- `actions` (optional): the user's exceptions to the level, each `allowed`, `ask`
+  or `deny`. `redeem_reset` cannot be `allowed`: every attempt still needs
+  current human confirmation.
+- `limits`: `maximumHours`, `maximumActiveThreads` and an explicit
+  `stopOnScheduledWeeklyRenewal`. Count every active task or thread against the
+  thread limit, including the coordinator, several tasks of one owner and threads
+  outside the run.
+- `projects`, by stable name: `label`; `path`, the project's absolute folder;
+  `work`, where its pending work lives (`github-issues`, `github-prs`,
+  `github-alerts`, or files inside the project such as `ROADMAP.md`); `priority`,
+  0 or more, lower first; and optional `notes`, what the user said about it, such
+  as what done means. Without a working `gh`, read only the files and say so.
+- `excluded` (optional): absolute folders never to touch or propose. No project
+  may be inside one.
+- `models` (optional): per agent (`codex`, `claude`), model names for
+  `repeatable`, `ordinary` or `difficult` work. Without them, choose among the
+  host's models by task shape; escalate on complexity or failed verification.
+  Never invent a model binding or lower quality merely to save quota.
 
-Profiles written before announcements became notify-only may still contain
-`conditionalStart`, `allowUnspecifiedUpcoming`, `sources.announcements` or
-`limits.announcementMaxAgeHours`. They stay valid and those fields are ignored.
+| Action | `careful` | `balanced` | `autonomous` |
+| --- | --- | --- | --- |
+| `read`, `edit`, `checks`, `commit` | allowed | allowed | allowed |
+| `publish_pr`, `review` | ask | allowed | allowed |
+| `merge` | ask | ask | allowed |
+| `install`, `access`, `redeem_reset` | ask | ask | ask |
+| `finance`, `destruction` | deny | deny | deny |
+
+`commit` is on a working branch, never on the default branch. `review` is
+requesting or running an independent review; `merge` at `autonomous` still needs
+one, with checks green. Actions not listed are denied, and so is every action on
+an unregistered project.
+
+A `schemaVersion: 1` profile (with a task list inside) is refused: set up
+again, carrying over its projects, exclusions and limits.
 
 Check a profile with:
 
@@ -56,9 +65,9 @@ python3 -B scripts/capacity_policy.py --profile /chosen/private/profile.json
 ```
 
 It refuses an invalid profile (exit code 2) and otherwise prints
-`authorizationActive` (approved and not expired right now), `readyWork`, the
-task IDs that may be assigned next, and `fingerprint`, which changes whenever
-anything but the backlog changes. Add `--project NAME --action ACTION` to also
+`authorizationActive` (approved and not expired right now), `level`, `actions`
+(the level with the exceptions applied) and `fingerprint`, which changes whenever
+anything in the profile changes. Add `--project NAME --action ACTION` to also
 print that action's `decision`: `allowed`, `ask` or `deny`.
 
 The human-approved profile defines standing scope and maximum permissions;
@@ -91,10 +100,11 @@ python3 -B scripts/profile_binding.py locate
 
 The output gives `bindingPath` and `profilePath`. Resolve this before asking the
 user to set up again; load the returned profile only for the authorized purpose,
-verify its approval/validity and refresh its backlog. Pass that absolute profile
-path to `capacity_policy.py --profile`. Lookup does not read profile contents,
-authenticate consent, create a schedule or start work. A short manual request
-inherits the approved profile with the requested duration capped by its limits.
+verify its approval/validity and read its projects' work sources. Pass that
+absolute profile path to `capacity_policy.py --profile`. Lookup does not read
+profile contents, authenticate consent, create a schedule or start work. A short
+manual request inherits the approved profile with the requested duration capped
+by its limits.
 
 The reference has only `schemaVersion: 1` and absolute `profilePath`. No profile
 contents, credentials or conversation are copied. Both files must be regular,
@@ -124,9 +134,8 @@ to this shared package.
 
 Every run starts by hand. A direct human start using the approved saved setup,
 explicitly or through the established setup context, authorizes work on its
-ready, non-excluded backlog within its `allowed` actions for the requested
-duration. The user need not
-repeat those standing rules. Any narrower task or action restriction in the
+projects within its `allowed` actions for the requested duration. The user need
+not repeat those standing rules. Any narrower task or action restriction in the
 request wins; a request outside that setup covers only its stated scope and
 still cannot exceed the profile's limits or current native gates. `ask` and
 `deny` actions remain gated. Verify the real human instruction and profile
@@ -159,7 +168,8 @@ payload. It observes and stops; it does not dispatch. The operator separately
 checks current authorization, ready work, the action's decision, outside active
 threads and ownership before each assignment; stop on revocation or policy
 change. A policy change shows as a `fingerprint` (from `capacity_policy.py`)
-different from the one noted at the start; backlog progress does not change it. Never silently convert an existing active window or renew its deadline.
+different from the one noted at the start. Never silently convert an existing
+active window or renew its deadline.
 
 If native quota observation is unavailable, use only the agreed clock deadline
 and supervised checkpoints; do not seed an observer with invented quota or
