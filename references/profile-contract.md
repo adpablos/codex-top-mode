@@ -236,7 +236,10 @@ which the stdlib cannot read; `compressedLogs` counts those that may cover the
 interval, with the same caveat. It covers only this machine and every session
 in that interval, including work outside the run; say so in the report. Codex
 `cached input` and `cache write input` are part of `input`; Claude cache reads
-and writes are separate fields and are included in its total. Otherwise the host
+and writes are separate fields and are included in its total. When a Claude
+response itemizes its steps (`usage.iterations`: an advisor call, a compaction,
+a retried attempt), the report sums the steps, each under its own model, since
+the top-level counts can leave them out. Otherwise the host
 operator supplies the evidence. Do not add an account client or read credential
 stores to fill a gap. Write `unknown` with the reason when a source is missing,
 partial, stale or cannot be attributed. Preserve sanitized report evidence in

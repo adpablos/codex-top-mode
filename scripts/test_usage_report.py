@@ -209,6 +209,27 @@ class TokenTests(unittest.TestCase):
         self.assertEqual({m["model"] for m in result["byModel"]}, {"claude-x", "claude-y"})
         self.assertNotIn("private-session", json.dumps(result))
 
+    def test_claude_advisor_steps_count_under_the_advisor_model(self):
+        step = {"input_tokens": 1, "cache_read_input_tokens": 100, "output_tokens": 5}
+        advisor = {"model": "claude-advisor", "input_tokens": 800, "output_tokens": 200}
+        steps = [{"type": "message", **step}, {"type": "advisor_message", **advisor}]
+        # The top-level counts cover only the executor's steps.
+        executor = {"input_tokens": 2, "cache_read_input_tokens": 200, "output_tokens": 10}
+        usage = {**executor, "iterations": [*steps, {"type": "message", **step}]}
+        row = {
+            "type": "assistant",
+            "timestamp": "2033-05-18T01:00:00Z",
+            "effort": "low",
+            "message": {"id": "m1", "model": "claude-x", "usage": usage},
+        }
+        write_lines(self.home / "projects/p/session.jsonl", [row])
+        result = claude_tokens(self.home, SINCE, NOW)
+        self.assertEqual((result["responses"], result["totalTokens"]), (1, 1212))
+        models = {(m["model"], m["effort"]): m for m in result["byModel"]}
+        self.assertEqual(models["claude-x", "low"]["total_tokens"], 212)
+        self.assertEqual(models["claude-advisor", None]["total_tokens"], 1000)
+        self.assertEqual(models["claude-advisor", None]["responses"], 1)
+
 
 class QuotaTests(unittest.TestCase):
     def setUp(self):

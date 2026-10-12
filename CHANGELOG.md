@@ -17,7 +17,8 @@ not a tagged release or evidence of live installation.
 - Added `scripts/usage_report.py`: a quota suggestion (unused weekly allowance
   near renewal, expiring saved resets) from Codex local logs, a native Codex
   payload or a saved Claude Code status line, and token totals per agent, model
-  and effort from local Codex and Claude Code logs for run reports. It honors
+  and effort from local Codex and Claude Code logs for run reports. Claude
+  advisor calls count under the advisor's model. It honors
   `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, and a saved reading must carry its
   capture time (the file's modification time is not trusted). A reading
   without a weekly window is `unknown`, never `nothing_to_do`. Totals that may

@@ -167,12 +167,31 @@ def claude_tokens(home, since, until):
             seen.add(key)
             # Subagents share their parent's sessionId; each has its own agentId.
             sessions.add((row.get("sessionId") or path.stem, row.get("agentId")))
-            bucket = buckets.setdefault((model, row.get("effort")), {"responses": 0})
-            bucket["responses"] += 1
-            add(bucket, usage, CLAUDE_FIELDS)
+            groups = {}
+            for step_model, step in claude_steps(usage, model):
+                effort = row.get("effort") if step_model == model else None
+                groups.setdefault((step_model, effort), []).append(step)
+            for group, steps in groups.items():
+                bucket = buckets.setdefault(group, {"responses": 0})
+                bucket["responses"] += 1
+                for step in steps:
+                    add(bucket, step, CLAUDE_FIELDS)
     for bucket in buckets.values():
         bucket["total_tokens"] = sum(bucket.get(f, 0) for f in CLAUDE_FIELDS)
     return summary("claude", buckets, len(sessions), len(seen))
+
+
+def claude_steps(usage, model):
+    """The billed steps of one response, as (model, usage) pairs.
+
+    `usage.iterations` itemizes them (a server-side advisor call, a compaction, a
+    retried attempt), each under its own model when it names one; the top-level
+    counts can leave those steps out. Older transcripts have no iterations.
+    """
+    steps = usage.get("iterations")
+    if not isinstance(steps, list) or not steps:
+        return [(model, usage)]
+    return [(s.get("model") or model, s) for s in steps if isinstance(s, dict)]
 
 
 def summary(provider, buckets, sessions, responses):
