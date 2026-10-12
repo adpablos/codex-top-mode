@@ -66,7 +66,7 @@ spare capacity to use.
 | Signal | Codex | Claude Code |
 | --- | --- | --- |
 | Weekly allowance renews soon and plenty is unused | Yes, from Codex's local logs | Yes, if you let the agent save your status line ([how](references/profile-contract.md#quota-readings)); otherwise it asks you |
-| Saved resets are about to expire | Yes, when the Codex app exposes them | Not applicable |
+| Saved resets are about to expire | Only from Codex's own usage payload, saved and passed to the check ([how](references/profile-contract.md#proactive-check)); local logs don't list them | Not applicable |
 | A usage reset is announced | Optional, experimental ([details](references/announcements.md)) | Not applicable |
 | You simply want to push work forward | Yes | Yes |
 

@@ -225,8 +225,11 @@ are flags (`--min-unused`, `--within-hours`). It never starts work.
 `python3 -B scripts/check.py` combines every signal available on this machine:
 the Codex local-log reading, a saved Claude Code status line
 (`~/.codex-top-mode/claude-status.json`), and the optional announcement watch
-when `~/.codex-top-mode/watch.json` exists. It prints one line per piece of news
-and nothing otherwise. Run plain, as a scheduled check does, it tells the same
+when `~/.codex-top-mode/watch.json` exists. Local logs don't list saved resets:
+news about them needs `--quota-file` with a native payload saved in the
+`{"observedAt", "payload"}` wrapper above, which then replaces the other quota
+sources. It prints one line per piece of news and nothing otherwise. Run plain,
+as a scheduled check does, it tells the same
 news at most once every 20 hours, remembered in
 `~/.codex-top-mode/check-state.json` (keys and times only); a watch that fails to
 run counts as news too. It refuses to run, before the watch writes anything,
