@@ -33,8 +33,9 @@ no task list and no run state. `schemaVersion: 2` has these fields and no others
 - `projects`, by stable name: `label`; `path`, the project's absolute folder;
   `work`, where its pending work lives (`github-issues`, `github-prs`,
   `github-alerts`, or files inside the project such as `ROADMAP.md`); `priority`,
-  0 or more, lower first; and optional `notes`, what the user said about it, such
-  as what done means. Without a working `gh`, read only the files and say so.
+  0 or more, lower first; optional `checks`, the commands that run its tests or
+  lint; and optional `notes`, what the user said about it, such as what done
+  means. Without a working `gh`, read only the files and say so.
 - `excluded` (optional): absolute folders never to touch or propose. No project
   may be inside one; paths with `..` are refused so that this holds.
 - `models` (optional): per agent (`codex`, `claude`), model names for
@@ -76,6 +77,45 @@ Native permissions, actual owner availability and
 state-bound approvals for authentication, access, installation, private data,
 finance and destruction still apply at action time. The code classifies work;
 it cannot authenticate consent, reserve worker slots or judge task complexity.
+
+## Host rules
+
+The agent answers each command from its own permission rules, not from the
+level. On Claude Code, `host_rules.py` turns the level and its exceptions into
+Claude Code's `allow`, `ask` and `deny` rules for the folder where the user
+starts Top Mode, in `<folder>/.claude/settings.local.json`. That file applies
+to every Claude Code session started there, remote ones included, and to no
+other folder:
+
+```sh
+python3 -B scripts/host_rules.py --agent claude --folder /where/you/start
+```
+
+Without `--write` it changes nothing and prints `current`, and the rules it
+would `add` and `remove`. With `--write`, given only with the user's OK, it adds
+them and removes the ones it added before that the profile no longer gives. It
+never removes a rule it did not add: it keeps a record of its own in
+`~/.codex-top-mode/host-rules.json`. A stricter rule of the user's wins in
+Claude Code, as a narrower request does here. It refuses a settings file that is
+a link (change the file it points to) or that Git would pick up.
+
+| Rules | From |
+| --- | --- |
+| `git status`, `log`, `diff`, `show`, `fetch`; `gh pr` and `gh issue` reading; each project's folder | `read`, `edit` |
+| each project's `checks` | `checks` |
+| `git add`, `commit`, `switch`, new branches `quota-coach/*`, `git worktree add` | `commit` |
+| pushing `quota-coach/*` branches, `gh pr create` | `publish_pr` |
+| `gh pr review`, `gh pr comment` | `review` |
+| `gh pr merge` | `merge` |
+| package installs, `gh auth`, the keychain | `install`, `access` |
+| forced pushes, deleting remote branches, hard resets, switching branches by force, `git clean`, `branch -D`, `rm -rf`, deleting repositories or releases | `destruction` |
+| the run's own scripts (`run.py`, `check.py`, `capacity_policy.py`, `usage_report.py`, `profile_binding.py locate`) | always allowed |
+| pushing to `main` or `master`; reading or editing excluded folders | always denied |
+
+Each action's decision picks the list: `allowed` to `allow`, `ask` to `ask`,
+`deny` to `deny`. These rules match a command's words, not its effect
+(`git -C . push` is not `git push`), so they are not a security boundary:
+protect each project's default branch on GitHub too.
 
 ## Private profile binding
 

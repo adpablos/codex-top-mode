@@ -130,7 +130,7 @@ def validate_profile(profile: dict) -> None:
     for name, project in projects.items():
         where = f"project {name}"
         require(text(name) and isinstance(project, dict), f"Invalid {where}")
-        fields(project, {"label", "path", "work", "priority"}, {"notes"}, where)
+        fields(project, {"label", "path", "work", "priority"}, {"notes", "checks"}, where)
         require(text(project["label"]), f"{where} needs a label")
         require(absolute(project["path"]), f"{where} needs an absolute path without ..")
         path = PurePath(project["path"])
@@ -149,6 +149,11 @@ def validate_profile(profile: dict) -> None:
             f"{where} needs a priority (0 or more, lower first)",
         )
         require(text(project.get("notes", "-")), f"{where} has empty notes")
+        checks = project.get("checks", [])
+        require(
+            isinstance(checks, list) and all(text(c) for c in checks),
+            f"{where}: checks are the commands that run its tests or lint",
+        )
     models = profile.get("models", {})
     require(
         isinstance(models, dict)
