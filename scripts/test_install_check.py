@@ -49,6 +49,16 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(results["Claude Code"], "nothing to remove")
         self.assertTrue((self.home / ".claude/skills/top-mode").is_symlink())
 
+    def test_a_failed_link_makes_the_install_fail(self):
+        (self.home / ".codex").mkdir()
+        denied = patch.object(Path, "symlink_to", side_effect=OSError(13, "Permission denied"))
+        argv = patch.object(sys, "argv", ["install.py", "--home", str(self.home)])
+        out = io.StringIO()
+        with argv, denied, contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as stop:
+            install.main()
+        self.assertEqual(stop.exception.code, 1)
+        self.assertIn("Codex: failed: Permission denied", out.getvalue())
+
     def test_follows_codex_home_and_claude_config_dir(self):
         env = {"CODEX_HOME": str(self.home / "codex"), "CLAUDE_CONFIG_DIR": ""}
         (self.home / "codex").mkdir()

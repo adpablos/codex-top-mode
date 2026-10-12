@@ -7,6 +7,7 @@ anything already at the destination that is not this package is left untouched.
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent.parent
@@ -67,6 +68,8 @@ def main():
         print(f"{agent}: {result}")
     if not args.remove and any(r.startswith("installed") for r in results.values()):
         print("Start a new agent session and ask: 'Help me set up Top Mode.'")
+    if any(r.startswith("failed") for r in results.values()):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
