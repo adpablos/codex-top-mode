@@ -323,8 +323,8 @@ def codex_quota(home):
 def codexbar_quota(provider, run=subprocess.run):
     """A live reading from the CodexBar CLI, or None when it is missing or fails.
 
-    CodexBar (https://codexbar.app) is optional. Windows are told apart by their
-    length, not their position: a Codex Pro account has no 5-hour window.
+    CodexBar (https://codexbar.app) is optional. Anything unexpected in its answer
+    means no reading, so the caller falls back to its other sources.
     """
     command = shutil.which(CODEXBAR)
     if not command:
@@ -337,21 +337,23 @@ def codexbar_quota(provider, run=subprocess.run):
             timeout=CODEXBAR_SECONDS,
             check=False,
         )
-        rows = json.loads(done.stdout) if done.returncode == 0 else None
-    except (OSError, subprocess.SubprocessError, ValueError):
+        if done.returncode != 0:
+            return None
+        return codexbar_reading(json.loads(done.stdout), provider)
+    except (OSError, subprocess.SubprocessError, ValueError, OverflowError):
         return None
-    row = (
-        next(
-            (r for r in rows if isinstance(r, dict) and r.get("provider") == provider),
-            None,
-        )
-        if isinstance(rows, list)
-        else None
-    )
-    usage = row.get("usage") if row else None
-    observed = epoch(usage.get("updatedAt")) if isinstance(usage, dict) else None
-    if observed is None:
+
+
+def codexbar_reading(rows, provider):
+    """Keep window percentages, lengths and renewal times, and the saved-reset count
+    and next expiry; drop identity. Windows are told apart by their length, not
+    their position: a Codex Pro account has no 5-hour window."""
+    rows = rows if isinstance(rows, list) else []
+    row = next((r for r in rows if isinstance(r, dict) and r.get("provider") == provider), {})
+    usage = row.get("usage")
+    if not isinstance(usage, dict):
         return None
+    observed = epoch(usage.get("updatedAt"))
     windows = []
     for slot in ("primary", "secondary", "tertiary"):
         window = usage.get(slot)
@@ -367,6 +369,8 @@ def codexbar_quota(provider, run=subprocess.run):
                     "resetsAt": epoch(window.get("resetsAt")),
                 }
             )
+    if observed is None or not windows:
+        return None
     credits = row.get("resetCredits", usage.get("resetCredits"))
     credits = credits if isinstance(credits, dict) else {}
     count = number(credits.get("available"))

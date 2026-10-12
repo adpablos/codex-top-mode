@@ -638,12 +638,20 @@ class CodexBarTests(unittest.TestCase):
     def test_anything_unexpected_is_no_reading(self):
         no_time = codexbar_row()
         no_time["usage"]["updatedAt"] = None
+        no_window = codexbar_row()
+        no_window["usage"]["secondary"]["windowMinutes"] = "10080"
+        huge = json.dumps([codexbar_row()]).replace(
+            '"usedPercent": 8', '"usedPercent": 1' + "0" * 400
+        )
         for stdout, code in (
             ("", 0),
             ("not json", 0),
             (json.dumps({"provider": "codex"}), 0),
             (json.dumps([codexbar_row("claude")]), 0),
             (json.dumps([no_time]), 0),
+            (json.dumps([no_window]), 0),
+            (huge, 0),
+            (json.dumps([{"provider": "codex", "usage": []}]), 0),
             (json.dumps([codexbar_row()]), 1),
         ):
             with self.subTest(stdout=stdout[:40], code=code):
