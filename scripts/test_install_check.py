@@ -79,6 +79,27 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(stop.exception.code, 1)
         self.assertIn("Codex: failed: Permission denied", out.getvalue())
 
+    def test_installs_for_one_agent_and_replaces_broken_links(self):
+        (self.home / ".codex/skills").mkdir(parents=True)
+        (self.home / ".claude/skills").mkdir(parents=True)
+        (self.home / ".claude/skills/quota-coach").symlink_to(self.home / ".quota-coach")
+        (self.home / ".claude/skills/top-mode").symlink_to(self.home / ".top-mode")
+        argv = ["install.py", "--home", str(self.home), "--agent", "claude"]
+        out = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+            install.main()
+        self.assertNotIn("Codex", out.getvalue())
+        self.assertIn("replaced a broken link; removed the old link", out.getvalue())
+        self.assertEqual((self.home / ".claude/skills/quota-coach").resolve(), install.PACKAGE)
+        self.assertFalse((self.home / ".claude/skills/top-mode").is_symlink())
+        self.assertEqual(list((self.home / ".codex/skills").iterdir()), [])
+        (self.home / ".codex/skills/quota-coach").symlink_to(self.home / "top-mode")
+        (self.home / ".codex/skills/top-mode").symlink_to(self.home / "my-own-skill")
+        results = install.remove(self.home, {}, {"Codex"})
+        self.assertEqual(list(results), ["Codex"])
+        kept = list((self.home / ".codex/skills").iterdir())
+        self.assertEqual(kept, [self.home / ".codex/skills/top-mode"])
+
     def test_follows_codex_home_and_claude_config_dir(self):
         env = {"CODEX_HOME": str(self.home / "codex"), "CLAUDE_CONFIG_DIR": ""}
         (self.home / "codex").mkdir()

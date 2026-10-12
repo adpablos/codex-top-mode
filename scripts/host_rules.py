@@ -15,9 +15,8 @@ import tempfile
 from pathlib import Path, PureWindowsPath
 
 from capacity_policy import effective_actions, require, validate_profile
-from profile_binding import locate, private_path
+from profile_binding import locate, private_folder, private_path
 
-PRIVATE = Path.home() / ".codex-top-mode"
 PACKAGE = Path(__file__).resolve().parents[1]
 BRANCH = "quota-coach/"
 LISTS = {"allowed": "allow", "ask": "ask", "deny": "deny"}
@@ -428,8 +427,9 @@ def main() -> None:
         "--folder", type=Path, default=Path.cwd(), help="Where the user starts Top Mode"
     )
     parser.add_argument("--write", action="store_true", help="Only with the user's OK")
-    parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
+    parser.add_argument("--private", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    args.private = args.private or private_folder()
     try:
         path = args.profile or Path(locate(args.private / "binding.json")["profilePath"])
         profile = json.loads(path.read_text(encoding="utf-8"))

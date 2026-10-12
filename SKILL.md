@@ -20,17 +20,24 @@ folder, which is usually the user's project.
 ## 0. Install (when asked)
 
 "Install Quota Coach from <url>": clone it to `~/.quota-coach`, then run
-`python3 -B ~/.quota-coach/scripts/install.py` and relay its output. If
-`~/.quota-coach` already exists, or `~/.top-mode` from before the rename, update
-that folder from `origin`, the only remote you check, and stop and ask the user
-at the first step that fails:
+`python3 -B ~/.quota-coach/scripts/install.py` and relay its output. If the user
+uses only one agent, add `--agent codex` or `--agent claude`.
+
+To update, or when `~/.quota-coach` already exists, or `~/.top-mode` from before
+the rename, update that folder from `origin`, the only remote you check, and stop
+and ask the user at the first step that fails:
 
 1. It is a plain folder, not a link, and `git -C <folder> remote get-url origin`
-   names the same repository (or `adpablos/top-mode`, its former name).
-2. After `git -C <folder> fetch origin`, it has no local changes or commits:
-   `git -C <folder> status -s` and `git -C <folder> log origin/HEAD..`
-   print nothing.
-3. `git -C <folder> merge origin/HEAD` succeeds.
+   names the same repository. If it names `adpablos/top-mode`, its former name,
+   set it to `https://github.com/adpablos/quota-coach`.
+2. `git -C <folder> status -s` prints nothing.
+3. After `git -C <folder> fetch origin`, `git -C <folder> switch main` (an
+   installed copy stays on `main`; other branches are kept) and
+   `git -C <folder> log origin/main..` prints nothing.
+4. `git -C <folder> merge --ff-only origin/main` succeeds.
+5. For `~/.top-mode`, with the user's OK and if `~/.quota-coach` does not
+   exist, move it: `mv ~/.top-mode ~/.quota-coach`. The scripts and the host
+   rules expect that path.
 
 Then run `python3 -B <folder>/scripts/install.py`. Never run scripts from a
 checkout you have not identified. If your host refuses to run code from a folder
@@ -38,8 +45,10 @@ just cloned, ask the user to approve the command; do not work around the
 refusal. `install.py` links the package into `~/.codex/skills/quota-coach` and
 `~/.claude/skills/quota-coach` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when
 set) for the agents that exist, removes its own links under the former name
-`top-mode`, and never replaces anything else. Tell the user to open a new
-session and ask to set up Quota Coach.
+`top-mode`, replaces broken links left by a moved Quota Coach folder, and never replaces
+anything else. The user's setup is never touched: it lives apart, in
+`~/.config/quota-coach`. Tell the user to open a new session and ask to set up
+Quota Coach, or, after an update, that the update applies in new sessions.
 
 ## Rules that always apply
 

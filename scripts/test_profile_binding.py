@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from profile_binding import bind, default_binding, locate
+from profile_binding import bind, default_binding, locate, private_folder
 
 SCRIPT = Path(__file__).with_name("profile_binding.py")
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples/profile.example.json"
@@ -25,7 +25,35 @@ class BindingTests(unittest.TestCase):
 
     def test_default_is_user_private_and_independent_of_working_directory(self):
         with patch("profile_binding.Path.home", return_value=self.root):
-            self.assertEqual(default_binding(), self.root / ".codex-top-mode/binding.json")
+            self.assertEqual(default_binding(), self.root / ".config/quota-coach/binding.json")
+
+    def test_the_former_private_folder_moves_and_saved_paths_keep_working(self):
+        former = self.root / ".codex-top-mode"
+        former.mkdir(mode=0o700)
+        self.profile.rename(former / "profile.json")
+        bind(former / "binding.json", former / "profile.json")
+        folder = private_folder(self.root)
+        self.assertEqual(folder, self.root / ".config/quota-coach")
+        self.assertTrue((folder / "binding.json").is_file() and former.is_symlink())
+        found = locate(folder / "binding.json")["profilePath"]
+        self.assertEqual(found, str(folder / "profile.json"))
+        self.assertEqual(private_folder(self.root), folder)
+
+    def test_the_former_private_folder_stays_when_it_cannot_move_safely(self):
+        former = self.root / ".codex-top-mode"
+        former.mkdir()
+        (self.root / ".git").mkdir()
+        self.assertEqual(private_folder(self.root), former)
+        (self.root / ".git").rmdir()
+        (self.root / "dotfiles/.git").mkdir(parents=True)
+        (self.root / ".config").symlink_to(self.root / "dotfiles")
+        self.assertEqual(private_folder(self.root), former)
+        (self.root / ".config").unlink()
+        with patch.object(Path, "symlink_to", side_effect=OSError("no links here")):
+            self.assertEqual(private_folder(self.root), former)
+        self.assertTrue(former.is_dir() and not former.is_symlink())
+        self.assertFalse((self.root / ".config/quota-coach").exists())
+        self.assertEqual(private_folder(self.root / "new"), self.root / "new/.config/quota-coach")
 
     def test_another_process_recovers_only_the_location_from_another_directory(self):
         before = self.profile.read_bytes()

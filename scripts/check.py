@@ -10,11 +10,10 @@ import json
 import time
 from pathlib import Path
 
-from profile_binding import private_path
+from profile_binding import private_folder, private_path
 from usage_monitor import write_private
 from usage_report import advise, agent_home, latest_quota
 
-PRIVATE = Path.home() / ".codex-top-mode"
 QUIET_SECONDS = 20 * 3600
 # What to do when an agent has no reading, for --verbose.
 NO_READING = {
@@ -87,8 +86,9 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Also print the full status")
     parser.add_argument("--json", action="store_true", help="The full status as JSON")
     parser.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
-    parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
+    parser.add_argument("--private", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    args.private = args.private or private_folder()
     try:
         # Nothing check reads or writes may sit in Git or behind a link.
         state = private_path(args.private / "check-state.json", existing=False)

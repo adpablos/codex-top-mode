@@ -96,7 +96,7 @@ Without `--write` it changes nothing and prints `current`, and the rules it
 would `add` and `remove`. With `--write`, given only with the user's OK, it adds
 them and removes the ones it added before that the profile no longer gives. It
 never removes a rule it did not add: it keeps a record of its own in
-`~/.codex-top-mode/host-rules.json`. A stricter rule of the user's wins in
+`~/.config/quota-coach/host-rules.json`. A stricter rule of the user's wins in
 Claude Code, as a narrower request does here. It refuses a settings file, or a
 folder on its way, that is a link (change what it points to instead). It also
 refuses one that Git would pick up, even when the file is already current: with
@@ -149,10 +149,13 @@ project is kept from the file tools only; exclude whole repositories. Network
 
 ## Private profile binding
 
-The private folder keeps its original name, `~/.codex-top-mode`, so existing
-setups keep working after the project was renamed (to Top Mode, then Quota Coach).
+The private folder is `~/.config/quota-coach`. A setup from before the rename,
+in `~/.codex-top-mode`, moves there the first time a script needs it, and a link
+at the old name keeps saved paths working. It stays where it is if the move is
+not safe: the new folder would sit inside a Git worktree, or links cannot be
+made (as on some Windows accounts).
 
-Use one local reference, `~/.codex-top-mode/binding.json`, to recover a setup in
+Use one local reference, `~/.config/quota-coach/binding.json`, to recover a setup in
 later sessions on the same host and user account. `~` means the user home directory
 on macOS, Linux or Windows. The agent prepares the real profile in private storage
 outside every Git worktree, verifies human approval, and saves its location:
@@ -215,7 +218,7 @@ News, a scheduled check or a saved file never starts a run. Without a stated or
 previously approved default duration, resolve it before starting. Consent until
 revocation remains valid only while the human has not revoked it.
 
-[run.py](../scripts/run.py) keeps the run journal, `~/.codex-top-mode/runs.json`
+[run.py](../scripts/run.py) keeps the run journal, `~/.config/quota-coach/runs.json`
 (owner-only, outside Git, one entry per run):
 
 - `start --hours H --agents codex claude` refuses while another run is open,
@@ -248,7 +251,7 @@ revocation remains valid only while the human has not revoked it.
   back to `planned` or `in_progress` and changes to a task's project,
   objective, done criterion or owner are refused.
 - `close` ends the run, records `quotaAfter` and writes the
-  [report](#run-report) skeleton to a new file in `~/.codex-top-mode/reports/`.
+  [report](#run-report) skeleton to a new file in `~/.config/quota-coach/reports/`.
 
 Nothing renews a deadline, also on resume. Without a quota reading a run has
 only its clock deadline and supervised checkpoints; never invent quota or claim
@@ -305,7 +308,7 @@ it is installed, otherwise Codex's local logs (which don't list saved resets).
 It prints one line per piece of news and nothing otherwise. Run plain,
 as a scheduled check does, it tells the same
 news at most once every 20 hours, remembered in
-`~/.codex-top-mode/check-state.json` (keys and times only). It refuses to run,
+`~/.config/quota-coach/check-state.json` (keys and times only). It refuses to run,
 before writing anything, when its private folder is inside a Git worktree or one of its files is a link.
 Quota news needs the suggestion `consider_top_mode`, so a stale reading stays
 quiet until it is refreshed. `--verbose` and `--json` are for asking on demand:

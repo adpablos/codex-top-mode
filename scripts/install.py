@@ -2,9 +2,10 @@
 
 Links this package into each agent's personal skills folder (honoring
 CODEX_HOME and CLAUDE_CONFIG_DIR). Agents that are not installed are skipped;
-anything already at the destination that is not this package is left untouched.
-A link to this package under the skill's former name is removed, so the skill
-is not listed twice.
+anything already at the destination that is not this package is left untouched,
+except a broken link left by a moved Quota Coach folder, which is replaced. Such
+a link, or one to this package, under the skill's former name is removed, so the
+skill is not listed twice.
 """
 
 import argparse
@@ -14,14 +15,16 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent.parent
 AGENTS = {"Codex": ("CODEX_HOME", ".codex"), "Claude Code": ("CLAUDE_CONFIG_DIR", ".claude")}
+CHOICES = {"codex": "Codex", "claude": "Claude Code"}
 NAME = "quota-coach"
 FORMER = "top-mode"
 
 
-def targets(home, env, name=NAME):
+def targets(home, env, name=NAME, agents=None):
     return {
         agent: Path(env.get(variable) or home / folder).expanduser() / "skills" / name
         for agent, (variable, folder) in AGENTS.items()
+        if agents is None or agent in agents
     }
 
 
@@ -29,10 +32,23 @@ def ours(path):
     return path.is_symlink() and path.resolve() == PACKAGE
 
 
-def install(home, env):
+def broken(path):
+    """A link to a missing Quota Coach (or Top Mode) folder, as a move leaves."""
+    return (
+        path.is_symlink()
+        and not path.exists()
+        and Path(os.readlink(path)).name.lstrip(".") in {NAME, FORMER, "codex-" + FORMER}
+    )
+
+
+def install(home, env, agents=None):
     results = {}
     former = targets(home, env, FORMER)
-    for agent, target in targets(home, env).items():
+    for agent, target in targets(home, env, agents=agents).items():
+        replaced = ""
+        if broken(target):
+            target.unlink()
+            replaced = "; replaced a broken link"
         if not target.parent.parent.is_dir():
             results[agent] = "skipped: agent not found"
         elif ours(target):
@@ -46,18 +62,18 @@ def install(home, env):
             except OSError as error:
                 results[agent] = f"failed: {error.strerror or error}"
             else:
-                results[agent] = f"installed at {target}"
-        if ours(target) and ours(former[agent]):
+                results[agent] = f"installed at {target}" + replaced
+        if ours(target) and (ours(former[agent]) or broken(former[agent])):
             former[agent].unlink()
             results[agent] += f"; removed the old link {former[agent]}"
     return results
 
 
-def remove(home, env):
+def remove(home, env, agents=None):
     results = {}
     former = targets(home, env, FORMER)
-    for agent, target in targets(home, env).items():
-        removed = [link for link in (target, former[agent]) if ours(link)]
+    for agent, target in targets(home, env, agents=agents).items():
+        removed = [link for link in (target, former[agent]) if ours(link) or broken(link)]
         for link in removed:
             link.unlink()
         names = ", ".join(str(link) for link in removed)
@@ -68,10 +84,14 @@ def remove(home, env):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--remove", action="store_true", help="Remove the links again")
+    parser.add_argument(
+        "--agent", choices=CHOICES, action="append", help="Only this agent (default: both)"
+    )
     parser.add_argument("--home", type=Path, default=Path.home(), help=argparse.SUPPRESS)
     args = parser.parse_args()
     action = remove if args.remove else install
-    results = action(args.home, os.environ)
+    agents = args.agent and {CHOICES[choice] for choice in args.agent}
+    results = action(args.home, os.environ, agents)
     for agent, result in results.items():
         print(f"{agent}: {result}")
     if not args.remove and any(r.startswith("installed") for r in results.values()):
