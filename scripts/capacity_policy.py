@@ -1,4 +1,4 @@
-"""Check a human-approved Top Mode profile: is it valid, what is ready, what may an action do."""
+"""Check a human-approved Quota Coach profile: is it valid, what is ready, what may an action do."""
 
 import argparse
 import hashlib
