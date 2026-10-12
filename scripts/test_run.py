@@ -338,6 +338,12 @@ class StopAndReportTests(unittest.TestCase):
         r["sessions"].append({"id": "c", "startedAt": iso(NOW), **coordinator})
         return r
 
+    def test_a_run_opened_before_the_observer_was_removed_keeps_its_renewal_stop(self):
+        p = profile()
+        _, r = fresh(p)
+        r["usageMonitor"] = {"mode": "normal", "stopReason": "weekly_quota_replenished"}
+        self.assertEqual(run.status(r, p, {}, NOW + 60)["stopReasons"], ["weekly_renewal"])
+
 
 class CommandTests(unittest.TestCase):
     def setUp(self):
