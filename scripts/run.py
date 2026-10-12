@@ -163,7 +163,8 @@ def start(data: dict, profile: dict, hours: float, agents: list, found: dict, no
 
 def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     """Add a task or record its progress; a refused change leaves the run as it was."""
-    task = next((t for t in run["tasks"] if t["id"] == task_id), None)
+    index = next((i for i, t in enumerate(run["tasks"]) if t["id"] == task_id), None)
+    task = None if index is None else run["tasks"][index]
     status = fields["status"]
     if "stoppedAt" in run:
         require(
@@ -196,10 +197,11 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
         # A new blocker says again whether it waits on the user.
         updated.pop("needsYou", None)
         updated.update({"needsYou": True} if fields.get("needsYou") else {})
-    if task is None:
+    # Replace the task whole, so the fields dropped above leave the journal too.
+    if index is None:
         run["tasks"].append(updated)
     else:
-        task.update(updated)
+        run["tasks"][index] = updated
     return updated
 
 

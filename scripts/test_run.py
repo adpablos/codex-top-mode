@@ -149,22 +149,22 @@ class TaskAndSessionTests(unittest.TestCase):
         merge = "Merge #186? It deploys to production; recommended"
         task = new_task(self.run, status="blocked", blocker=merge, needsYou=True)
         self.assertTrue(task["needsYou"])
-        # A new blocker that does not wait on the user clears the flag.
-        task = new_task(self.run, status="blocked", blocker="CI is running", at=NOW + 30)
-        self.assertNotIn("needsYou", task)
+        # A new blocker that does not wait on the user clears the flag, in the journal too.
+        new_task(self.run, status="blocked", blocker="CI is running", at=NOW + 30)
+        self.assertNotIn("needsYou", self.run["tasks"][0])
         new_task(self.run, status="blocked", blocker=merge, needsYou=True, at=NOW + 40)
-        task = new_task(self.run, status="done", evidence="merged", at=NOW + 60)
-        self.assertNotIn("needsYou", task)
+        new_task(self.run, status="done", evidence="merged", at=NOW + 60)
+        self.assertNotIn("needsYou", self.run["tasks"][0])
 
     def test_reaching_done_or_blocked_again_needs_fresh_words(self):
         new_task(self.run, status="done", evidence="old check")
-        task = new_task(self.run, status="in_progress", at=NOW + 60)
-        self.assertNotIn("evidence", task)
+        new_task(self.run, status="in_progress", at=NOW + 60)
+        self.assertNotIn("evidence", self.run["tasks"][0])
         with self.assertRaisesRegex(ValueError, "evidence"):
             new_task(self.run, status="done", at=NOW + 120)
         new_task(self.run, status="blocked", blocker="Needs your login", at=NOW + 120)
-        task = new_task(self.run, status="in_progress", at=NOW + 180)
-        self.assertNotIn("blocker", task)
+        new_task(self.run, status="in_progress", at=NOW + 180)
+        self.assertNotIn("blocker", self.run["tasks"][0])
         with self.assertRaisesRegex(ValueError, "blocker"):
             new_task(self.run, status="blocked", at=NOW + 240)
 
