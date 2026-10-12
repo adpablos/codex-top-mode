@@ -82,7 +82,7 @@ def add(bucket, usage, fields):
 def codex_tokens(home, since, until):
     """Sum per-response usage from Codex rollout logs, attributed to model/effort."""
     roots = [home / "sessions", home / "archived_sessions"]
-    buckets, sessions, responses, older, seen = {}, 0, 0, 0, set()
+    buckets, sessions, responses, older, seen = {}, set(), 0, 0, set()
     markers = ('"session_meta"', '"turn_context"', '"token_usage_record"', '"token_count"')
     for path in recent_files(roots, "rollout-*.jsonl", since):
         model, effort, used, owner = "unknown", None, False, None
@@ -129,12 +129,14 @@ def codex_tokens(home, since, until):
             add(bucket, usage, CODEX_FIELDS)
             responses += 1
             used = True
-        sessions += used
+        if used:
+            # A thread can write more than one log; count it once.
+            sessions.add(owner or path)
         if used and not records:
             # The older format only keeps a cumulative counter, which can leave out
             # automatic compactions, so a total that includes it may be a lower bound.
             older += 1
-    result = summary("codex", buckets, sessions, responses)
+    result = summary("codex", buckets, len(sessions), responses)
     result["olderLogs"] = older
     # Codex compresses logs untouched for a week (.jsonl.zst); stdlib Python cannot read them.
     packed = recent_files(roots, "rollout-*.jsonl.zst", since)

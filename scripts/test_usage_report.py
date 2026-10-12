@@ -136,12 +136,14 @@ class TokenTests(unittest.TestCase):
         ]
         # A thread that writes a second log of its own repeats its records.
         rewritten = [*parent, record("r4", "parent")]
-        write_lines(self.home / "sessions/rollout-parent.jsonl", parent)
+        write_lines(self.home / "sessions/rollout-parent.jsonl", [*parent, record("r5", "parent")])
         write_lines(self.home / "sessions/rollout-child.jsonl", child)
         write_lines(self.home / "sessions/rollout-parent_2.jsonl", rewritten)
         result = codex_tokens(self.home, SINCE, NOW)
-        # r1 is before the interval; r2, r3 and r4 count once each.
-        self.assertEqual((result["responses"], result["totalTokens"]), (3, 300))
+        # r1 is before the interval; r2 to r5 count once each.
+        self.assertEqual((result["responses"], result["totalTokens"]), (4, 400))
+        # Both of the parent's logs add usage, but it is one thread.
+        self.assertEqual(result["sessions"], 2)
 
     def test_codex_usage_outside_the_window_is_ignored(self):
         write_lines(
