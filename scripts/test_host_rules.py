@@ -186,6 +186,21 @@ class SyncTests(unittest.TestCase):
             self.sync(profile())
         self.assertFalse(self.settings.exists())
 
+    def test_a_failed_settings_write_keeps_the_rules_to_remove_on_record(self):
+        self.sync(profile("autonomous"))
+        write_json = host_rules.write_json
+
+        def fail_on_settings(path, data, mode):
+            if path == self.settings:
+                raise OSError("read-only")
+            write_json(path, data, mode)
+
+        with patch.object(host_rules, "write_json", fail_on_settings), self.assertRaises(OSError):
+            self.sync(profile("careful"))
+        self.assertIn(MERGE, self.stored()["permissions"]["allow"])
+        self.assertIn(MERGE, self.sync(profile("careful"))["remove"]["allow"])
+        self.assertNotIn(MERGE, self.stored()["permissions"]["allow"])
+
     def test_refuses_a_linked_settings_file_or_a_broken_one(self):
         self.settings.parent.mkdir()
         target = Path(self.tmp.name) / "elsewhere.json"
