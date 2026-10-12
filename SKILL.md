@@ -77,14 +77,34 @@ A request that only reviews or changes this package does not need it.
   `python3 -B <this folder>/scripts/capacity_policy.py --profile <path>`: it must
   be valid with `authorizationActive: true`. A short request like "start Top Mode
   for 2 hours" inherits it.
-- **Not found:** run first-time setup. Ask the user, in plain words, for: projects
-  and what to exclude, current priorities and pending work, who owns each task,
-  what "done" means, which actions are allowed / ask / deny, which models to use
-  for easy, normal and hard work, a maximum run length, and whether to stop when
-  the weekly allowance renews. Adapt the
-  [fictional example](examples/profile.example.json) (its permissions are not
-  real). Show the result as a short plain summary, get explicit approval, save it
-  owner-only outside Git, then run `profile_binding.py bind --profile <path>`.
+- **Old format** (refused as `schemaVersion 1`): offer to set up again, filling
+  in what it already says (projects, exclusions, limits). Never run with it.
+- **Not found:** guided setup. Ask only what you cannot find out yourself:
+  1. Ask which folders hold their projects (default: the current one). Look
+     there: Git repositories, their README, ROADMAP or TODO files, and open
+     issues, pull requests and security alerts when `gh` works. Skip folders the
+     user rules out.
+  2. Propose a short list: each project in one line, where its pending work
+     lives, and its three clearest pending items.
+  3. Ask what to leave out, the order of priority, the permission level
+     (careful, balanced or autonomous, as in the
+     [README](README.md#you-stay-in-control); balanced by default) with any
+     exceptions, a maximum run length, how many sessions may work at once
+     (two by default, counting yours), whether to stop when the weekly
+     allowance renews (yes by default), and until when the approval holds
+     (until they revoke it by default).
+  4. Say that their agent's own permission settings still apply: at autonomous
+     it may still ask before a push or a merge.
+  5. On Claude Code without a saved status line, offer to save it
+     ([how](references/profile-contract.md#quota-readings)); it changes their
+     settings, so only with their OK. Without it, Claude quota stays unknown.
+  6. Write the profile from the
+     [fictional example](examples/profile.example.json) (its permissions are
+     not real; the fields are in the
+     [contract](references/profile-contract.md#human-profile)), with
+     `approvedAt` the time they approve it and `source` where they did. Show it
+     as a short plain summary, get explicit approval, save it owner-only
+     outside Git, then run `profile_binding.py bind --profile <path>`.
 - **Broken or conflicting:** explain the one problem and fix only that with the
   user. Never fall back to an example, another profile or memory.
 
@@ -124,8 +144,10 @@ Before the first assignment:
    `limits.maximumHours` and `authorization.validUntil`. If no duration is given
    and none was approved as default, ask.
 2. Take a **quota baseline** with the same source as in step 2, if any.
-3. Refresh the backlog from the approved sources: objective, benefit, done
-   criteria, owner, ready, blocker. Order by `priority`; finish pending work first.
+3. Read each project's `work` sources, most important project first, and list
+   ready work: objective, benefit, done criteria, owner, blocker. Finish pending
+   work before starting new work. Show the plan in three to five lines and start;
+   the user can change it or stop at any time.
 
 Then, until the deadline or another stop:
 
@@ -136,8 +158,16 @@ Then, until the deadline or another stop:
   profile changed: stop.
 - Prefer continuing a session that already owns the task. Delegate only bounded,
   independent work, through your host's supported tools; otherwise work serially.
-- Pick models by task shape: the economical tier for repeatable, easily checked
-  work; stronger tiers for ambiguity or after a failed check.
+- An owner is a person, "anyone", or a session you can see. If you cannot tell
+  whether the owner is busy (a Codex thread seen from Claude Code, say), ask the
+  user, or only read and diagnose.
+- Commit only on a working branch, never on the default branch. At `autonomous`,
+  merge only after an independent review and with checks green.
+- Work outside the run you come across (a broken pull request, a stale branch):
+  report it, don't touch it.
+- Pick models by task shape, using the profile's `models` for your agent when
+  given: an economical model for repeatable, easily checked work; stronger ones
+  for ambiguity or after a failed check.
 - At each checkpoint verify the outcome yourself (tests, diff, file) before
   marking it done; keep blockers and the next owner.
 - On Codex with native quota, feed each fresh reading to the observer described
@@ -168,6 +198,8 @@ and the [example](examples/report.example.md):
   from delivered work; tested, reviewed, merged and used in real life are
   different levels of evidence.
 - **Pending and next step**, with who acts next.
+- **Setup changes** you noticed (a new project, a finished roadmap, a source
+  that moved): propose them; change the profile only with the user's approval.
 - **The run:** start, deadline, actual stop and why; quota before and after with
   reading times; models and effort actually used; sessions started and finished.
 - **Tokens:** `python3 -B <this folder>/scripts/usage_report.py tokens --since <start> --markdown`.

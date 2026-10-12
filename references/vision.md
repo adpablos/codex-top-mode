@@ -57,12 +57,14 @@ suggestion and token report from local logs, manual runs with deadlines and
 reports, an experimental watch for announced Codex resets that only notifies,
 quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
 documentation links, macOS), one-step install for Codex and Claude Code, a
-quiet `check` command to schedule with the agent's own scheduler, and a verdict
+quiet `check` command to schedule with the agent's own scheduler, a verdict
 on whether the Codex plan has been enough, from its weekly history, compared
-with the other Codex plans.
+with the other Codex plans, and a guided setup: the agent discovers projects and
+where their work lives, and the user picks one of three permission levels.
 
 Next, in small pull requests:
 
-1. **Guided setup.** The agent discovers projects and pending work from the
-   workspace; three permission levels with optional detail; the profile points
-   to where work lives instead of copying task lists.
+1. **Run journal.** `run.py` records each run's deadline, quota, tasks and
+   sessions privately, answers "status" from it and writes the report's
+   skeleton, so the report comes from data and the plan advice can tell Top
+   Mode's use apart from the user's own.

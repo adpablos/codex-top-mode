@@ -45,10 +45,13 @@ expected. Update with `git -C ~/.quota-coach pull`; undo with
 Ask your agent to update Top Mode; your setup and folder stay as they are.
 
 **2. Set up, once.** In a new session, say *"Help me set up Quota Coach."* The
-agent asks about your projects and priorities, what to leave out, what it may do
-without asking, and a default time limit. It shows you the setup in plain words
-and saves it, after your approval, in a private file outside any Git repository.
-You never need to edit JSON.
+agent looks at the folders you point it to, proposes your projects and where
+their pending work lives (issues, pull requests, a roadmap file), and asks only
+what it can't find out: what to leave out, the order, a permission level, a time
+limit, how many sessions may work at once and how long your approval lasts
+(until you revoke it, by default). It shows you the setup in plain words and
+saves it, after your approval, in a private file outside any Git repository. You
+never need to edit JSON.
 
 **3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
 every 4 hours with your cheapest model and only tell me when there is
@@ -60,7 +63,7 @@ up only when there is spare capacity to use.
 | You say | What happens |
 | --- | --- |
 | "Is it worth running Top Mode now?" | It checks your quota and says yes, no or unknown, and why. |
-| "Start Top Mode for 2 hours." | It picks the most valuable ready work from your setup and gets going. |
+| "Start Top Mode for 2 hours." | It reads your projects' pending work, shows you its plan in a few lines and gets going. |
 | "Status." | What is done and checked, what is in progress, blockers, time left. |
 | "Stop Top Mode." | No new work; running tasks save a checkpoint; you get the report. |
 | "Explain the report." | Before, after, pending and next step, per project. |
@@ -80,9 +83,15 @@ The check only suggests. Top Mode only starts when you say so.
 ## You stay in control
 
 - **Nothing runs without your approval.** Examples and news never count as permission.
-- **Every action has a rule:** `allowed`, `ask` or `deny`. Editing, opening a pull
-  request, reviewing and merging are separate; installing, access to accounts,
-  money and deleting things are denied or asked by default.
+- **You pick a permission level,** and can change single actions on top of it:
+
+  | Level | Does alone | Asks you first | Never |
+  | --- | --- | --- | --- |
+  | Careful | read, edit, run tests, commit on a branch | open a pull request, request a review, merge, install, use your accounts | money, deleting things |
+  | **Balanced** (default) | the above, plus open a pull request and request a review | merge, install, use your accounts | money, deleting things |
+  | Autonomous | the above, plus merge once an independent review and the checks pass | install, use your accounts | money, deleting things |
+
+  Your agent's own permission settings still apply on top of these.
 - **Fixed deadline.** It stops at the time limit, if you revoke permission, or
   (when the agent can see your quota) when your weekly allowance renews.
 - **One coordinator.** One conversation keeps track of everything. It reuses
@@ -115,7 +124,7 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [references/plans.json](references/plans.json) | Codex plan prices and sizes, with sources and the date they were checked. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
-| [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, what is ready, what an action needs. |
+| [scripts/capacity_policy.py](scripts/capacity_policy.py) | Checks your setup: is it valid, and what an action needs. |
 | [scripts/public_watch.py](scripts/public_watch.py) | Optional: watches for announced Codex resets and only tells you. |
 | [examples/](examples/) | Fictional setup, watch and report examples. |
 

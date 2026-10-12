@@ -5,6 +5,21 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Guided setup with a smaller profile (`schemaVersion: 2`). The agent looks at
+  the folders you point it to, proposes your projects and where their pending
+  work lives (GitHub issues, pull requests and security alerts, or files such as
+  `ROADMAP.md`), and asks only what it can't find out. You pick one of three
+  permission levels (careful, balanced by default, or autonomous) and can change
+  single actions on top. The profile no longer holds a task list or run state,
+  and models per agent are optional. A profile in the old format is refused with
+  a request to set up again; the agent carries over its projects, exclusions and
+  limits. `capacity_policy.py` no longer prints `readyWork`; it prints the
+  level and the resulting actions.
+- New rules for a run: commit only on a working branch; when the agent can't see
+  whether a task's owner is busy, it asks or only reads; it reports work outside
+  the run that it comes across without touching it; and the report proposes
+  setup changes, applied only with your approval.
+
 - Renamed the project to Quota Coach (repository `adpablos/quota-coach`, skill
   `quota-coach`, suggested folder `~/.quota-coach`), because it now also tells
   you whether your plan fits, not only how to spend spare quota. Top Mode stays
