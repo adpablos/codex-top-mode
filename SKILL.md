@@ -1,42 +1,45 @@
 ---
-name: top-mode
-description: Check whether spare subscription quota is worth using, set up a private profile, run a bounded Top Mode on the user's priorities, and close with a clear report. Works with Codex, Claude Code and similar agents.
+name: quota-coach
+description: Help the user get the most out of an AI subscription. Check whether spare quota is worth using, set up a private profile, run a bounded Top Mode on the user's priorities, close with a clear report, and judge whether the plan fits. Works with Codex, Claude Code and similar agents.
 ---
 
-# Top Mode
+# Quota Coach
 
-Top Mode helps the user spend spare subscription capacity on useful work without
-losing control. You have four jobs: **set up**, **check**, **run** and **report**,
+Quota Coach helps the user get the most out of their subscription without losing
+control. Top Mode is its bounded run that spends spare capacity on the user's
+priorities. You have four jobs: **set up**, **check**, **run** and **report**,
 plus installing the package and judging the plan when asked.
 The [README](README.md) shows how to explain this to people. Field and command
 details live in the [profile, quota and report contract](references/profile-contract.md).
 
 The scripts live next to this file. Run them by full path,
-`python3 -B <this folder>/scripts/<name>.py` (`~/.top-mode/scripts/` after the
+`python3 -B <this folder>/scripts/<name>.py` (`~/.quota-coach/scripts/` after the
 one-step install), never relative to the current folder, which is usually the
 user's project.
 
 ## 0. Install (when asked)
 
-"Install Top Mode from <url>": clone it to `~/.top-mode`, then run
-`python3 -B ~/.top-mode/scripts/install.py` and relay its output. If
-`~/.top-mode` already exists, update it from `origin`, the only remote you check,
-and stop and ask the user at the first step that fails:
+"Install Quota Coach from <url>": clone it to `~/.quota-coach`, then run
+`python3 -B ~/.quota-coach/scripts/install.py` and relay its output. If
+`~/.quota-coach` already exists, or `~/.top-mode` from before the rename, update
+that folder from `origin`, the only remote you check, and stop and ask the user
+at the first step that fails:
 
-1. It is a plain folder, not a link, and `git -C ~/.top-mode remote get-url origin`
-   names the same repository.
-2. After `git -C ~/.top-mode fetch origin`, it has no local changes or commits:
-   `git -C ~/.top-mode status -s` and `git -C ~/.top-mode log origin/HEAD..`
+1. It is a plain folder, not a link, and `git -C <folder> remote get-url origin`
+   names the same repository (or `adpablos/top-mode`, its former name).
+2. After `git -C <folder> fetch origin`, it has no local changes or commits:
+   `git -C <folder> status -s` and `git -C <folder> log origin/HEAD..`
    print nothing.
-3. `git -C ~/.top-mode merge origin/HEAD` succeeds.
+3. `git -C <folder> merge origin/HEAD` succeeds.
 
-Then run `install.py` as above. Never run scripts from a checkout you have not
-identified. If your host refuses to run code from a folder just cloned, ask the
-user to approve the command; do not work around the refusal. `install.py` links
-the package into `~/.codex/skills/top-mode` and `~/.claude/skills/top-mode`
-(under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when set) for the agents that exist
-and never replaces anything else. Tell the user to open a new session and ask to
-set up Top Mode.
+Then run `python3 -B <folder>/scripts/install.py`. Never run scripts from a
+checkout you have not identified. If your host refuses to run code from a folder
+just cloned, ask the user to approve the command; do not work around the
+refusal. `install.py` links the package into `~/.codex/skills/quota-coach` and
+`~/.claude/skills/quota-coach` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when
+set) for the agents that exist, removes its own links under the former name
+`top-mode`, and never replaces anything else. Tell the user to open a new
+session and ask to set up Quota Coach.
 
 ## Rules that always apply
 
@@ -62,7 +65,7 @@ set up Top Mode.
 
 ## 1. Set up (first time) or load the saved setup
 
-When the user asks to set up, check or run Top Mode, start with:
+When the user asks to set up Quota Coach, check or run Top Mode, start with:
 
 ```sh
 python3 -B <this folder>/scripts/profile_binding.py locate

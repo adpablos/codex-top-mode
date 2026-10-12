@@ -1,6 +1,6 @@
 # Vision and principles
 
-Read this before changing Top Mode. Every change should move toward this picture
+Read this before changing Quota Coach. Every change should move toward this picture
 and keep these principles; when one conflicts with another, the earlier one wins.
 
 ## Goal
@@ -11,7 +11,7 @@ without babysitting and **without losing control**.
 
 ## The user's journey
 
-1. **Install once.** One step makes Top Mode available in Codex and Claude Code.
+1. **Install once.** One step makes Quota Coach available in Codex and Claude Code.
 2. **Set up once, by conversation.** The agent looks at the user's workspace,
    proposes projects, priorities and a permission level, and the user approves.
    The setup stays private and is updated as things change.
@@ -45,7 +45,7 @@ without babysitting and **without losing control**.
 
 ## Not goals
 
-- A task manager: Top Mode reads priorities from where the user already keeps them.
+- A task manager: Quota Coach reads priorities from where the user already keeps them.
 - Automatic model routing: the agent picks models within the host's options.
 - A hosted service, cloud checker or anything that needs an extra account.
 - Spending quota for its own sake: useful outcomes come first.

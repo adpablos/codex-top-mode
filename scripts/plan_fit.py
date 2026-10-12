@@ -85,8 +85,9 @@ def windows(readings, now, size=None):
     """The account's weekly windows in time order, and how many readings were left out.
 
     Some logs carry a second weekly meter at the same time: one that stays near
-    0% while the account's window fills, or another account signed in on the
-    same machine. When two windows run in parallel, the one that used more is
+    0% while the account's window fills, the same sessions alternating between
+    two meters for a while, or another account signed in on the same machine.
+    When two windows run in parallel, the one that used more is
     kept (on a tie, the one with more readings, then the later one); the other
     is not a renewal.
     """
@@ -524,8 +525,7 @@ def markdown(advice):
     if advice["parallelReadingsLeftOut"]:
         out.append(
             f"- Left out {advice['parallelReadingsLeftOut']} readings from a second weekly meter "
-            "that ran at the same time (another account on this machine, or a meter that "
-            "stays near 0 %)."
+            "that ran at the same time; the one that used more is kept."
         )
     if advice.get("compressedLogs"):
         out.append(

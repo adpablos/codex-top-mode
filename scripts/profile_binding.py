@@ -1,4 +1,4 @@
-"""Save or locate one private Top Mode profile without copying its contents."""
+"""Save or locate one private Quota Coach profile without copying its contents."""
 
 import argparse
 import json

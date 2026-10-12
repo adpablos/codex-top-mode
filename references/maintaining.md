@@ -1,4 +1,4 @@
-# Maintaining Top Mode
+# Maintaining Quota Coach
 
 This guide is for changing the package. To use it for your own work, start
 with the [README](../README.md) and [agent entry point](../AGENTS.md).
@@ -12,7 +12,7 @@ Keep review, merge, release and deployment authority separate.
 ## Optional maintainer review
 
 The [Claude workflow](../.github/workflows/claude.yml) reviews maintenance PRs for
-this repository. It is not a requirement for installing or using Top Mode.
+this repository. It is not a requirement for installing or using Quota Coach.
 The model reads frozen PR files; it cannot execute PR code, edit files or write
 to GitHub. Trusted workflow code verifies and publishes its result.
 
@@ -30,7 +30,7 @@ checks pass, and its head is the exact full 40-character SHA you intend to revie
 Replace both placeholders below; leave the default economical runner unchanged:
 
 ```sh
-gh workflow run .github/workflows/claude.yml --repo adpablos/top-mode --ref main \
+gh workflow run .github/workflows/claude.yml --repo adpablos/quota-coach --ref main \
   -f pr_number=PR_NUMBER -f head_sha=FULL_HEAD_SHA
 ```
 

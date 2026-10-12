@@ -22,7 +22,7 @@ class InstallTests(unittest.TestCase):
     def test_links_into_each_installed_agent_and_skips_missing_ones(self):
         (self.home / ".codex").mkdir()
         results = install.install(self.home, {})
-        link = self.home / ".codex/skills/top-mode"
+        link = self.home / ".codex/skills/quota-coach"
         self.assertTrue(link.is_symlink())
         self.assertEqual(link.resolve(), install.PACKAGE)
         self.assertTrue((link / "SKILL.md").is_file())
@@ -31,7 +31,7 @@ class InstallTests(unittest.TestCase):
 
     def test_is_idempotent_and_never_replaces_something_else(self):
         (self.home / ".codex").mkdir()
-        other = self.home / ".claude/skills/top-mode"
+        other = self.home / ".claude/skills/quota-coach"
         other.mkdir(parents=True)
         install.install(self.home, {})
         again = install.install(self.home, {})
@@ -42,12 +42,25 @@ class InstallTests(unittest.TestCase):
     def test_remove_only_deletes_our_links(self):
         (self.home / ".codex").mkdir()
         (self.home / ".claude/skills").mkdir(parents=True)
-        (self.home / ".claude/skills/top-mode").symlink_to(self.home)
+        (self.home / ".claude/skills/quota-coach").symlink_to(self.home)
         install.install(self.home, {})
         results = install.remove(self.home, {})
-        self.assertFalse((self.home / ".codex/skills/top-mode").exists())
+        self.assertFalse((self.home / ".codex/skills/quota-coach").exists())
         self.assertEqual(results["Claude Code"], "nothing to remove")
+        self.assertTrue((self.home / ".claude/skills/quota-coach").is_symlink())
+
+    def test_replaces_only_our_links_under_the_former_name(self):
+        (self.home / ".codex/skills").mkdir(parents=True)
+        (self.home / ".claude/skills").mkdir(parents=True)
+        (self.home / ".codex/skills/top-mode").symlink_to(install.PACKAGE)
+        (self.home / ".claude/skills/top-mode").symlink_to(self.home)
+        results = install.install(self.home, {})
+        self.assertIn("removed the old link", results["Codex"])
+        self.assertFalse((self.home / ".codex/skills/top-mode").is_symlink())
         self.assertTrue((self.home / ".claude/skills/top-mode").is_symlink())
+        (self.home / ".codex/skills/top-mode").symlink_to(install.PACKAGE)
+        install.remove(self.home, {})
+        self.assertEqual(list((self.home / ".codex/skills").iterdir()), [])
 
     def test_a_failed_link_makes_the_install_fail(self):
         (self.home / ".codex").mkdir()
@@ -64,7 +77,7 @@ class InstallTests(unittest.TestCase):
         (self.home / "codex").mkdir()
         (self.home / ".codex").mkdir()
         install.install(self.home, env)
-        self.assertTrue((self.home / "codex/skills/top-mode").is_symlink())
+        self.assertTrue((self.home / "codex/skills/quota-coach").is_symlink())
         self.assertFalse((self.home / ".codex/skills").exists())
 
 
