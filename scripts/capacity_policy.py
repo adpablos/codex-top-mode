@@ -49,17 +49,16 @@ def fields(section: dict, required: set, optional: set, where: str) -> None:
 
 
 def absolute(value) -> bool:
-    return text(value) and PurePath(value).is_absolute()
+    """An absolute path with no `..`, so comparing folders by name is safe."""
+    return text(value) and PurePath(value).is_absolute() and ".." not in PurePath(value).parts
 
 
 def work_source(value) -> bool:
     """A GitHub source, or a file inside the project such as ROADMAP.md."""
     if not text(value):
         return False
-    if value.startswith("github-"):
-        return value in GITHUB
     path = PurePath(value)
-    return not path.is_absolute() and ".." not in path.parts
+    return value in GITHUB or (not path.is_absolute() and ".." not in path.parts)
 
 
 def validate_profile(profile: dict) -> None:
@@ -124,7 +123,7 @@ def validate_profile(profile: dict) -> None:
     excluded = profile.get("excluded", [])
     require(
         isinstance(excluded, list) and all(absolute(p) for p in excluded),
-        "Exclusions must be absolute folder paths",
+        "Exclusions must be absolute folder paths without ..",
     )
     projects = profile["projects"]
     require(isinstance(projects, dict) and projects, "At least one project is required")
@@ -133,7 +132,7 @@ def validate_profile(profile: dict) -> None:
         require(text(name) and isinstance(project, dict), f"Invalid {where}")
         fields(project, {"label", "path", "work", "priority"}, {"notes"}, where)
         require(text(project["label"]), f"{where} needs a label")
-        require(absolute(project["path"]), f"{where} needs an absolute path")
+        require(absolute(project["path"]), f"{where} needs an absolute path without ..")
         path = PurePath(project["path"])
         require(
             not any(PurePath(p) == path or PurePath(p) in path.parents for p in excluded),

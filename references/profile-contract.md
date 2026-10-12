@@ -36,7 +36,7 @@ no task list and no run state. `schemaVersion: 2` has these fields and no others
   0 or more, lower first; and optional `notes`, what the user said about it, such
   as what done means. Without a working `gh`, read only the files and say so.
 - `excluded` (optional): absolute folders never to touch or propose. No project
-  may be inside one.
+  may be inside one; paths with `..` are refused so that this holds.
 - `models` (optional): per agent (`codex`, `claude`), model names for
   `repeatable`, `ordinary` or `difficult` work. Without them, choose among the
   host's models by task shape; escalate on complexity or failed verification.

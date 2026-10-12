@@ -138,7 +138,12 @@ class ValidationTests(unittest.TestCase):
             ),
             "relative exclusion": broken(lambda p: p.update(excluded=["client-work"])),
             "no work sources": broken(lambda p: notes(p).update(work=[])),
-            "unknown GitHub source": broken(lambda p: notes(p).update(work=["github-issue"])),
+            "path that climbs out": broken(
+                lambda p: notes(p).update(path="/home/you/other/../projects/client-work/x")
+            ),
+            "exclusion that climbs out": broken(
+                lambda p: p.update(excluded=["/home/you/x/../projects"])
+            ),
             "file outside the project": broken(lambda p: notes(p).update(work=["../PLAN.md"])),
             "absolute work file": broken(lambda p: notes(p).update(work=["/tmp/PLAN.md"])),
             "work source as a list": broken(lambda p: notes(p).update(work=[["ROADMAP.md"]])),
@@ -157,6 +162,7 @@ class ValidationTests(unittest.TestCase):
         p = profile()
         notes = p["projects"]["notes-app"]
         notes["work"] = ["github-issues", "github-prs", "github-alerts", "docs/PLAN.md"]
+        notes["work"].append("github-roadmap.md")  # Any other name is a file.
         validate_profile(p)
 
 

@@ -89,8 +89,10 @@ A request that only reviews or changes this package does not need it.
   3. Ask what to leave out, the order of priority, the permission level
      (careful, balanced or autonomous, as in the
      [README](README.md#you-stay-in-control); balanced by default) with any
-     exceptions, a maximum run length, and whether to stop when the weekly
-     allowance renews (yes by default).
+     exceptions, a maximum run length, how many sessions may work at once
+     (two by default, counting yours), whether to stop when the weekly
+     allowance renews (yes by default), and until when the approval holds
+     (until they revoke it by default).
   4. Say that their agent's own permission settings still apply: at autonomous
      it may still ask before a push or a merge.
   5. On Claude Code without a saved status line, offer to save it
@@ -99,8 +101,10 @@ A request that only reviews or changes this package does not need it.
   6. Write the profile from the
      [fictional example](examples/profile.example.json) (its permissions are
      not real; the fields are in the
-     [contract](references/profile-contract.md#human-profile)), show it as a short plain summary, get explicit approval, save it
-     owner-only outside Git, then run `profile_binding.py bind --profile <path>`.
+     [contract](references/profile-contract.md#human-profile)), with
+     `approvedAt` the time they approve it and `source` where they did. Show it
+     as a short plain summary, get explicit approval, save it owner-only
+     outside Git, then run `profile_binding.py bind --profile <path>`.
 - **Broken or conflicting:** explain the one problem and fix only that with the
   user. Never fall back to an example, another profile or memory.
 
