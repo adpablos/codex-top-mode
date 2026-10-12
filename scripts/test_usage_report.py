@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import usage_report
-from usage_monitor import epoch
+from usage_monitor import epoch, snapshot
 from usage_report import (
     advise,
     agent_home,
@@ -18,7 +18,6 @@ from usage_report import (
     codex_quota,
     codex_tokens,
     codex_weekly_readings,
-    file_quota,
     markdown,
 )
 
@@ -294,6 +293,19 @@ class TokenTests(unittest.TestCase):
         self.assertEqual(models["claude-advisor", None]["responses"], 1)
 
 
+def week(used, resets_at, observed_at=NOW, minutes=10080):
+    """A reading with one window, as any source gives it."""
+    window = {"slot": "secondary", "usedPercent": used, "durationMinutes": minutes}
+    return {
+        "source": "test",
+        "observedAt": observed_at,
+        "windows": [{**window, "resetsAt": resets_at}],
+        "availableResets": None,
+        "grantTimes": [],
+        "resetExpirations": [],
+    }
+
+
 class QuotaTests(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
@@ -331,26 +343,18 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(codex_quota(self.home)["windows"][0]["usedPercent"], 10.0)
 
     def test_a_capture_time_in_the_future_is_not_a_fresh_reading(self):
-        path = self.home / "status.json"
-        limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + 10 * 3600}}
         for ahead, suggestion in ((300, "consider_top_mode"), (301, "refresh_or_wait")):
             with self.subTest(ahead=ahead):
-                reading = {"observedAt": NOW + ahead, "payload": {"rate_limits": limits}}
-                path.write_text(json.dumps(reading))
-                self.assertEqual(advise(file_quota(path), NOW)["suggestion"], suggestion)
+                reading = week(40, NOW + 10 * 3600, NOW + ahead)
+                self.assertEqual(advise(reading, NOW)["suggestion"], suggestion)
 
     def test_a_reading_from_before_its_weekly_renewal_needs_a_fresh_one(self):
-        path = self.home / "status.json"
         for resets_in, suggestion in ((3600, "consider_top_mode"), (0, "refresh_or_wait")):
             with self.subTest(resets_in=resets_in):
-                limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + resets_in}}
-                reading = {"observedAt": NOW - 3600, "payload": {"rate_limits": limits}}
-                path.write_text(json.dumps(reading))
-                advice = advise(file_quota(path), NOW)
+                advice = advise(week(40, NOW + resets_in, NOW - 3600), NOW)
                 self.assertEqual(advice["suggestion"], suggestion)
 
     def test_decisions_use_exact_times_not_rounded_ones(self):
-        path = self.home / "status.json"
         cases = (
             (6 * 3600, 3600, "consider_top_mode"),
             (6 * 3600 + 60, 3600, "refresh_or_wait"),  # stale, though 6.0 h rounded
@@ -358,22 +362,13 @@ class QuotaTests(unittest.TestCase):
         )
         for age, resets_in, suggestion in cases:
             with self.subTest(age=age, resets_in=resets_in):
-                limits = {"seven_day": {"used_percentage": 40, "resets_at": NOW + resets_in}}
-                reading = {"observedAt": NOW - age, "payload": {"rate_limits": limits}}
-                path.write_text(json.dumps(reading))
-                self.assertEqual(advise(file_quota(path), NOW)["suggestion"], suggestion)
+                reading = week(40, NOW + resets_in, NOW - age)
+                self.assertEqual(advise(reading, NOW)["suggestion"], suggestion)
 
     def test_a_reading_without_a_weekly_window_is_unknown(self):
-        path = self.home / "status.json"
-        five_hour = {"five_hour": {"used_percentage": 10, "resets_at": NOW + 3600}}
-        not_a_number = {"seven_day": {"used_percentage": True, "resets_at": NOW + 3600}}
-        for limits in (five_hour, not_a_number):
-            with self.subTest(limits=limits):
-                reading = {"observedAt": NOW, "payload": {"rate_limits": limits}}
-                path.write_text(json.dumps(reading))
-                advice = advise(file_quota(path), NOW)
-                self.assertEqual(advice["suggestion"], "unknown")
-                self.assertEqual(advice["reasons"], ["weekly_window_unknown"])
+        advice = advise(week(10, NOW + 3600, minutes=300), NOW)
+        self.assertEqual(advice["suggestion"], "unknown")
+        self.assertEqual(advice["reasons"], ["weekly_window_unknown"])
 
     def test_an_old_codex_reading_is_stale_not_missing(self):
         limits = {"primary": {"used_percent": 40, "window_minutes": 10080}}
@@ -465,27 +460,6 @@ class QuotaTests(unittest.TestCase):
             [(epoch("2033-05-18T10:00:00Z"), 20, NOW + 3600, "pro")],
         )
 
-    def test_claude_status_line_reading_carries_its_capture_time(self):
-        status = {
-            "rate_limits": {
-                "five_hour": {"used_percentage": 20, "resets_at": NOW + 3600},
-                "seven_day": {"used_percentage": 90, "resets_at": NOW + 3600},
-            }
-        }
-        path = self.home / "status.json"
-        path.write_text(json.dumps({"observedAt": NOW - 3600, "payload": status}))
-        advice = advise(file_quota(path), NOW)
-        self.assertEqual(advice["weeklyUsedPercent"], 90)
-        self.assertEqual(advice["readingAgeHours"], 1.0)
-        self.assertEqual(advice["suggestion"], "nothing_to_do")
-        # A bare reading says nothing about when it was taken; the file time is
-        # not evidence because copying or restoring the file changes it.
-        path.write_text(json.dumps(status))
-        with self.assertRaises(ValueError):
-            file_quota(path)
-        reading = file_quota(path, "2033-05-18T11:00:00Z")
-        self.assertEqual(epoch(reading["observedAt"]), NOW - 3600)
-
     def test_stale_or_exhausted_readings_do_not_suggest_work(self):
         week = {"slot": "primary", "durationMinutes": 10080, "resetsAt": NOW + 3600}
         base = {"source": "test", "availableResets": None, "resetExpirations": []}
@@ -523,14 +497,6 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(suggestion(75, 36, age_hours=6), "consider_top_mode")
         self.assertEqual(suggestion(75, 36, age_hours=6.5), "refresh_or_wait")
 
-    def test_claude_percentages_outside_0_to_100_are_dropped(self):
-        path = self.home / "status.json"
-        for used, kept in ((0, True), (100, True), (-1, False), (101, False)):
-            limits = {"seven_day": {"used_percentage": used}}
-            path.write_text(json.dumps({"observedAt": NOW, "payload": {"rate_limits": limits}}))
-            with self.subTest(used=used):
-                self.assertEqual(bool(file_quota(path)["windows"]), kept)
-
     def test_expiring_saved_resets_are_suggested(self):
         payload = {
             "rateLimitsByLimitId": {
@@ -547,9 +513,8 @@ class QuotaTests(unittest.TestCase):
                 "credits": [{"status": "available", "expiresAt": NOW + 2 * 86400}],
             },
         }
-        path = self.home / "payload.json"
-        path.write_text(json.dumps(payload))
-        advice = advise(file_quota(path, "2033-05-18T12:00:00Z"), NOW)
+        reading = {"source": "test", **snapshot(payload, "2033-05-18T12:00:00Z")}
+        advice = advise(reading, NOW)
         self.assertEqual(advice["reasons"], ["saved_resets_expiring_soon"])
         self.assertEqual(advice["suggestion"], "consider_top_mode")
 
@@ -727,23 +692,11 @@ class MainTests(unittest.TestCase):
         self.assertEqual(report["providers"][0]["totalTokens"], 140)
         self.assertEqual(report["providers"][1]["byModel"], [])
 
-    def test_quota_from_codex_logs_and_from_a_file(self):
+    def test_quota_from_codex_logs_or_unknown(self):
         logs = json.loads(self.run_main("quota", *self.homes()))
         self.assertEqual(logs["source"], "codex_session_log")
-        status = self.home / "status.json"
-        status.write_text(json.dumps({"rate_limits": {"seven_day": {"used_percentage": 10}}}))
-        saved = json.loads(
-            self.run_main(
-                "quota",
-                "--file",
-                str(status),
-                "--observed-at",
-                "2033-05-18T11:00:00Z",
-                *self.homes(),
-            )
-        )
-        self.assertEqual(saved["source"], "claude_status_line")
-        self.assertEqual(saved["weeklyUsedPercent"], 10)
+        claude = json.loads(self.run_main("quota", "--agent", "claude", *self.homes()))
+        self.assertEqual(claude["reasons"], ["no_quota_reading"])  # no CodexBar
         missing = json.loads(self.run_main("quota", "--codex-home", str(self.home / "none")))
         self.assertEqual(missing, {"suggestion": "unknown", "reasons": ["no_quota_reading"]})
 
@@ -758,14 +711,11 @@ class MainTests(unittest.TestCase):
         with self.assertRaises(SystemExit), quiet:
             self.run_main("plan", "--windows", "3")
 
-    def test_invalid_or_missing_times_are_rejected(self):
-        bare = self.home / "bare.json"
-        bare.write_text(json.dumps({"rate_limits": {"seven_day": {"used_percentage": 10}}}))
+    def test_invalid_times_or_agents_are_rejected(self):
         for argv in (
             ("tokens", "--since", "yesterday"),
             ("tokens", "--since", "2033-05-18T10:00:00Z", "--until", "2033-05-18T09:00:00Z"),
-            ("quota", "--file", str(bare)),
-            ("quota", "--file", str(bare), "--observed-at", "noon"),
+            ("quota", "--agent", "gemini"),
         ):
             quiet = contextlib.redirect_stderr(io.StringIO())
             with self.subTest(argv=argv), self.assertRaises(SystemExit), quiet:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from profile_binding import private_path
 from usage_monitor import write_private
-from usage_report import advise, agent_home, codexbar_quota, file_quota, latest_quota
+from usage_report import advise, agent_home, latest_quota
 
 PRIVATE = Path.home() / ".codex-top-mode"
 QUIET_SECONDS = 20 * 3600
@@ -23,22 +23,9 @@ NO_READING = {
 }
 
 
-def saved(path):
-    """A saved reading that carries its capture time; anything else counts as none."""
-    try:
-        return file_quota(path)
-    except (OSError, ValueError):
-        return None
-
-
-def readings(codex_home, claude_status, quota_file):
-    """(agent, reading or None) for each quota source."""
-    if quota_file:
-        return [("quota file", saved(quota_file))]
-    claude = codexbar_quota("claude")
-    if claude is None and claude_status.is_file():
-        claude = saved(claude_status)
-    return [("Codex", latest_quota("codex", codex_home)), ("Claude", claude)]
+def readings(codex_home):
+    """(agent, reading or None) for each agent."""
+    return [(name, latest_quota(name.lower(), codex_home)) for name in ("Codex", "Claude")]
 
 
 def quota_lines(agent, advice):
@@ -99,23 +86,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verbose", action="store_true", help="Also print the full status")
     parser.add_argument("--json", action="store_true", help="The full status as JSON")
-    parser.add_argument("--quota-file", type=Path, help="A saved reading with its capture time")
     parser.add_argument("--codex-home", type=Path, default=agent_home("CODEX_HOME", ".codex"))
     parser.add_argument("--private", type=Path, default=PRIVATE, help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
         # Nothing check reads or writes may sit in Git or behind a link.
-        state, claude_status = (
-            private_path(args.private / name, existing=False)
-            for name in ("check-state.json", "claude-status.json")
-        )
+        state = private_path(args.private / "check-state.json", existing=False)
     except ValueError as error:
         parser.error(str(error))
     now = time.time()
-    advice = [
-        (agent, advise(reading, now))
-        for agent, reading in readings(args.codex_home, claude_status, args.quota_file)
-    ]
+    advice = [(agent, advise(reading, now)) for agent, reading in readings(args.codex_home)]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
     if args.json:
         lines = [line for _, line in news]

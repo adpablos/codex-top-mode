@@ -27,20 +27,10 @@ def profile(**limits):
     return p
 
 
-def native(used=40, at=NOW, renews=NOW + 30 * HOUR):
-    payload = {
-        "rateLimitsByLimitId": {
-            "codex": {
-                "primary": {"usedPercent": used, "windowDurationMins": 10080, "resetsAt": renews}
-            }
-        },
-        "rateLimitResetCredits": {"availableCount": 0},
-    }
-    return {"source": "codex_usage_payload", **snapshot(payload, iso(at))}
-
-
 def log_reading(used=40, at=NOW, renews=NOW + 30 * HOUR):
-    return {**native(used, at, renews), "source": "codex_session_log", "availableResets": None}
+    window = {"usedPercent": used, "windowDurationMins": 10080, "resetsAt": renews}
+    payload = {"rateLimitsByLimitId": {"codex": {"primary": window}}}
+    return {"source": "codex_session_log", **snapshot(payload, iso(at))}
 
 
 def fresh(p=None, hours=2, agents=("codex",), found=None):
@@ -107,14 +97,6 @@ class StartTests(unittest.TestCase):
         _, r = fresh(found={"codex": log_reading(renews=NOW - 60), "claude": None})
         self.assertEqual(r["deadline"], iso(NOW + 2 * HOUR))
         self.assertEqual(len(r["unknown"]), 1)
-
-    def test_only_codex_own_payload_starts_the_renewal_observer(self):
-        _, r = fresh()
-        self.assertNotIn("usageMonitor", r)
-        _, r = fresh(found={"codex": native(), "claude": None})
-        monitor = r["usageMonitor"]
-        self.assertEqual((monitor["mode"], monitor["effectiveStopAt"]), ("top", r["deadline"]))
-        self.assertEqual(monitor["scheduledWeeklyStopAt"], NOW + 30 * HOUR)
 
     def test_refuses_a_second_run_a_dead_approval_or_no_time(self):
         data, _ = fresh()
@@ -251,20 +233,6 @@ class StatusTests(unittest.TestCase):
         reasons = run.status(r, p, {}, NOW + HOUR)["stopReasons"]
         self.assertEqual(reasons, ["deadline", "authorization_ended"])
 
-    def test_says_stop_when_codex_confirms_an_early_renewal(self):
-        p = profile()
-        _, r = fresh(p, found={"codex": native(used=60), "claude": None})
-        first = run.status(r, p, {"codex": native(used=1, at=NOW + 60)}, NOW + 60)
-        self.assertFalse(first["stopNow"])
-        second = run.status(r, p, {"codex": native(used=1, at=NOW + 120)}, NOW + 120)
-        self.assertEqual(second["stopReasons"], ["weekly_renewal"])
-        self.assertFalse(second["savedResetAdded"])
-        # Readings from the logs are shown but never feed the observer.
-        _, r = fresh(p, found={"codex": native(used=60), "claude": None})
-        for at in (NOW + 60, NOW + 120):
-            result = run.status(r, p, {"codex": log_reading(used=1, at=at)}, at)
-        self.assertFalse(result["stopNow"])
-
 
 class StopAndReportTests(unittest.TestCase):
     def test_deadline_is_refused_as_a_reason_before_it_arrives(self):
@@ -337,18 +305,6 @@ class StopAndReportTests(unittest.TestCase):
         ):
             self.assertIn(expected, text)
         self.assertNotIn("w1", text)
-
-    def test_a_saved_reset_that_appears_is_reported_and_extends_nothing(self):
-        p = profile()
-        _, r = fresh(p, found={"codex": native(), "claude": None})
-        later = native(at=NOW + 60)
-        later["availableResets"] = 1
-        result = run.status(r, p, {"codex": later}, NOW + 60)
-        self.assertTrue(result["savedResetAdded"])
-        self.assertEqual((result["stopReasons"], result["deadline"]), ([], iso(NOW + 2 * HOUR)))
-        run.stop(r, "user", NOW + 120)
-        run.close(r, {"codex": later}, NOW + 120)
-        self.assertIn("| Saved resets | A new one appeared during the run", run.report(r, ""))
 
     def test_a_renewal_between_readings_is_not_counted_as_the_runs_use(self):
         _, r = fresh()
@@ -450,22 +406,15 @@ class CommandTests(unittest.TestCase):
         self.profile.write_text("{}")
         self.assertEqual(self.cli("status")["stopReasons"], ["profile_changed"])
 
-    def test_a_saved_reading_replaces_its_agents_source(self):
-        saved = self.private / "payload.json"
-        payload = {
-            "rateLimitsByLimitId": {
-                "codex": {"primary": {"usedPercent": 9, "windowDurationMins": 10080}}
-            }
-        }
-        saved.write_text(json.dumps({"observedAt": iso(NOW), "payload": payload}))
-        status = self.private / "claude-status.json"
-        status.write_text(json.dumps({"payload": {}}))  # no capture time: no reading
-        self.cli("start", "--hours", "1", "--agents", "codex", "claude", "--quota-file", str(saved))
+    def test_quota_comes_from_codexbar_when_it_answers(self):
+        bar = {**log_reading(used=9), "source": "codexbar"}
+        answers = {"claude": bar}
+        with patch.object(usage_report, "codexbar_quota", lambda agent, run: answers.get(agent)):
+            self.cli("start", "--hours", "1", "--agents", "codex", "claude")
         journal = json.loads((self.private / "runs.json").read_text())
         before = journal["runs"][0]["quotaBefore"]
-        self.assertEqual(before["codex"]["source"], "codex_usage_payload")
-        self.assertIsNone(before["claude"])
-        self.assertIn("usageMonitor", journal["runs"][0])
+        self.assertEqual(before["claude"]["source"], "codexbar")
+        self.assertIsNone(before["codex"])  # no CodexBar answer and no Codex logs
 
     def test_private_files_stay_out_of_git(self):
         (self.private / ".git").mkdir()

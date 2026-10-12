@@ -5,6 +5,13 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Removed the saved Claude Code status line, the hand-saved Codex usage
+  payload passed to the check, the run journal and `usage_report.py quota`,
+  and the observer that used it to
+  notice an early renewal during a run. CodexBar now covers both quotas and
+  saved resets; a run still stops at its deadline, which already includes the
+  known weekly renewal. `usage_report.py quota --agent claude` reads Claude
+  through CodexBar.
 - Quota comes from [CodexBar](https://codexbar.app) when it is installed: a
   live reading for Codex and Claude, with Codex's saved resets. Without it,
   Codex is read from its local logs as before. The check, the run journal and

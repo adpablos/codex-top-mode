@@ -398,44 +398,6 @@ def latest_quota(agent, codex_home, run=subprocess.run):
     return reading
 
 
-def file_quota(path, observed_at=None):
-    """A saved Claude Code status-line JSON or a native Codex usage payload.
-
-    The capture time is observed_at or the file's own {"observedAt", "payload"}
-    wrapper, never the file's modification time, which copies and restores change.
-    """
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if isinstance(data, dict) and "payload" in data:
-        observed_at = observed_at or data.get("observedAt")
-        data = data["payload"]
-    if epoch(observed_at) is None:
-        raise ValueError("The reading has no capture time; pass --observed-at")
-    limits = data.get("rate_limits") if isinstance(data, dict) else None
-    if isinstance(limits, dict) and ("seven_day" in limits or "five_hour" in limits):
-        windows = []
-        for name, minutes in (("five_hour", 300), ("seven_day", WEEK_MINUTES)):
-            window = limits.get(name)
-            used = window.get("used_percentage") if isinstance(window, dict) else None
-            if number(used) is not None and 0 <= used <= 100:
-                windows.append(
-                    {
-                        "slot": name,
-                        "usedPercent": float(used),
-                        "durationMinutes": minutes,
-                        "resetsAt": epoch(window.get("resets_at")),
-                    }
-                )
-        return {
-            "source": "claude_status_line",
-            "observedAt": observed_at,
-            "windows": windows,
-            "availableResets": None,
-            "grantTimes": [],
-            "resetExpirations": [],
-        }
-    return {"source": "codex_usage_payload", **snapshot(data, observed_at)}
-
-
 def advise(reading, now, min_unused=25, within_hours=36, stale_hours=6):
     """Suggest, never start: unused weekly quota near renewal or expiring resets."""
     if reading is None:
@@ -546,8 +508,7 @@ def main():
     tokens.add_argument("--until", help="ISO time with timezone (default: now)")
     tokens.add_argument("--markdown", action="store_true")
     quota = commands.add_parser("quota", help="Latest quota reading and a suggestion")
-    quota.add_argument("--file", help="Saved Claude status-line JSON or Codex payload")
-    quota.add_argument("--observed-at", help="When --file was captured, if it doesn't say")
+    quota.add_argument("--agent", choices=("codex", "claude"), default="codex")
     quota.add_argument("--min-unused", type=float, default=25)
     quota.add_argument("--within-hours", type=float, default=36)
     plan = commands.add_parser("plan", help="Has the Codex plan been enough? History and verdict")
@@ -585,15 +546,7 @@ def main():
         advice["compressedLogs"] = len(recent_files(roots, "rollout-*.jsonl.zst", 0))
         print(plan_fit.markdown(advice) if args.markdown else json.dumps(advice, indent=2))
         return
-    if args.file:
-        if args.observed_at and epoch(args.observed_at) is None:
-            parser.error("--observed-at needs an ISO time with a timezone")
-        try:
-            reading = file_quota(args.file, args.observed_at)
-        except (OSError, ValueError) as error:
-            parser.error(f"Cannot use {args.file}: {error}")
-    else:
-        reading = latest_quota("codex", args.codex_home)
+    reading = latest_quota(args.agent, args.codex_home)
     json.dump(advise(reading, now, args.min_unused, args.within_hours), sys.stdout, indent=2)
     print()
 

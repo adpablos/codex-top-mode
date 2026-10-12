@@ -15,13 +15,11 @@ from pathlib import Path
 
 from capacity_policy import authorization_active, fingerprint, require, validate_profile
 from profile_binding import locate, private_path
-from usage_monitor import epoch, observe, weekly
+from usage_monitor import epoch, weekly
 from usage_report import (
     agent_home,
     claude_tokens,
     codex_tokens,
-    codexbar_quota,
-    file_quota,
     iso,
     latest_quota,
     markdown,
@@ -29,12 +27,7 @@ from usage_report import (
 
 PRIVATE = Path.home() / ".codex-top-mode"
 AGENTS = ("codex", "claude")
-SOURCES = {
-    "codex_session_log": ("codex", "Codex local logs"),
-    "codex_usage_payload": ("codex", "Codex usage payload"),
-    "claude_status_line": ("claude", "Claude Code status line"),
-    "codexbar": (None, "CodexBar"),
-}
+SOURCES = {"codex_session_log": "Codex local logs", "codexbar": "CodexBar"}
 STATUSES = ("planned", "in_progress", "done", "blocked")
 TASK_FIELDS = ("project", "objective", "doneWhen", "owner")
 ROLES = ("coordinator", "worker", "reviewer")
@@ -91,18 +84,9 @@ def current(data: dict):
     return runs[-1] if runs and not runs[-1].get("endedAt") else None
 
 
-def readings(codex_home: Path, claude_status: Path, quota_file=None, observed_at=None) -> dict:
-    """The best reading per agent; a saved file replaces its agent's usual source."""
-    claude = codexbar_quota("claude")
-    try:
-        if claude is None and claude_status.is_file():
-            claude = file_quota(claude_status)
-    except (OSError, ValueError):
-        claude = None  # A saved line without its capture time is no reading.
-    found = {"codex": latest_quota("codex", codex_home), "claude": claude}
-    if quota_file:
-        reading = file_quota(quota_file, observed_at)
-        found[SOURCES[reading["source"]][0]] = reading
+def readings(codex_home: Path) -> dict:
+    """The best reading per agent: CodexBar, then Codex's own logs."""
+    found = {agent: latest_quota(agent, codex_home) for agent in AGENTS}
     return {
         agent: {**r, "observedAt": iso(epoch(r["observedAt"]))} if r else None
         for agent, r in found.items()
@@ -147,20 +131,6 @@ def start(data: dict, profile: dict, hours: float, agents: list, found: dict, no
         "tasks": [],
         "sessions": [],
     }
-    native = found.get("codex")
-    if "codex" in agents and native and native["source"] == "codex_usage_payload":
-        week = weekly(native)
-        # The observer that notices an early renewal needs Codex's own payload.
-        run["usageMonitor"] = {
-            "mode": "top",
-            "startedAt": iso(now),
-            "effectiveStopAt": iso(deadline),
-            "baseline": native,
-            "last": native,
-            "stopOnScheduledWeeklyRenewal": limits["stopOnScheduledWeeklyRenewal"],
-            "scheduledWeeklyStopAt": week["resetsAt"] if week else None,
-            "detectLowUsageRenewalShift": True,
-        }
     data["runs"].append(run)
     return run
 
@@ -259,12 +229,6 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         reasons.append("profile_changed")
     elif not authorization_active(profile, now):
         reasons.append("authorization_ended")
-    monitor, reading = run.get("usageMonitor"), found.get("codex")
-    if monitor and reading and reading["source"] == "codex_usage_payload":
-        run["usageMonitor"], _ = observe(monitor, reading)
-    monitor = run.get("usageMonitor") or {}
-    if monitor.get("mode") == "normal" and monitor["stopReason"] != "authorized_time_window_ended":
-        reasons.append("weekly_renewal")
     active = [s for s in run["sessions"] if not s["endedAt"] and s["role"] != "coordinator"]
     working = [t for t in run["tasks"] if t["status"] == "in_progress"]
     # The coordinator is one thread; each task in progress counts, even two of one session.
@@ -284,7 +248,6 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         "activeSessions": len(active),
         "freeThreads": max(0, run["maximumActiveThreads"] - busy),
         "quota": quota_now(run, found, now),
-        "savedResetAdded": bool(monitor.get("bankedResetObserved")),
     }
 
 
@@ -326,7 +289,8 @@ def quota_row(agent: str, before, after) -> str:
         used = f"{week['usedPercent']:g}% used" if week else "weekly window unknown"
         return f"{used} at {clock(reading['observedAt'])}"
 
-    sources = sorted({SOURCES[r["source"]][1] for r in (before, after) if r})
+    # A run journal from an older version can name a source no longer read.
+    sources = sorted({SOURCES.get(r["source"], r["source"]) for r in (before, after) if r})
     text = f"{one(before)} → {one(after)} ({', '.join(sources)})."
     weeks = [weekly(r) if r else None for r in (before, after)]
     if not all(weeks):
@@ -401,8 +365,6 @@ def report(run: dict, tokens: str) -> str:
     if not any(s["role"] == "coordinator" for s in run["sessions"]):
         sessions = f"{sessions or 'none started'} (plus this coordinator)"
     out.append(f"| Sessions | {sessions} |")
-    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):
-        out.append("| Saved resets | A new one appeared during the run; it did not extend it. |")
     out += [
         "",
         "## Tokens",
@@ -443,8 +405,6 @@ def main() -> None:
     sources.add_argument(
         "--claude-home", type=Path, default=agent_home("CLAUDE_CONFIG_DIR", ".claude")
     )
-    sources.add_argument("--quota-file", type=Path, help="A saved native reading")
-    sources.add_argument("--observed-at", help="When --quota-file was captured, if it doesn't say")
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     begin = commands.add_parser("start", parents=[sources], help="Start a run")
@@ -482,12 +442,7 @@ def main() -> None:
             return
         require(args.command == "start" or run is not None, "No run is open")
         if args.command in ("start", "status", "close"):
-            found = readings(
-                args.codex_home,
-                args.private / "claude-status.json",
-                args.quota_file,
-                args.observed_at,
-            )
+            found = readings(args.codex_home)
         if args.command == "start":
             run = start(data, load_profile(args), args.hours, args.agents, found, now)
             result = {k: run[k] for k in ("startedAt", "deadline", "cappedBy", "level", "unknown")}
