@@ -192,7 +192,7 @@ class QuotaTests(unittest.TestCase):
     def test_codex_quota_comes_from_the_latest_log_reading(self):
         path = self.home / "sessions/rollout-x.jsonl"
         write_lines(path, codex_rows())
-        reading = codex_quota(self.home, NOW)
+        reading = codex_quota(self.home)
         self.assertEqual(reading["windows"][0]["usedPercent"], 40.0)
         self.assertNotIn("secret-balance", json.dumps(reading))
         advice = advise(reading, epoch("2033-05-18T03:00:00Z"))
@@ -216,10 +216,10 @@ class QuotaTests(unittest.TestCase):
             limits_row("2033-05-18T03:00:00Z", 99, "codex_other_model"),
         ]
         write_lines(self.home / "sessions/rollout-x.jsonl", rows)
-        reading = codex_quota(self.home, NOW)
+        reading = codex_quota(self.home)
         self.assertEqual(reading["windows"][0]["usedPercent"], 20.0)
         write_lines(self.home / "sessions/rollout-x.jsonl", rows[:1] + rows[2:])
-        self.assertEqual(codex_quota(self.home, NOW)["windows"][0]["usedPercent"], 10.0)
+        self.assertEqual(codex_quota(self.home)["windows"][0]["usedPercent"], 10.0)
 
     def test_a_capture_time_in_the_future_is_not_a_fresh_reading(self):
         path = self.home / "status.json"
@@ -241,12 +241,26 @@ class QuotaTests(unittest.TestCase):
                 self.assertEqual(advice["suggestion"], suggestion)
 
     def test_a_reading_without_a_weekly_window_is_unknown(self):
-        path = self.home / "five-hour-only.json"
-        limits = {"five_hour": {"used_percentage": 10, "resets_at": NOW + 3600}}
-        path.write_text(json.dumps({"observedAt": NOW, "payload": {"rate_limits": limits}}))
-        advice = advise(file_quota(path), NOW)
-        self.assertEqual(advice["suggestion"], "unknown")
-        self.assertEqual(advice["reasons"], ["weekly_window_unknown"])
+        path = self.home / "status.json"
+        five_hour = {"five_hour": {"used_percentage": 10, "resets_at": NOW + 3600}}
+        not_a_number = {"seven_day": {"used_percentage": True, "resets_at": NOW + 3600}}
+        for limits in (five_hour, not_a_number):
+            with self.subTest(limits=limits):
+                reading = {"observedAt": NOW, "payload": {"rate_limits": limits}}
+                path.write_text(json.dumps(reading))
+                advice = advise(file_quota(path), NOW)
+                self.assertEqual(advice["suggestion"], "unknown")
+                self.assertEqual(advice["reasons"], ["weekly_window_unknown"])
+
+    def test_an_old_codex_reading_is_stale_not_missing(self):
+        limits = {"primary": {"used_percent": 40, "window_minutes": 10080}}
+        row = {"timestamp": "2033-04-18T12:00:00Z", "payload": {"rate_limits": limits}}
+        path = self.home / "sessions/2033/04/18/rollout-x.jsonl"
+        write_lines(path, [row])
+        os.utime(path, (NOW - 30 * 86400, NOW - 30 * 86400))
+        advice = advise(codex_quota(self.home), NOW)
+        self.assertEqual(advice["suggestion"], "refresh_or_wait")
+        self.assertIn("reading_is_stale", advice["reasons"])
 
     def test_codex_quota_is_the_newest_reading_not_the_newest_file(self):
         def quota_row(stamp, used):
@@ -263,7 +277,7 @@ class QuotaTests(unittest.TestCase):
         stale = self.home / "sessions/2033/05/18/rollout-earlier.jsonl"
         write_lines(stale, [quota_row("2033-05-18T09:00:00Z", 3)])
         os.utime(stale, (NOW - 3 * 3600, NOW - 3 * 3600))
-        reading = codex_quota(self.home, NOW)
+        reading = codex_quota(self.home)
         self.assertEqual(reading["observedAt"], "2033-05-18T11:55:00Z")
         self.assertEqual(reading["windows"][0]["usedPercent"], 4.0)
 

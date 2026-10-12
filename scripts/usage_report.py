@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from usage_monitor import epoch, expiry_advice, snapshot, weekly
+from usage_monitor import epoch, expiry_advice, number, snapshot, weekly
 
 WEEK_MINUTES = 10080
 CODEX_FIELDS = (
@@ -174,16 +174,17 @@ def summary(provider, buckets, sessions, responses):
     }
 
 
-def codex_quota(home, now):
+def codex_quota(home):
     """Newest weekly/5-hour reading that Codex wrote into its local session logs.
 
     The most recently modified log can hold only old readings (a long session
     that keeps logging other events), so readings are compared by their own time.
     A log last modified before the best reading so far cannot hold a newer one.
+    However old the newest reading is, it is returned, so advise() can call it stale.
     """
     best = None
     roots = [home / "sessions", home / "archived_sessions"]
-    for path in recent_files(roots, "rollout-*.jsonl", now - 8 * 86400):
+    for path in recent_files(roots, "rollout-*.jsonl", 0):
         if best and path.stat().st_mtime < best[0]:
             break
         for row in lines(path, ('"rate_limits"',)):
@@ -234,7 +235,7 @@ def file_quota(path, observed_at=None):
         for name, minutes in (("five_hour", 300), ("seven_day", WEEK_MINUTES)):
             window = limits.get(name)
             used = window.get("used_percentage") if isinstance(window, dict) else None
-            if isinstance(used, (int, float)) and 0 <= used <= 100:
+            if number(used) is not None and 0 <= used <= 100:
                 windows.append(
                     {
                         "slot": name,
@@ -384,7 +385,7 @@ def main():
         except (OSError, ValueError) as error:
             parser.error(f"Cannot use {args.file}: {error}")
     else:
-        reading = codex_quota(args.codex_home, now)
+        reading = codex_quota(args.codex_home)
     json.dump(advise(reading, now, args.min_unused, args.within_hours), sys.stdout, indent=2)
     print()
 

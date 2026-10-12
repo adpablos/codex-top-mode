@@ -182,8 +182,8 @@ durations and renewal times, the saved-reset count and credit grant/expiry
 times. Do not read authentication files or add an account client.
 
 Codex log readings are as fresh as the last Codex response on that machine;
-`usage_report.py` reports their age and treats readings older than six hours
-as stale. They do not include saved resets.
+`usage_report.py` uses the newest one however old, reports its age and treats
+readings older than six hours as stale. They do not include saved resets.
 
 Claude Code exposes `rate_limits.five_hour` and `rate_limits.seven_day` only to
 a [status-line command](https://code.claude.com/docs/en/statusline). With the
