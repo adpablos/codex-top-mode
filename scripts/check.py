@@ -33,12 +33,12 @@ def saved(path):
         return None
 
 
-def readings(codex_home, claude_status, quota_file, now):
+def readings(codex_home, claude_status, quota_file):
     """(agent, reading or None) for each quota source."""
     if quota_file:
         return [("quota file", saved(quota_file))]
     claude = saved(claude_status) if claude_status.is_file() else None
-    return [("Codex", codex_quota(codex_home, now)), ("Claude", claude)]
+    return [("Codex", codex_quota(codex_home)), ("Claude", claude)]
 
 
 def quota_lines(agent, advice):
@@ -155,7 +155,7 @@ def main():
     now = time.time()
     advice = [
         (agent, advise(reading, now))
-        for agent, reading in readings(args.codex_home, claude_status, args.quota_file, now)
+        for agent, reading in readings(args.codex_home, claude_status, args.quota_file)
     ]
     news = [pair for agent, item in advice for pair in quota_lines(agent, item)]
     announcements = watch(Path(__file__).with_name("public_watch.py"), config, watch_state)
