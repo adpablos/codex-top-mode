@@ -54,7 +54,7 @@ saves it, after your approval, in a private file outside any Git repository. You
 never need to edit JSON.
 
 **3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
-every 4 hours with your cheapest model and only tell me when there is
+once a day with your cheapest model and only tell me when there is
 something."* The agent schedules a quiet check with its own scheduler. It speaks
 up only when there is spare capacity to use.
 
