@@ -195,11 +195,15 @@ Then:
    `done` needs new `--evidence` you checked yourself (tests, diff, file), and
    each change to `blocked` a new `--blocker`. Add `--needs-you` when it waits on
    the user (a merge, a login, a choice), with a blocker that asks the question
-   and gives your recommendation and its consequence.
+   and gives your recommendation and its consequence. When a done task's
+   evidence changes (CI finished, a merge), record `done` again with the new
+   `--evidence`.
 3. Record each session you start or reuse:
    `run.py session <id> --agent codex|claude --role worker|reviewer`, and again
-   with `--ended` when it finishes. Its ID stays in the private journal. Name
-   every agent a session spends in `start --agents`; others are refused.
+   with `--ended` when it finishes. Use the ID your host shows for that session
+   or thread; if it shows none, leave `<id>` out and reuse the `id` run.py
+   prints. A host's ID stays in the private journal. Name every agent a session
+   spends in `start --agents`; others are refused.
 4. Before each assignment, run `run.py status`. Stop when it says `stopNow`
    (deadline, setup changed, approval ended, weekly allowance renewed). Delegate
    only while `freeThreads` is above zero (each task in progress takes a thread),
@@ -261,7 +265,10 @@ The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
 `authorization_ended` or `weekly_renewal`. After it the journal takes no new
 tasks or sessions, only how existing ones ended. Ask
 active owners for a short checkpoint and record each result with `run.py task`
-and `run.py session --ended`, then end the run with `run.py close`. Stopping Top Mode does not pause a
+and `run.py session --ended`. Put each repository back on the branch it was on,
+and delete nothing: the report names the `quota-coach/` branches and the
+worktrees you added, which the user can remove (a worktree removal also deletes
+its ignored files). Then end the run with `run.py close`. Stopping Top Mode does not pause a
 scheduled check; say whether one is still active.
 
 ## 5. Report

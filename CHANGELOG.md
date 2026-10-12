@@ -9,6 +9,13 @@ not a tagged release or evidence of live installation.
   Claude Code; writing them still always asks. Runs now work from inside each
   project (`cd <project> && git ...`), because the rules don't recognize
   `git -C`.
+- The README and the vision say what Quota Coach is for next to CodexBar: it
+  reads the quota CodexBar measures and turns spare quota into work done, a
+  report and plan advice. Usage history and costs are left to CodexBar and
+  ccusage.
+- `run.py session` gives an ID when the host shows none. The guide says how to
+  update a done task's evidence and to put each repository back on its branch
+  before closing; the report names the run's branches and worktrees.
 - The private folder is now `~/.config/quota-coach`; a setup in
   `~/.codex-top-mode` moves there on its own, leaving a link behind.
   `install.py --agent codex|claude` installs for one agent, and broken links

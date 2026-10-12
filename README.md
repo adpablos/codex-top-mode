@@ -6,8 +6,10 @@
 
 Coding-agent subscriptions come with weekly limits. Whatever you don't use before
 the limit renews is gone, and the plan you pay for may be too small or bigger
-than you need. Quota Coach is a skill for your agent (Codex, Claude Code or any
-agent that can read files and run Python) that helps you get the most out of it:
+than you need. Apps like [CodexBar](https://codexbar.app) tell you how much
+quota you have left. Quota Coach turns it into work done, on your priorities and
+with your rules, and tells you whether your plan fits. It is a skill for your
+agent (Codex, Claude Code or any agent that can read files and run Python):
 
 - **It tells you when it's worth it.** Your weekly allowance renews soon and a
   lot is still unused, or saved resets are about to expire.
@@ -141,7 +143,9 @@ Full example: [examples/report.example.md](examples/report.example.md).
   Everything runs locally; there is no service, account or dashboard.
 - The agent only works while your machine and agent are running. A closed laptop
   doesn't watch anything.
-- Token counts come from local logs on this machine. Work done elsewhere isn't counted.
+- Token counts come from local logs on this machine. Work done elsewhere isn't
+  counted. For usage history and costs, use CodexBar or
+  [ccusage](https://github.com/ryoppippi/ccusage); Quota Coach only reports each run.
 - Quota is shared by everything on your account, so before/after numbers include
   any other work you did meanwhile. The report says so.
 - Plan advice covers Codex only for now and still counts Top Mode runs as your

@@ -175,6 +175,24 @@ class TaskAndSessionTests(unittest.TestCase):
         self.assertEqual(session["endedAt"], iso(NOW + 60))
         self.assertEqual(len(self.run["sessions"]), 1)
 
+    def test_a_session_without_an_id_gets_a_new_one(self):
+        run.record_session(self.run, "codex-worker-1", "codex", "worker", False, NOW)
+        first = run.record_session(self.run, None, "codex", "worker", False, NOW)
+        second = run.record_session(self.run, None, "codex", "reviewer", False, NOW)
+        self.assertEqual([first["id"], second["id"]], ["codex-worker-2", "codex-reviewer-1"])
+        run.record_session(self.run, "codex-worker-2", "codex", "worker", True, NOW + 60)
+        self.assertEqual(first["endedAt"], iso(NOW + 60))
+        with self.assertRaises(ValueError):
+            run.record_session(self.run, "codex-reviewer-1", "codex", "worker", True, NOW)
+        self.assertIsNone(second["endedAt"])
+
+    def test_a_done_task_takes_newer_evidence(self):
+        fields = {"project": "website", "objective": "Fix", "doneWhen": "CI", "owner": "me"}
+        run.record_task(self.run, "t", {**fields, "status": "done", "evidence": "CI pending"}, NOW)
+        task = run.record_task(self.run, "t", {"status": "done", "evidence": "CI green"}, NOW)
+        self.assertEqual(task["evidence"], "CI green")
+        self.assertEqual(len(task["events"]), 1)
+
     def test_a_session_must_spend_an_agent_named_at_start(self):
         with self.assertRaisesRegex(ValueError, "does not track claude"):
             run.record_session(self.run, "s1", "claude", "worker", False, NOW)
@@ -373,6 +391,8 @@ class CommandTests(unittest.TestCase):
         )  # fmt: skip
         session = self.cli("session", "private-id", "--agent", "codex", "--ended")
         self.assertNotIn("private-id", json.dumps(session))
+        given = self.cli("session", "--agent", "codex")
+        self.assertEqual(given["id"], "codex-worker-1")
         task = self.cli("task", "fix", "--status", "done", "--owner", "private-id")
         self.assertEqual(task["owner"], "codex worker session")
         self.cli(

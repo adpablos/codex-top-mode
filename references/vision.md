@@ -7,7 +7,10 @@ and keep these principles; when one conflicts with another, the earlier one wins
 
 Help people who already use Codex or Claude Code get the most out of the
 subscription they pay for: spend spare capacity on **their own priorities**,
-without babysitting and **without losing control**.
+without babysitting and **without losing control**. Measuring quota is not our
+job: [CodexBar](https://codexbar.app) does it well, and we read it when it is
+there. Ours is what comes after: whether it is worth it, the work itself, the
+report and whether the plan fits.
 
 ## The user's journey
 
@@ -48,6 +51,8 @@ without babysitting and **without losing control**.
 - A task manager: Quota Coach reads priorities from where the user already keeps them.
 - Automatic model routing: the agent picks models within the host's options.
 - A hosted service, cloud checker or anything that needs an extra account.
+- A quota meter, usage dashboard or cost history: CodexBar and ccusage do that.
+- Watching for announced resets: public trackers do that.
 - Spending quota for its own sake: useful outcomes come first.
 
 ## Where we are
@@ -56,7 +61,8 @@ Done: plain-language docs, private setup that later sessions recover, quota
 suggestion and token report from local logs, manual runs with deadlines and
 reports, quality gates in CI (Python 3.9+, lint, formatting, coverage floor,
 documentation links, macOS), one-step install for Codex and Claude Code, a
-quiet `check` command to schedule with the agent's own scheduler, a verdict
+quiet `check` command to schedule with the agent's own scheduler, quota from
+CodexBar for Codex and Claude Code (Codex's local logs without it), a verdict
 on whether the Codex plan has been enough, from its weekly history, compared
 with the other Codex plans, a guided setup (the agent discovers projects and
 where their work lives, and the user picks one of three permission levels), and
