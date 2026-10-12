@@ -64,6 +64,18 @@ class WindowTests(unittest.TestCase):
         found, left_out = windows(one + other, NOW)
         self.assertEqual((len(found), left_out), (1, 60))
 
+    def test_a_window_left_out_does_not_hide_another(self):
+        def meter(start_hour, peak, renews):
+            steps = range(19)  # every 10 minutes for 3 hours
+            return [(START + start_hour * 3600 + s * 600, peak, renews, "pro") for s in steps]
+
+        # The middle meter runs alongside both others, which never overlap each other.
+        first = meter(0, 10.0, START + WEEK)
+        middle = meter(1.5, 20.0, START + WEEK + 3600)
+        last = meter(3.5, 30.0, START + WEEK + 7200)
+        found, left_out = windows(first + middle + last, NOW)
+        self.assertEqual(([w["peakPercent"] for w in found], left_out), ([10, 30], len(middle)))
+
     def test_a_late_reading_of_an_old_window_does_not_hide_the_new_one(self):
         old = window(START, 100, hours=48)
         new = window(START + 2 * DAY + 3600, 20)

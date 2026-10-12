@@ -87,14 +87,11 @@ def windows(readings, now):
         # Renewal times differ between groups, so exactly one of two parallel windows wins.
         return window["peakPercent"], len(window["times"]), window["renewsAt"]
 
-    kept = [
-        window
-        for window in found
-        if not any(
-            other is not window and rank(other) > rank(window) and parallel(window, other)
-            for other in found
-        )
-    ]
+    # Best first: a window is left out only for a parallel window that is kept.
+    kept = []
+    for window in sorted(found, key=rank, reverse=True):
+        if not any(parallel(window, other) for other in kept):
+            kept.append(window)
     left_out = sum(len(window["times"]) for window in found) - sum(
         len(window["times"]) for window in kept
     )
