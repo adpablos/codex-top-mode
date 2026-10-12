@@ -4,7 +4,7 @@ Technical reference for agents. People can start with the [README](../README.md)
 the operating workflow is in the [skill](../SKILL.md). Optional Codex reset
 announcements are in [announcements](announcements.md). Commands below run from
 the package folder; from anywhere else, including a scheduled task, give the
-script's full path (`~/.top-mode/scripts/` after the one-step install).
+script's full path (`~/.quota-coach/scripts/` after the one-step install).
 
 ## Human profile
 
@@ -71,7 +71,7 @@ it cannot authenticate consent, reserve worker slots or judge task complexity.
 ## Private profile binding
 
 The private folder keeps its original name, `~/.codex-top-mode`, so existing
-setups keep working after the project was renamed to Top Mode.
+setups keep working after the project was renamed (to Top Mode, then Quota Coach).
 
 Use one local reference, `~/.codex-top-mode/binding.json`, to recover a setup in
 later sessions on the same host and user account. `~` means the user home directory
@@ -269,9 +269,10 @@ How the history is rebuilt, in [plan_fit.py](../scripts/plan_fit.py):
 - Readings whose renewal times are within ten minutes belong to one window. A
   window renewed early when the next one started more than an hour before its
   scheduled renewal: an announced reset, a saved reset or a plan change.
-- Two windows whose readings interleave for over an hour are two meters at once
-  (another account signed in on the machine, or a meter that stays near 0 %).
-  The one that used more is kept and the left-out readings are counted.
+- Two windows whose readings interleave for over an hour are two meters at once.
+  The logs don't say why: the same sessions can alternate between two weekly
+  meters for a while, and another account signed in on the machine looks the
+  same. The one that used more is kept and the left-out readings are counted.
 - A plan change rescales the percentage; the jump is not use.
 - Use is the rise of each window's percentage. Replaying it through natural
   weeks (each starts with the first use after the previous one ended) shows how

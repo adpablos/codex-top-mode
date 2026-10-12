@@ -1,8 +1,10 @@
-"""Make Top Mode available to Codex and Claude Code as a skill.
+"""Make Quota Coach available to Codex and Claude Code as a skill.
 
 Links this package into each agent's personal skills folder (honoring
 CODEX_HOME and CLAUDE_CONFIG_DIR). Agents that are not installed are skipped;
 anything already at the destination that is not this package is left untouched.
+A link to this package under the skill's former name is removed, so the skill
+is not listed twice.
 """
 
 import argparse
@@ -12,12 +14,13 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent.parent
 AGENTS = {"Codex": ("CODEX_HOME", ".codex"), "Claude Code": ("CLAUDE_CONFIG_DIR", ".claude")}
-NAME = "top-mode"
+NAME = "quota-coach"
+FORMER = "top-mode"
 
 
-def targets(home, env):
+def targets(home, env, name=NAME):
     return {
-        agent: Path(env.get(variable) or home / folder).expanduser() / "skills" / NAME
+        agent: Path(env.get(variable) or home / folder).expanduser() / "skills" / name
         for agent, (variable, folder) in AGENTS.items()
     }
 
@@ -28,6 +31,7 @@ def ours(path):
 
 def install(home, env):
     results = {}
+    former = targets(home, env, FORMER)
     for agent, target in targets(home, env).items():
         if not target.parent.parent.is_dir():
             results[agent] = "skipped: agent not found"
@@ -43,17 +47,21 @@ def install(home, env):
                 results[agent] = f"failed: {error.strerror or error}"
             else:
                 results[agent] = f"installed at {target}"
+        if ours(target) and ours(former[agent]):
+            former[agent].unlink()
+            results[agent] += f"; removed the old link {former[agent]}"
     return results
 
 
 def remove(home, env):
     results = {}
+    former = targets(home, env, FORMER)
     for agent, target in targets(home, env).items():
-        if ours(target):
-            target.unlink()
-            results[agent] = f"removed {target}"
-        else:
-            results[agent] = "nothing to remove"
+        removed = [link for link in (target, former[agent]) if ours(link)]
+        for link in removed:
+            link.unlink()
+        names = ", ".join(str(link) for link in removed)
+        results[agent] = f"removed {names}" if removed else "nothing to remove"
     return results
 
 
@@ -67,7 +75,7 @@ def main():
     for agent, result in results.items():
         print(f"{agent}: {result}")
     if not args.remove and any(r.startswith("installed") for r in results.values()):
-        print("Start a new agent session and ask: 'Help me set up Top Mode.'")
+        print("Start a new agent session and ask: 'Help me set up Quota Coach.'")
     if any(r.startswith("failed") for r in results.values()):
         sys.exit(1)
 

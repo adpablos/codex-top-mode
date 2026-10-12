@@ -1,21 +1,24 @@
-# Top Mode
+# Quota Coach
 
-[![Checks](https://github.com/adpablos/top-mode/actions/workflows/tests.yml/badge.svg)](https://github.com/adpablos/top-mode/actions/workflows/tests.yml)
+[![Checks](https://github.com/adpablos/quota-coach/actions/workflows/tests.yml/badge.svg)](https://github.com/adpablos/quota-coach/actions/workflows/tests.yml)
 
 **Use the AI subscription you already pay for, on purpose and without losing track.**
 
 Coding-agent subscriptions come with weekly limits. Whatever you don't use before
-the limit renews is gone. Top Mode is a skill for your agent (Codex, Claude Code
-or any agent that can read files and run Python) that turns that spare capacity
-into work you actually care about:
+the limit renews is gone, and the plan you pay for may be too small or bigger
+than you need. Quota Coach is a skill for your agent (Codex, Claude Code or any
+agent that can read files and run Python) that helps you get the most out of it:
 
 - **It tells you when it's worth it.** Your weekly allowance renews soon and a
   lot is still unused, saved resets are about to expire, or a reset was announced.
-- **It works on your priorities, with your rules.** You decide the projects, what
-  to leave out, and what the agent may do alone or must ask first.
-- **It stops on time.** Every run has a deadline that nothing can extend.
+- **Top Mode works on your priorities, with your rules.** When you say so, it
+  spends the spare capacity on your projects. You decide what to leave out, and
+  what the agent may do alone or must ask first.
+- **It stops on time.** Every Top Mode run has a deadline that nothing can extend.
 - **It tells you what happened.** Each run ends with a short report: what changed,
   what is pending, and what it used (quota before and after, tokens per model).
+- **It tells you whether your plan fits.** From your Codex quota history: enough,
+  short, or a cheaper plan would do, and what a coming change to your plan means.
 
 Downloading it starts nothing and changes no settings. It is a set of instructions
 plus small Python scripts with no dependencies. [MIT license](LICENSE).
@@ -25,31 +28,32 @@ plus small Python scripts with no dependencies. [MIT license](LICENSE).
 **1. Install.** Ask your agent (Codex or Claude Code):
 
 ```text
-Install Top Mode from https://github.com/adpablos/top-mode
+Install Quota Coach from https://github.com/adpablos/quota-coach
 ```
 
 It runs two commands you can also run yourself:
 
 ```sh
-git clone https://github.com/adpablos/top-mode ~/.top-mode &&
-  python3 ~/.top-mode/scripts/install.py
+git clone https://github.com/adpablos/quota-coach ~/.quota-coach &&
+  python3 ~/.quota-coach/scripts/install.py
 ```
 
-This makes Top Mode available as a skill in every new Codex and Claude Code
+This makes Quota Coach available as a skill in every new Codex and Claude Code
 session. Your agent may ask you to approve running the install script; that is
-expected. Update with `git -C ~/.top-mode pull`; undo with
-`python3 ~/.top-mode/scripts/install.py --remove`.
+expected. Update with `git -C ~/.quota-coach pull`; undo with
+`python3 ~/.quota-coach/scripts/install.py --remove`. Installed it as Top Mode?
+Ask your agent to update Top Mode; your setup and folder stay as they are.
 
-**2. Set up, once.** In a new session, say *"Help me set up Top Mode."* The agent
-asks about your projects and priorities, what to leave out, what it may do
+**2. Set up, once.** In a new session, say *"Help me set up Quota Coach."* The
+agent asks about your projects and priorities, what to leave out, what it may do
 without asking, and a default time limit. It shows you the setup in plain words
 and saves it, after your approval, in a private file outside any Git repository.
 You never need to edit JSON.
 
-**3. Get told when it's worth it (optional).** Say *"Check Top Mode every 4 hours
-with your cheapest model and only tell me when there is something."* The agent
-schedules a quiet check with its own scheduler. It speaks up only when there is
-spare capacity to use.
+**3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
+every 4 hours with your cheapest model and only tell me when there is
+something."* The agent schedules a quiet check with its own scheduler. It speaks
+up only when there is spare capacity to use.
 
 **4. Use it.** From then on, short sentences are enough:
 
@@ -104,7 +108,7 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [SKILL.md](SKILL.md) | How the agent sets up, runs, stops and reports. |
 | [references/profile-contract.md](references/profile-contract.md) | The setup file, quota sources and report rules. |
 | [references/announcements.md](references/announcements.md) | Optional: watching for announced Codex resets. |
-| [scripts/install.py](scripts/install.py) | Makes Top Mode available in Codex and Claude Code. |
+| [scripts/install.py](scripts/install.py) | Makes Quota Coach available in Codex and Claude Code. |
 | [scripts/check.py](scripts/check.py) | The quiet check: speaks only when there is capacity worth using. |
 | [scripts/usage_report.py](scripts/usage_report.py) | Quota details, tokens per model and plan history from local logs. |
 | [scripts/plan_fit.py](scripts/plan_fit.py) | Rebuilds weekly windows from quota readings, judges the plan and compares the others. |

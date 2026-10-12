@@ -3,7 +3,7 @@
 Read this file explicitly when you are given the repository URL; a URL installs
 nothing. Tell the user which files you actually read.
 
-## Using Top Mode
+## Using Quota Coach
 
 1. Read [SKILL.md](SKILL.md) and follow it. Read the
    [profile, quota and report contract](references/profile-contract.md) before

@@ -1,5 +1,5 @@
 [project]
-name = "top-mode"
+name = "quota-coach"
 version = "0.1.0"
 description = "Use spare AI subscription capacity on your own priorities, with a deadline and a clear report."
 readme = "README.md"
@@ -8,8 +8,8 @@ requires-python = ">=3.9"
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/adpablos/top-mode"
-Changelog = "https://github.com/adpablos/top-mode/blob/main/CHANGELOG.md"
+Repository = "https://github.com/adpablos/quota-coach"
+Changelog = "https://github.com/adpablos/quota-coach/blob/main/CHANGELOG.md"
 
 # The scripts run directly with `python3 scripts/<name>.py`; nothing is installed.
 # This file only holds metadata and tool settings.

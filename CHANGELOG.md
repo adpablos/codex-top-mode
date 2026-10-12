@@ -5,6 +5,16 @@ not a tagged release or evidence of live installation.
 
 ## 2026-10-12
 
+- Renamed the project to Quota Coach (repository `adpablos/quota-coach`, skill
+  `quota-coach`, suggested folder `~/.quota-coach`), because it now also tells
+  you whether your plan fits, not only how to spend spare quota. Top Mode stays
+  as the name of its bounded run on your priorities, so "Start Top Mode" works
+  as before. The private folder stays `~/.codex-top-mode`, so saved setups keep
+  working. To update an existing install, ask your agent to update Top Mode, or
+  run `git -C ~/.top-mode pull && python3 ~/.top-mode/scripts/install.py`: it
+  adds the `quota-coach` skill and removes its old `top-mode` link.
+- The plan report no longer guesses why a second weekly meter appears: one
+  account's sessions can alternate between two meters for a while.
 - Added `usage_report.py plan`: is your Codex plan enough? It rebuilds your
   weekly windows from Codex's local logs and says whether the plan has been
   enough, short, or enough only thanks to early renewals, with the evidence:
