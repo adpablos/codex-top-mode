@@ -176,6 +176,13 @@ def action_decision(profile: dict, project: str, action: str) -> str:
     return effective_actions(profile).get(action, "deny")
 
 
+def authorization_active(profile: dict, now: float) -> bool:
+    """Approved and not expired at `now`."""
+    auth = profile["authorization"]
+    expires = epoch(auth["validUntil"])
+    return epoch(auth["approvedAt"]) <= now and (expires is None or now < expires)
+
+
 def fingerprint(profile: dict) -> str:
     """Changes whenever anything the human approved changes."""
     return hashlib.sha256(json.dumps(profile, sort_keys=True).encode()).hexdigest()[:16]
@@ -194,11 +201,8 @@ def main() -> None:
         validate_profile(profile)
     except (ValueError, OSError) as error:
         parser.exit(2, f"Profile refused: {error}\n")
-    auth, now = profile["authorization"], time.time()
-    expires = epoch(auth["validUntil"])
     result = {
-        "authorizationActive": epoch(auth["approvedAt"]) <= now
-        and (expires is None or now < expires),
+        "authorizationActive": authorization_active(profile, time.time()),
         "level": profile["level"],
         "actions": effective_actions(profile),
         "fingerprint": fingerprint(profile),
