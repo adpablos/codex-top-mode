@@ -47,10 +47,11 @@ Ask your agent to update Top Mode; your setup and folder stay as they are.
 **2. Set up, once.** In a new session, say *"Help me set up Quota Coach."* The
 agent looks at the folders you point it to, proposes your projects and where
 their pending work lives (issues, pull requests, a roadmap file), and asks only
-what it can't find out: what to leave out, the order, a permission level and a
-time limit. It shows you the setup in plain words and saves it, after your
-approval, in a private file outside any Git repository. You never need to edit
-JSON.
+what it can't find out: what to leave out, the order, a permission level, a time
+limit, how many sessions may work at once and how long your approval lasts
+(until you revoke it, by default). It shows you the setup in plain words and
+saves it, after your approval, in a private file outside any Git repository. You
+never need to edit JSON.
 
 **3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
 every 4 hours with your cheapest model and only tell me when there is
