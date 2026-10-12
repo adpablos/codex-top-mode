@@ -9,7 +9,7 @@ not a tagged release or evidence of live installation.
   items that look done, and offers exceptions in the user's words. During a
   run, checks count as green only when every required check has passed, a
   review is published on GitHub, and a 403 on Dependabot alerts reads as
-  "not enabled".
+  "not enabled" only when GitHub says so, and as unknown otherwise.
 - Removed the saved Claude Code status line, the hand-saved Codex usage
   payload passed to the check, the run journal and `usage_report.py quota`,
   and the observer that used it to

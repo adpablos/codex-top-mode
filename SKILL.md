@@ -216,8 +216,9 @@ While working:
   (`gh api`) before saying so or asking for a merge; a required check that never
   reported is a blocker ("check X never ran"), not green.
 - `review` includes publishing the review on GitHub. A 403 on Dependabot alerts
-  means they are not enabled, not an error. What you could not verify, report
-  as the probable cause, never as a fact.
+  means "not enabled" only when its message says they are disabled; otherwise
+  `gh` may lack the permission, so report the alerts as unknown. What you could
+  not verify, report as the probable cause, never as a fact.
 - When something starts waiting on the user, tell them right away, with the
   others already waiting (`status` lists them as `waitingOnYou`), and keep
   working on other ready work. If only their decisions remain, ask once and wait
