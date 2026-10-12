@@ -176,7 +176,9 @@ revocation remains valid only while the human has not revoked it.
   status line are shown but do not stop a run. A saved reset that appears shows
   as `savedResetAdded` and in the report; it never extends the deadline.
 - `stop --reason R` records when new assignments stopped and why; `status` then
-  keeps `stopNow`. Checkpoints are still recorded after it.
+  keeps `stopNow`. After it, only checkpoints go in: existing tasks reaching
+  `done` or `blocked` and sessions ending; new tasks, new sessions and moves
+  back to `planned` or `in_progress` are refused.
 - `close` ends the run, records `quotaAfter` and writes the
   [report](#run-report) skeleton to a new file in `~/.codex-top-mode/reports/`.
 

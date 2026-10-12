@@ -163,6 +163,12 @@ def start(data: dict, profile: dict, hours: float, agents: list, found: dict, no
 def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     """Add a task or record its progress; a refused change leaves the run as it was."""
     task = next((t for t in run["tasks"] if t["id"] == task_id), None)
+    status = fields["status"]
+    if "stoppedAt" in run:
+        require(
+            task is not None and status in (task["status"], "done", "blocked"),
+            "The run stopped: record only how existing tasks ended, as done or blocked",
+        )
     if task is None:
         require(
             all(fields.get(k) for k in ("project", "objective", "doneWhen", "owner")),
@@ -171,7 +177,6 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     updated = {**(task or {"id": task_id, "status": None, "events": []})}
     updated.update({k: v for k, v in fields.items() if v and k != "status"})
     require(updated["project"] in run["projects"], "Unknown project: add it to the setup first")
-    status = fields["status"]
     if status != updated["status"]:
         # Reaching done or blocked again needs fresh evidence or a fresh blocker.
         require(status != "done" or fields.get("evidence"), "Say how it was verified: --evidence")
@@ -195,6 +200,7 @@ def record_session(run: dict, session_id: str, agent: str, role: str, ended: boo
         f"This run does not track {agent}'s quota; name every agent it spends at start",
     )
     session = next((s for s in run["sessions"] if s["id"] == session_id), None)
+    require(session or "stoppedAt" not in run, "The run stopped: start no new sessions")
     if session is None:
         session = {"id": session_id, "agent": agent, "role": role, "startedAt": iso(now)}
         session["endedAt"] = None
@@ -460,7 +466,8 @@ def main() -> None:
                 "evidence": args.evidence,
                 "blocker": args.blocker,
             }
-            result = record_task(run, args.id, fields, now)
+            task = record_task(run, args.id, fields, now)
+            result = {**task, "owner": owner(run, task["owner"])}
         elif args.command == "session":
             session = record_session(run, args.id, args.agent, args.role, args.ended, now)
             result = {k: v for k, v in session.items() if k != "id"}

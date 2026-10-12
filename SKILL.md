@@ -207,7 +207,8 @@ python3 -B <this folder>/scripts/run.py stop --reason <reason>
 ```
 
 The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
-`authorization_ended` or `weekly_renewal`. Assign nothing new after it. Ask
+`authorization_ended` or `weekly_renewal`. After it the journal takes no new
+tasks or sessions, only how existing ones ended. Ask
 active owners for a short checkpoint and record each result with `run.py task`
 and `run.py session --ended`, then end the run with `run.py close`. Stopping Top Mode does not pause any
 separate scheduled watch; say which schedules, if any, are still active.

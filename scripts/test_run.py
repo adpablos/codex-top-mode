@@ -255,6 +255,9 @@ class StopAndReportTests(unittest.TestCase):
     def test_stop_ends_assignments_and_close_ends_the_run(self):
         p = profile()
         _, r = fresh(p)
+        new_task(r, status="in_progress")
+        new_task(r, "docs")
+        run.record_session(r, "w", "codex", "worker", False, NOW)
         with self.assertRaisesRegex(ValueError, "Stop the run first"):
             run.close(r, {}, NOW)
         run.stop(r, "user", NOW + 60)
@@ -262,8 +265,17 @@ class StopAndReportTests(unittest.TestCase):
             run.stop(r, "user", NOW + 90)
         result = run.status(r, p, {}, NOW + 90)
         self.assertEqual((result["stopNow"], result["stoppedAt"]), (True, iso(NOW + 60)))
-        # Checkpoints still go in after the stop.
+        # After the stop only checkpoints go in: no new work.
+        for refused in (
+            lambda: new_task(r, "new"),
+            lambda: new_task(r, "docs", status="in_progress"),
+            lambda: run.record_session(r, "w2", "codex", "worker", False, NOW + 90),
+        ):
+            with self.assertRaisesRegex(ValueError, "The run stopped"):
+                refused()
+        self.assertEqual((len(r["tasks"]), r["tasks"][1]["status"]), (2, "planned"))
         new_task(r, status="blocked", blocker="Waiting on CI", at=NOW + 120)
+        run.record_session(r, "w", "codex", "worker", True, NOW + 120)
         run.close(r, {"codex": log_reading(at=NOW + 180)}, NOW + 180)
         self.assertEqual((r["stoppedAt"], r["endedAt"]), (iso(NOW + 60), iso(NOW + 180)))
         self.assertIsNone(run.current({"runs": [r]}))
@@ -322,7 +334,8 @@ class StopAndReportTests(unittest.TestCase):
     @staticmethod
     def with_coordinator(r):
         r = copy.deepcopy(r)
-        run.record_session(r, "c", "codex", "coordinator", True, NOW)
+        coordinator = {"agent": "codex", "role": "coordinator", "endedAt": iso(NOW)}
+        r["sessions"].append({"id": "c", "startedAt": iso(NOW), **coordinator})
         return r
 
 
@@ -365,6 +378,8 @@ class CommandTests(unittest.TestCase):
         )  # fmt: skip
         session = self.cli("session", "private-id", "--agent", "codex", "--ended")
         self.assertNotIn("private-id", json.dumps(session))
+        task = self.cli("task", "fix", "--status", "done", "--owner", "private-id")
+        self.assertEqual(task["owner"], "codex worker session")
         self.assertEqual(self.cli("status", at=NOW + 60)["tasks"]["done"][0]["id"], "fix")
         stopped = self.cli("stop", "--reason", "nothing_ready", at=NOW + HOUR)
         self.assertEqual(stopped["stoppedAt"], iso(NOW + HOUR))
