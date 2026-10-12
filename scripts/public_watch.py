@@ -497,7 +497,8 @@ def main():
 
         config = json.loads(args.config.read_text())
         validate_config(config)
-        handle = os.open(str(args.state) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+        flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+        handle = os.open(str(args.state) + ".lock", flags, 0o600)
         with os.fdopen(handle, "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             state = json.loads(args.state.read_text()) if args.state.exists() else {}

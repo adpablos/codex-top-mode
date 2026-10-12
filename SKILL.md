@@ -6,11 +6,37 @@ description: Check whether spare subscription quota is worth using, set up a pri
 # Top Mode
 
 Top Mode helps the user spend spare subscription capacity on useful work without
-losing control. You have four jobs: **set up**, **check**, **run** and **report**.
+losing control. You have four jobs: **set up**, **check**, **run** and **report**,
+plus installing the package when asked.
 The [README](README.md) shows how to explain this to people. Field and command
 details live in the [profile, quota and report contract](references/profile-contract.md).
 
-Run the scripts from this package's root with `python3 -B scripts/<name>.py`.
+The scripts live next to this file. Run them by full path,
+`python3 -B <this folder>/scripts/<name>.py` (`~/.top-mode/scripts/` after the
+one-step install), never relative to the current folder, which is usually the
+user's project.
+
+## 0. Install (when asked)
+
+"Install Top Mode from <url>": clone it to `~/.top-mode`, then run
+`python3 -B ~/.top-mode/scripts/install.py` and relay its output. If
+`~/.top-mode` already exists, update it from `origin`, the only remote you check,
+and stop and ask the user at the first step that fails:
+
+1. It is a plain folder, not a link, and `git -C ~/.top-mode remote get-url origin`
+   names the same repository.
+2. After `git -C ~/.top-mode fetch origin`, it has no local changes or commits:
+   `git -C ~/.top-mode status -s` and `git -C ~/.top-mode log origin/HEAD..`
+   print nothing.
+3. `git -C ~/.top-mode merge origin/HEAD` succeeds.
+
+Then run `install.py` as above. Never run scripts from a checkout you have not
+identified. If your host refuses to run code from a folder just cloned, ask the
+user to approve the command; do not work around the refusal. `install.py` links
+the package into `~/.codex/skills/top-mode` and `~/.claude/skills/top-mode`
+(under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when set) for the agents that exist
+and never replaces anything else. Tell the user to open a new session and ask to
+set up Top Mode.
 
 ## Rules that always apply
 
@@ -39,7 +65,7 @@ Run the scripts from this package's root with `python3 -B scripts/<name>.py`.
 When the user asks to set up, check or run Top Mode, start with:
 
 ```sh
-python3 -B scripts/profile_binding.py locate
+python3 -B <this folder>/scripts/profile_binding.py locate
 ```
 
 A request that only reviews or changes this package does not need it.
@@ -59,23 +85,28 @@ A request that only reviews or changes this package does not need it.
 
 ## 2. Check whether it's worth it
 
-When the user asks, or before suggesting a run:
+When the user asks, run:
 
 ```sh
-python3 -B scripts/usage_report.py quota            # Codex: local logs
-python3 -B scripts/usage_report.py quota --file F   # saved Claude status line, or a native
-                                                    # Codex payload with --observed-at TIME
+python3 -B <this folder>/scripts/check.py --verbose
 ```
 
-Explain the answer in one or two sentences: how much of the weekly allowance is
-used, when it renews, and the suggestion (`consider_top_mode`, `nothing_to_do`,
-`refresh_or_wait` or `unknown`). Which source to use per agent is in
-[quota readings](references/profile-contract.md#quota-readings). If no reading is
-possible, say so and offer a run with a clock deadline only.
+It reads every quota source on this machine (Codex local logs, a saved Claude
+Code status line) plus the optional announcement watch. Explain the answer in one
+or two sentences: how much of the weekly allowance is used, when it renews, and
+whether a run is worth it. If there is no reading, say so and offer a run with a
+clock deadline only. Details per source are in
+[quota readings](references/profile-contract.md#quota-readings); a native Codex
+payload, which also lists saved resets, goes through
+`usage_report.py quota --file F --observed-at TIME`.
 
-Expiring saved resets come from a native Codex payload: alert once per expiry
-date, then at most once a day while still available. Announced resets are an
-optional add-on described in [announcements](references/announcements.md).
+**Proactive check.** When the user wants to be told, schedule a recurring task
+with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
+scheduled task, not a cloud routine, which cannot see this machine). Use the
+cheapest model, every 4 hours if the announcement watch is set up and daily
+otherwise. The task runs `check.py` by full path, without `--verbose`. Empty output means end
+quietly; otherwise tell the user those lines and offer to start Top Mode. A
+scheduled check never starts work by itself.
 
 ## 3. Run
 
@@ -130,7 +161,7 @@ and the [example](examples/report.example.md):
 - **Pending and next step**, with who acts next.
 - **The run:** start, deadline, actual stop and why; quota before and after with
   reading times; models and effort actually used; sessions started and finished.
-- **Tokens:** `python3 -B scripts/usage_report.py tokens --since <start> --markdown`.
+- **Tokens:** `python3 -B <this folder>/scripts/usage_report.py tokens --since <start> --markdown`.
   It counts every session on this machine in that interval; say so.
 
 Write `unknown` with the reason instead of guessing. Quota is account-wide, so

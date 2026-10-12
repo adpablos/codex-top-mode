@@ -22,20 +22,36 @@ plus small Python scripts with no dependencies. [MIT license](LICENSE).
 
 ## Get started
 
-**1. Give your agent this repository** (its URL or a local copy) and paste:
+**1. Install.** Ask your agent (Codex or Claude Code):
 
 ```text
-Read the README, AGENTS.md and SKILL.md of this repository.
-Tell me what you loaded and what you can do on this machine.
-Then help me set up Top Mode: ask me about my projects and priorities,
-what to leave out, what you may do without asking, and a default time limit.
-Show me the setup in plain words and wait for my approval.
+Install Top Mode from https://github.com/adpablos/top-mode
 ```
 
-**2. Approve the setup.** The agent writes it to a private file outside any Git
-repository and remembers where it is. You never need to edit JSON.
+It runs two commands you can also run yourself:
 
-**3. Use it.** From then on, short sentences are enough:
+```sh
+git clone https://github.com/adpablos/top-mode ~/.top-mode &&
+  python3 ~/.top-mode/scripts/install.py
+```
+
+This makes Top Mode available as a skill in every new Codex and Claude Code
+session. Your agent may ask you to approve running the install script; that is
+expected. Update with `git -C ~/.top-mode pull`; undo with
+`python3 ~/.top-mode/scripts/install.py --remove`.
+
+**2. Set up, once.** In a new session, say *"Help me set up Top Mode."* The agent
+asks about your projects and priorities, what to leave out, what it may do
+without asking, and a default time limit. It shows you the setup in plain words
+and saves it, after your approval, in a private file outside any Git repository.
+You never need to edit JSON.
+
+**3. Get told when it's worth it (optional).** Say *"Check Top Mode every 4 hours
+with your cheapest model and only tell me when there is something."* The agent
+schedules a quiet check with its own scheduler. It speaks up only when there is
+spare capacity to use.
+
+**4. Use it.** From then on, short sentences are enough:
 
 | You say | What happens |
 | --- | --- |
@@ -50,11 +66,11 @@ repository and remembers where it is. You never need to edit JSON.
 | Signal | Codex | Claude Code |
 | --- | --- | --- |
 | Weekly allowance renews soon and plenty is unused | Yes, from Codex's local logs | Yes, if you let the agent save your status line ([how](references/profile-contract.md#quota-readings)); otherwise it asks you |
-| Saved resets are about to expire | Yes, when the Codex app exposes them | Not applicable |
+| Saved resets are about to expire | Only from Codex's own usage payload, saved and passed to the check ([how](references/profile-contract.md#proactive-check)); local logs don't list them | Not applicable |
 | A usage reset is announced | Optional, experimental ([details](references/announcements.md)) | Not applicable |
 | You simply want to push work forward | Yes | Yes |
 
-The check is a suggestion. Top Mode only starts when you say so, unless you
+The check only suggests. Top Mode only starts when you say so, unless you
 explicitly turned on automatic starts for announced resets.
 
 ## You stay in control
@@ -88,7 +104,9 @@ Full example: [examples/report.example.md](examples/report.example.md).
 | [SKILL.md](SKILL.md) | How the agent sets up, runs, stops and reports. |
 | [references/profile-contract.md](references/profile-contract.md) | The setup file, quota sources and report rules. |
 | [references/announcements.md](references/announcements.md) | Optional: watching for announced Codex resets. |
-| [scripts/usage_report.py](scripts/usage_report.py) | Quota suggestion and tokens per model from local logs. |
+| [scripts/install.py](scripts/install.py) | Makes Top Mode available in Codex and Claude Code. |
+| [scripts/check.py](scripts/check.py) | The quiet check: speaks only when there is capacity worth using. |
+| [scripts/usage_report.py](scripts/usage_report.py) | Quota details and tokens per model from local logs. |
 | [scripts/profile_binding.py](scripts/profile_binding.py) | Remembers where your private setup lives. |
 | [scripts/usage_monitor.py](scripts/usage_monitor.py) | Watches Codex quota during a run and decides when to stop. |
 | [scripts/capacity_policy.py](scripts/capacity_policy.py), [scripts/public_watch.py](scripts/public_watch.py) | Optional announcement watch and conditional start. |

@@ -23,7 +23,7 @@ def private_path(path: Path, *, existing: bool) -> Path:
             (parent / ".git").exists() or (parent / ".git").is_symlink()
             for parent in (path.parent, *path.parent.parents)
         ),
-        "Keep the profile and binding outside Git worktrees, even ignored folders",
+        "Keep private files outside Git worktrees, even ignored folders",
     )
     if existing:
         require(path.is_file(), "A private regular file is required")
