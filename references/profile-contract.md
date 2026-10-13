@@ -428,9 +428,12 @@ compactions), `compressedLogs` (`.jsonl.zst`, which the standard library can't
 read) or `unfinishedResponses`. It covers this machine and every session in
 the interval, including work outside the run: say so.
 
-Quota is account-wide, not this run's cost. Never present the difference as
-what the run used, never convert percentages to tokens or money, and say when
-the allowance renewed or a saved reset was used in between. Write `unknown`
+Compare quota before and after only for the same account and window; if you
+cannot tell that both readings come from the same account, write `unknown`
+instead of a comparison. Quota is account-wide, not this run's cost: never
+present the difference as what the run used, never convert percentages to
+tokens or money, and say when the allowance renewed or a saved reset was used
+in between. Write `unknown`
 with the reason for anything missing, partial or stale. Keep reports private
 and outside Git, with no credentials, account or session IDs or conversation
 text; a private report is not permission to publish it.

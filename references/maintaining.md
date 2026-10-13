@@ -13,7 +13,9 @@ Keep review, merge, release and deployment authority separate.
 
 Every pull request gets an independent review before it merges, by an agent
 other than the one that wrote it (for example `@codex review` on a change
-Claude made), and CI must be green. Merging stays the owner's call.
+Claude made). A review covers the commit it names: every later push needs a
+review of what it added, and the PR merges only when the review covers its
+current head and CI is green on it. Merging stays the owner's call.
 
 ## Contributing and security
 
