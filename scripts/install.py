@@ -52,30 +52,40 @@ def check(home, env, agents=None):
     problems = False
     for agent, target in targets(home, env, agents=agents).items():
         former = target.with_name(FORMER)
-        if not target.parent.parent.is_dir():
-            print(f"{agent}: agent not found")
-            problems |= agents is not None
-            continue
-        if ours(target) and (target / "SKILL.md").is_file():
-            print(f"{agent}: ready for a new session — {target} -> {PACKAGE}")
-            ready += 1
-        else:
-            problems = True
-            if target.is_symlink():
-                folder = target.resolve()
-                state = "different copy" if folder.exists() else "broken link"
-                print(f"{agent}: {state} — {target} -> {folder}\n  Revision: {revision(folder)}")
-            elif target.exists():
-                print(f"{agent}: occupied by another file or folder — {target}")
+        try:
+            if not target.parent.parent.is_dir():
+                print(f"{agent}: agent not found")
+                problems |= agents is not None
+                continue
+            if ours(target) and (target / "SKILL.md").is_file():
+                print(f"{agent}: ready for a new session — {target} -> {PACKAGE}")
+                ready += 1
             else:
-                print(f"{agent}: skill not installed — {target}")
-        if former.exists() or former.is_symlink():
+                problems = True
+                if target.is_symlink():
+                    folder = target.resolve()
+                    state = "different copy" if folder.exists() else "broken link"
+                    print(
+                        f"{agent}: {state} — {target} -> {folder}\n  Revision: {revision(folder)}"
+                    )
+                elif target.exists():
+                    print(f"{agent}: occupied by another file or folder — {target}")
+                else:
+                    print(f"{agent}: skill not installed — {target}")
+        except (OSError, RuntimeError):
             problems = True
-            folder = former.resolve()
-            print(
-                f"{agent}: former skill present — {former} -> {folder}\n"
-                f"  Revision: {revision(folder)}"
-            )
+            print(f"{agent}: invalid or unreadable skill link — {target}")
+        try:
+            if former.exists() or former.is_symlink():
+                problems = True
+                folder = former.resolve()
+                print(
+                    f"{agent}: former skill present — {former} -> {folder}\n"
+                    f"  Revision: {revision(folder)}"
+                )
+        except (OSError, RuntimeError):
+            problems = True
+            print(f"{agent}: invalid or unreadable former link — {former}")
     print("Already-open sessions may still have older instructions; open a new session.")
     return bool(ready) and not problems
 

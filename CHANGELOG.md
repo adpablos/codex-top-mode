@@ -8,7 +8,8 @@ not a tagged release or evidence of live installation.
 - Installation now reports the package revision and verifies the skills each
   agent will load; `install.py --check` performs that diagnostic without changes.
   Missing selected agents, conflicting copies and leftover former skills fail
-  clearly instead of looking like a completed installation.
+  clearly instead of looking like a completed installation. Invalid or unreadable
+  links are reported without changing them or interrupting other agents' checks.
 - `install.py --update` fast-forwards a clean `main` from the recognized upstream,
   refuses local changes or commits, and reruns the updated installer and check.
   Existing installation paths and private setup are preserved.

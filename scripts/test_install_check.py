@@ -160,6 +160,59 @@ class InstallTests(unittest.TestCase):
                 install.main()
             self.assertEqual(stop.exception.code, 1)
 
+    def test_check_cli_preserves_cyclic_links_and_continues_diagnosing(self):
+        (self.home / ".codex").mkdir()
+        (self.home / ".claude").mkdir()
+        for name in ("quota-coach", "top-mode"):
+            with self.subTest(name=name):
+                install.install(self.home, {})
+                link = self.home / ".codex/skills" / name
+                if link.is_symlink():
+                    link.unlink()
+                link.symlink_to(name)
+                argv = ["install.py", "--home", str(self.home), "--check"]
+                out = io.StringIO()
+                with (
+                    patch.dict(os.environ, {}, clear=True),
+                    patch.object(sys, "argv", argv),
+                    contextlib.redirect_stdout(out),
+                    self.assertRaises(SystemExit) as stop,
+                ):
+                    install.main()
+                self.assertEqual(stop.exception.code, 1)
+                self.assertIn(str(link), out.getvalue())
+                self.assertIn("Claude Code: ready for a new session", out.getvalue())
+                self.assertIn("Already-open sessions", out.getvalue())
+                self.assertEqual(os.readlink(link), name)
+                link.unlink()
+
+    def test_check_reports_unreadable_links_and_continues_diagnosing(self):
+        (self.home / ".codex").mkdir()
+        (self.home / ".claude").mkdir()
+        install.install(self.home, {})
+        (self.home / ".codex/skills/top-mode").symlink_to(install.PACKAGE)
+        resolve = Path.resolve
+        for name in ("quota-coach", "top-mode"):
+            with self.subTest(name=name):
+                link = self.home / ".codex/skills" / name
+
+                def unreadable(path, *args, denied=link, **kwargs):
+                    if path == denied:
+                        raise PermissionError(13, "Permission denied")
+                    return resolve(path, *args, **kwargs)
+
+                out = io.StringIO()
+                with (
+                    patch.object(Path, "resolve", unreadable),
+                    contextlib.redirect_stdout(out),
+                ):
+                    self.assertFalse(install.check(self.home, {}))
+                self.assertIn("invalid or unreadable", out.getvalue())
+                self.assertIn(str(link), out.getvalue())
+                self.assertIn("Claude Code: ready for a new session", out.getvalue())
+                self.assertIn("Already-open sessions", out.getvalue())
+                self.assertEqual(link.resolve(), install.PACKAGE)
+
     def test_check_cli_succeeds_only_for_a_ready_selected_agent(self):
         (self.home / ".codex").mkdir()
         install.install(self.home, {})
