@@ -1,6 +1,9 @@
 import contextlib
 import io
+import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -107,6 +110,370 @@ class InstallTests(unittest.TestCase):
         install.install(self.home, env)
         self.assertTrue((self.home / "codex/skills/quota-coach").is_symlink())
         self.assertFalse((self.home / ".codex/skills").exists())
+
+    def test_check_is_read_only_and_names_both_old_and_current_copies(self):
+        (self.home / ".codex/skills").mkdir(parents=True)
+        other = self.home / "other-copy"
+        other.mkdir()
+        (self.home / ".codex/skills/quota-coach").symlink_to(other)
+        (self.home / ".codex/skills/top-mode").symlink_to(self.home / "missing")
+        before = sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertFalse(install.check(self.home, {}))
+        self.assertIn("different copy", out.getvalue())
+        self.assertIn(str(other), out.getvalue())
+        self.assertIn("former skill present", out.getvalue())
+        self.assertEqual(
+            before, sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*"))
+        )
+        self.assertEqual(install.revision(other), "unknown (no Git checkout)")
+
+    def test_check_reports_broken_links_and_conflicts_without_replacing_them(self):
+        link = self.home / ".codex/skills/quota-coach"
+        link.parent.mkdir(parents=True)
+        for kind in ("missing", "broken", "file", "directory"):
+            with self.subTest(kind=kind), contextlib.redirect_stdout(io.StringIO()):
+                if kind == "broken":
+                    link.symlink_to(self.home / "missing")
+                elif kind == "file":
+                    link.write_text("another skill")
+                elif kind == "directory":
+                    link.mkdir()
+                self.assertFalse(install.check(self.home, {}))
+                if link.is_dir():
+                    link.rmdir()
+                elif link.exists() or link.is_symlink():
+                    link.unlink()
+
+    def test_install_cli_fails_for_an_occupied_or_missing_selected_agent(self):
+        for present in (False, True):
+            if present:
+                (self.home / ".codex/skills/quota-coach").mkdir(parents=True)
+            argv = ["install.py", "--home", str(self.home), "--agent", "codex"]
+            with (
+                patch.dict(os.environ, {}, clear=True),
+                patch.object(sys, "argv", argv),
+                contextlib.redirect_stdout(io.StringIO()),
+                self.assertRaises(SystemExit) as stop,
+            ):
+                install.main()
+            self.assertEqual(stop.exception.code, 1)
+
+    def test_check_cli_preserves_cyclic_links_and_continues_diagnosing(self):
+        (self.home / ".codex").mkdir()
+        (self.home / ".claude").mkdir()
+        for name in ("quota-coach", "top-mode"):
+            with self.subTest(name=name):
+                install.install(self.home, {})
+                link = self.home / ".codex/skills" / name
+                if link.is_symlink():
+                    link.unlink()
+                link.symlink_to(name)
+                argv = ["install.py", "--home", str(self.home), "--check"]
+                out = io.StringIO()
+                with (
+                    patch.dict(os.environ, {}, clear=True),
+                    patch.object(sys, "argv", argv),
+                    contextlib.redirect_stdout(out),
+                    self.assertRaises(SystemExit) as stop,
+                ):
+                    install.main()
+                self.assertEqual(stop.exception.code, 1)
+                self.assertIn(str(link), out.getvalue())
+                self.assertIn("Claude Code: ready for a new session", out.getvalue())
+                self.assertIn("Already-open sessions", out.getvalue())
+                self.assertEqual(os.readlink(link), name)
+                link.unlink()
+
+    def test_check_reports_unreadable_links_and_continues_diagnosing(self):
+        (self.home / ".codex").mkdir()
+        (self.home / ".claude").mkdir()
+        install.install(self.home, {})
+        (self.home / ".codex/skills/top-mode").symlink_to(install.PACKAGE)
+        resolve = Path.resolve
+        for name in ("quota-coach", "top-mode"):
+            with self.subTest(name=name):
+                link = self.home / ".codex/skills" / name
+
+                def unreadable(path, *args, denied=link, **kwargs):
+                    if path == denied:
+                        raise PermissionError(13, "Permission denied")
+                    return resolve(path, *args, **kwargs)
+
+                out = io.StringIO()
+                with (
+                    patch.object(Path, "resolve", unreadable),
+                    contextlib.redirect_stdout(out),
+                ):
+                    self.assertFalse(install.check(self.home, {}))
+                self.assertIn("invalid or unreadable", out.getvalue())
+                self.assertIn(str(link), out.getvalue())
+                self.assertIn("Claude Code: ready for a new session", out.getvalue())
+                self.assertIn("Already-open sessions", out.getvalue())
+                self.assertEqual(link.resolve(), install.PACKAGE)
+
+    def test_check_cli_succeeds_only_for_a_ready_selected_agent(self):
+        (self.home / ".codex").mkdir()
+        install.install(self.home, {})
+        argv = ["install.py", "--home", str(self.home), "--check", "--agent", "codex"]
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(sys, "argv", argv),
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaises(SystemExit) as stop,
+        ):
+            install.main()
+        self.assertEqual(stop.exception.code, 0)
+
+
+class UpdateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name).resolve()
+        self.repo = root / "installed"
+        self.remote = root / "upstream"
+        # Keep user signing, hooks and global excludes out of these synthetic repositories.
+        self.env = patch.dict(
+            os.environ,
+            {
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_AUTHOR_NAME": "Test",
+                "GIT_AUTHOR_EMAIL": "test@example.invalid",
+                "GIT_COMMITTER_NAME": "Test",
+                "GIT_COMMITTER_EMAIL": "test@example.invalid",
+            },
+        )
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        self.remote.mkdir()
+        self.repo.mkdir()
+        install.git(self.remote, "init", "-b", "main")
+        (self.remote / "SKILL.md").write_text("fixture v1")
+        install.git(self.remote, "add", "SKILL.md")
+        install.git(self.remote, "commit", "-m", "First version")
+        install.git(self.repo, "clone", str(self.remote), ".")
+        install.git(
+            self.repo, "remote", "set-url", "origin", "https://github.com/adpablos/quota-coach.git"
+        )
+        self.before = install.git(self.repo, "rev-parse", "HEAD")
+        (self.remote / "SKILL.md").write_text("fixture v2")
+        install.git(self.remote, "commit", "-am", "Second version")
+        self.after = install.git(self.remote, "rev-parse", "HEAD")
+        package = patch.object(install, "PACKAGE", self.repo)
+        package.start()
+        self.addCleanup(package.stop)
+        self.real_git = install.git
+
+    def update(self):
+        def local_fetch(folder, *args):
+            if args == ("fetch", "origin", "refs/heads/main"):
+                return self.real_git(folder, "fetch", str(self.remote), "refs/heads/main")
+            return self.real_git(folder, *args)
+
+        with patch.object(install, "git", side_effect=local_fetch):
+            install.update()
+
+    def test_fast_forward_keeps_links_and_private_state_and_is_repeatable(self):
+        home = self.repo.parent / "home"
+        (home / ".codex").mkdir(parents=True)
+        private = home / "private.json"
+        private.write_text("private fixture stays unchanged")
+        install.install(home, {})
+        self.update()
+        self.update()
+        self.assertEqual(install.git(self.repo, "rev-parse", "HEAD"), self.after)
+        self.assertEqual((home / ".codex/skills/quota-coach/SKILL.md").read_text(), "fixture v2")
+        self.assertEqual(private.read_text(), "private fixture stays unchanged")
+        self.assertIn(self.after, install.revision(self.repo))
+        install.git(self.repo, "tag", "v0.1.0-test")
+        self.assertIn("v0.1.0-test", install.revision(self.repo))
+
+    def test_refuses_dirty_development_and_unrecognized_checkouts(self):
+        (self.repo / "local.txt").write_text("keep me")
+        with self.assertRaisesRegex(ValueError, "Local changes"):
+            self.update()
+        self.assertIn("local changes", install.revision(self.repo))
+        (self.repo / "local.txt").unlink()
+        install.git(self.repo, "switch", "-c", "work")
+        with self.assertRaisesRegex(ValueError, "requires main"):
+            self.update()
+        install.git(self.repo, "switch", "main")
+        install.git(self.repo, "remote", "set-url", "origin", "https://example.invalid/quota-coach")
+        with self.assertRaisesRegex(ValueError, "not the Quota Coach"):
+            self.update()
+        self.assertEqual(install.git(self.repo, "rev-parse", "HEAD"), self.before)
+
+    def test_refuses_local_commits_including_an_ahead_main(self):
+        self.update()
+        (self.repo / "local.txt").write_text("preserve local commit")
+        install.git(self.repo, "add", "local.txt")
+        install.git(self.repo, "commit", "-m", "Local commit")
+        head = install.git(self.repo, "rev-parse", "HEAD")
+        with self.assertRaisesRegex(ValueError, "Local commits"):
+            self.update()
+        self.assertEqual(install.git(self.repo, "rev-parse", "HEAD"), head)
+
+    def test_archive_and_git_failure_are_explicit(self):
+        shutil.rmtree(self.repo / ".git")
+        with self.assertRaisesRegex(ValueError, "Git checkout"):
+            self.update()
+        (self.repo / ".git").mkdir()
+        with patch.object(install, "git", side_effect=FileNotFoundError):
+            self.assertIn("Git unavailable", install.revision(self.repo))
+
+    def test_update_cli_restarts_the_updated_installer_and_preserves_agent_selection(self):
+        argv = ["install.py", "--update", "--agent", "claude"]
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(install, "update") as update,
+            patch.object(install.subprocess, "call", return_value=1) as call,
+            self.assertRaises(SystemExit) as stop,
+        ):
+            install.main()
+        update.assert_called_once()
+        self.assertEqual(stop.exception.code, 1)
+        self.assertEqual(call.call_args.args[0][-2:], ["--agent", "claude"])
+        self.assertIn(str(self.repo / "scripts/install.py"), call.call_args.args[0])
+
+    def test_git_error_does_not_disclose_remote_credentials(self):
+        error = subprocess.CalledProcessError(1, ["git"], stderr="https://secret@example.invalid")
+        with (
+            patch.object(sys, "argv", ["install.py", "--update"]),
+            patch.object(install, "update", side_effect=error),
+            contextlib.redirect_stderr(io.StringIO()) as err,
+            self.assertRaises(SystemExit),
+        ):
+            install.main()
+        self.assertIn("Git update failed", err.getvalue())
+        self.assertNotIn("secret", err.getvalue())
+
+
+class FirstRunTests(unittest.TestCase):
+    def test_installed_skill_can_resume_stop_and_close_from_a_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            home, private, project = (root / name for name in ("home", "private", "project"))
+            (home / ".codex").mkdir(parents=True)
+            private.mkdir(mode=0o700)
+            project.mkdir()
+            # Only Git is on PATH: no installed CodexBar or account-backed CLI can run.
+            commands = root / "bin"
+            commands.mkdir()
+            (commands / "git").symlink_to(shutil.which("git"))
+            env = {
+                **os.environ,
+                "PATH": str(commands),
+                "CODEX_HOME": str(home / ".codex"),
+                "CLAUDE_CONFIG_DIR": str(home / "missing-claude"),
+            }
+
+            def cli(script, *args, success=True):
+                result = subprocess.run(
+                    [sys.executable, "-B", str(script), *map(str, args)],
+                    cwd=project,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if success:
+                    self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                return result.stdout
+
+            cli(install.PACKAGE / "scripts/install.py", "--home", home, "--agent", "codex")
+            scripts = home / ".codex/skills/quota-coach/scripts"
+            self.assertIn(
+                "ready for a new session",
+                cli(scripts / "install.py", "--check", "--agent", "codex"),
+            )
+            fixture = json.loads((install.PACKAGE / "examples/profile.example.json").read_text())
+            fixture["authorization"] = {
+                "source": "Synthetic offline test, not real user permission",
+                "approvedAt": "2000-01-01T00:00:00Z",
+                "validUntil": None,
+            }
+            fixture["projects"] = {
+                "sample": {
+                    "label": "Sample",
+                    "path": str(project),
+                    "work": ["TODO.md"],
+                    "priority": 0,
+                }
+            }
+            profile = private / "profile.json"
+            profile.write_text(json.dumps(fixture))
+            profile.chmod(0o600)
+            binding = private / "binding.json"
+            cli(scripts / "profile_binding.py", "--binding", binding, "bind", "--profile", profile)
+            located = json.loads(
+                cli(scripts / "profile_binding.py", "--binding", binding, "locate")
+            )
+            self.assertEqual(located["profilePath"], str(profile))
+
+            def run_cli(command, *args, success=True):
+                sources = []
+                if command in ("start", "status", "close"):
+                    sources = [
+                        "--profile",
+                        profile,
+                        "--codex-home",
+                        home / ".codex",
+                        "--claude-home",
+                        home / "missing-claude",
+                    ]
+                out = cli(
+                    scripts / "run.py",
+                    command,
+                    *args,
+                    "--private",
+                    private,
+                    *sources,
+                    success=success,
+                )
+                return json.loads(out) if success else out
+
+            started = run_cli("start", "--hours", "0.25", "--agents", "codex")
+            self.assertTrue(started["unknown"])
+            run_cli("session", "fixture-session", "--agent", "codex", "--role", "coordinator")
+            run_cli(
+                "task",
+                "fix",
+                "--status",
+                "in_progress",
+                "--project",
+                "sample",
+                "--objective",
+                "Write a sample result",
+                "--done-when",
+                "File contains done",
+                "--owner",
+                "fixture-session",
+            )
+            self.assertEqual(run_cli("status")["deadline"], started["deadline"])
+            run_cli("stop", "--reason", "user")
+            self.assertTrue(run_cli("status")["stopNow"])
+            run_cli("task", "extra", "--status", "planned", success=False)
+            result = project / "result.txt"
+            result.write_text("done")
+            self.assertEqual(result.read_text(), "done")
+            run_cli("task", "fix", "--status", "done", "--evidence", "Read result.txt: done")
+            run_cli(
+                "session", "fixture-session", "--agent", "codex", "--role", "coordinator", "--ended"
+            )
+            closed = run_cli("close")
+            report = Path(closed["report"]).read_text()
+            self.assertIn("Read result.txt: done", report)
+            self.assertNotIn("fixture-session", report)
+            self.assertFalse(run_cli("status")["active"])
+            self.assertEqual(json.loads(profile.read_text()), fixture)
+            cli(scripts / "install.py", "--remove", "--agent", "codex")
+            self.assertFalse(scripts.exists())
+            self.assertTrue(Path(closed["report"]).is_file())
 
 
 class CheckTests(unittest.TestCase):

@@ -14,8 +14,9 @@ details live in the [profile, quota and report contract](references/profile-cont
 
 The scripts live next to this file. Run them by full path,
 `python3 -B <this folder>/scripts/<name>.py` (`~/.quota-coach/scripts/` after the
-one-step install, the path the host rules allow), never relative to the current
-folder, which is usually the user's project.
+one-step install), never relative to the current folder, which is usually the
+user's project. An older install may still live at `~/.top-mode`; use its actual
+path. Host rules use the package path from which they were prepared.
 
 ## 0. Install (when asked)
 
@@ -23,32 +24,35 @@ folder, which is usually the user's project.
 `python3 -B ~/.quota-coach/scripts/install.py` and relay its output. If the user
 uses only one agent, add `--agent codex` or `--agent claude`.
 
-To update, or when `~/.quota-coach` already exists, or `~/.top-mode` from before
-the rename, update that folder from `origin`, the only remote you check, and stop
-and ask the user at the first step that fails:
+After installing, run `install.py --check` from that same package, with the same
+`--agent` selection. Explain its package path, exact Git revision and each
+agent's skill target. A conflict, broken link or duplicate old skill is not a
+successful install; preserve unrelated files and explain the specific repair.
+A check reads local installation metadata only, without loading accounts or
+private setup. Open a new agent session to load the checked instructions.
 
-1. It is a plain folder, not a link, and `git -C <folder> remote get-url origin`
-   names the same repository. For either former name, `adpablos/top-mode` or
-   `adpablos/codex-top-mode`, set it to `https://github.com/adpablos/quota-coach`.
-2. `git -C <folder> status -s` prints nothing.
-3. After `git -C <folder> fetch origin`, `git -C <folder> switch main` (an
-   installed copy stays on `main`; other branches are kept) and
-   `git -C <folder> log origin/main..` prints nothing.
-4. `git -C <folder> merge --ff-only origin/main` succeeds.
-5. For `~/.top-mode`, with the user's OK and if `~/.quota-coach` does not
-   exist, move it: `mv ~/.top-mode ~/.quota-coach`. The scripts and the host
-   rules expect that path.
+To update an existing install, use `python3 -B <installed folder>/scripts/install.py --update`
+(with `--agent` when appropriate). It checks that `origin` is Quota Coach,
+including its two former repository names, requires a clean `main` without local
+commits, fetches `main`, fast-forwards, and runs the updated installer and check.
+It preserves the folder's name, other branches and the separate private setup.
+It does not update an already-open session. Main is an untagged development
+snapshot unless the reported commit has a release tag; never call it a release
+just because the update passed.
 
-Then run `python3 -B <folder>/scripts/install.py`. Never run scripts from a
-checkout you have not identified. If your host refuses to run code from a folder
-just cloned, ask the user to approve the command; do not work around the
-refusal. `install.py` links the package into `~/.codex/skills/quota-coach` and
-`~/.claude/skills/quota-coach` (under `CODEX_HOME` or `CLAUDE_CONFIG_DIR` when
-set) for the agents that exist, removes its own links under the former name
-`top-mode`, replaces broken links left by a moved Quota Coach folder, and never replaces
-anything else. The user's setup is never touched: it lives apart, in
-`~/.config/quota-coach`. Tell the user to open a new session and ask to set up
-Quota Coach, or, after an update, that the update applies in new sessions.
+For older copies without `--update`, first verify the plain, non-symlink folder
+and its `origin` (only `adpablos/quota-coach`, `adpablos/top-mode`, or
+`adpablos/codex-top-mode` on GitHub). Require `git -C <folder> status -s` to be
+empty, fetch origin, switch to `main`, require `git -C <folder> log origin/main..`
+to be empty, then `git -C <folder> merge --ff-only origin/main`. Run that copy's
+installer and, when available, its `--check`. Stop at the first failure and
+preserve local work; do not reset, delete or silently choose another copy.
+
+Never run scripts from a checkout you have not identified. A host refusal still
+needs the user's approval, not a workaround. `install.py` links this copy into
+Codex and/or Claude Code, honoring their configured home directories. It removes
+its own former `top-mode` links and repairs broken links left by a moved package;
+other files stay untouched. User setup lives separately in `~/.config/quota-coach`.
 
 ## Rules that always apply
 
@@ -85,6 +89,11 @@ Read the [profile contract](references/profile-contract.md#human-profile) and
   carrying over projects, exclusions and limits; never run with it.
 - **Missing:** guide setup below. **Broken or conflicting:** explain and repair
   that problem with the user; never substitute an example or another profile.
+
+For a newcomer, offer the [first run](references/first-run.md): one repository,
+one small task, one agent and 15 minutes. Propose these limits for approval;
+do not replace an existing setup or start a run until asked. Broaden the setup
+when the user wants more projects.
 
 Ask only what you cannot discover, in two short rounds, at most three questions
 at once, each in plain words:

@@ -19,6 +19,37 @@ current head and CI is green on it. Merging stays the owner's call.
 
 ## Contributing and security
 
+### Installation and pilot checks
+
+Keep installation diagnostics in `scripts/install.py`. Its `--check` is local
+and read-only; `--update` fetches only the recognized repository's `main`,
+refuses dirty or locally committed checkouts and reruns the updated installer.
+Do not add another updater or version registry. Git revisions identify snapshots;
+an exact release tag identifies a published version when one exists.
+
+The offline suite includes temporary-repository update tests and a first-run
+check through installed skill links, from a different working folder and across
+separate processes. It covers private setup recovery, unknown quota, a task,
+stop, completion checkpoints, report, and uninstall without losing private
+state. Deadline enforcement is exercised with a controlled clock. These checks
+use synthetic data and no provider calls; they do not prove host permission
+prompts, model behavior or account integrations work in a live session.
+
+Use the [first-run guide](first-run.md) for a 3–5-person pilot. Prepare a reviewed
+candidate and record its exact commit; invitations, shared feedback and release
+publication require the appropriate human authorization. Keep observations
+private and bring only sanitized, reproducible problems into the repository.
+
+Before an authorized release, require the checks on the exact commit, a clean
+independent review and a completed manual first run in each supported agent.
+Record known limits in the release notes, align the version in `pyproject.toml`,
+and tag that same commit. Verify that installing and updating reach the
+documented revision. Do not label a development snapshot stable based on CI
+alone. Start with GitHub distribution; another package channel should solve a
+measured installation problem from the pilot.
+
+### Contributor checks
+
 Record user-visible package changes in the [changelog](../CHANGELOG.md). Keep real
 run reports and metrics in private storage.
 

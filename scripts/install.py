@@ -10,6 +10,7 @@ skill is not listed twice.
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,6 +19,101 @@ AGENTS = {"Codex": ("CODEX_HOME", ".codex"), "Claude Code": ("CLAUDE_CONFIG_DIR"
 CHOICES = {"codex": "Codex", "claude": "Claude Code"}
 NAME = "quota-coach"
 FORMER = "top-mode"
+
+
+def git(folder, *args):
+    return subprocess.run(
+        ["git", "--no-optional-locks", "-C", str(folder), *args],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout.strip()
+
+
+def revision(folder):
+    """Identify this checkout, never a parent repository or a claimed package version."""
+    if not (folder / ".git").exists():
+        return "unknown (no Git checkout)"
+    try:
+        commit = git(folder, "rev-parse", "HEAD")
+        branch = git(folder, "branch", "--show-current") or "detached"
+        tags = git(folder, "tag", "--points-at", "HEAD")
+        dirty = "; local changes" if git(folder, "status", "--porcelain") else ""
+        return f"{commit} ({branch}; {tags or 'untagged'}{dirty})"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown (Git unavailable or unreadable checkout)"
+
+
+def check(home, env, agents=None):
+    """Read link metadata only; do not load profiles, accounts, or quota sources."""
+    print(f"Package: {PACKAGE}\nRevision: {revision(PACKAGE)}")
+    ready = 0
+    problems = False
+    for agent, target in targets(home, env, agents=agents).items():
+        former = target.with_name(FORMER)
+        try:
+            if not target.parent.parent.is_dir():
+                print(f"{agent}: agent not found")
+                problems |= agents is not None
+                continue
+            if ours(target) and (target / "SKILL.md").is_file():
+                print(f"{agent}: ready for a new session — {target} -> {PACKAGE}")
+                ready += 1
+            else:
+                problems = True
+                if target.is_symlink():
+                    folder = target.resolve()
+                    state = "different copy" if folder.exists() else "broken link"
+                    print(
+                        f"{agent}: {state} — {target} -> {folder}\n  Revision: {revision(folder)}"
+                    )
+                elif target.exists():
+                    print(f"{agent}: occupied by another file or folder — {target}")
+                else:
+                    print(f"{agent}: skill not installed — {target}")
+        except (OSError, RuntimeError):
+            problems = True
+            print(f"{agent}: invalid or unreadable skill link — {target}")
+        try:
+            if former.exists() or former.is_symlink():
+                problems = True
+                folder = former.resolve()
+                print(
+                    f"{agent}: former skill present — {former} -> {folder}\n"
+                    f"  Revision: {revision(folder)}"
+                )
+        except (OSError, RuntimeError):
+            problems = True
+            print(f"{agent}: invalid or unreadable former link — {former}")
+    print("Already-open sessions may still have older instructions; open a new session.")
+    return bool(ready) and not problems
+
+
+def update():
+    """Fast-forward an identified, clean main checkout; keep all other branches intact."""
+    if not (PACKAGE / ".git").exists():
+        raise ValueError("Update requires a Git checkout.")
+    origin = git(PACKAGE, "remote", "get-url", "origin").removesuffix("/").removesuffix(".git")
+    names = ("quota-coach", "top-mode", "codex-top-mode")
+    allowed = {
+        f"{prefix}{name}"
+        for prefix in (
+            "https://github.com/adpablos/",
+            "git@github.com:adpablos/",
+        )
+        for name in names
+    }
+    if origin not in allowed:
+        raise ValueError("Origin is not the Quota Coach repository; nothing was updated.")
+    if git(PACKAGE, "branch", "--show-current") != "main":
+        raise ValueError("Update requires main. Keep development in a separate checkout.")
+    if git(PACKAGE, "status", "--porcelain"):
+        raise ValueError("Local changes found; preserve them before updating.")
+    git(PACKAGE, "fetch", "origin", "refs/heads/main")
+    if git(PACKAGE, "rev-list", "FETCH_HEAD..HEAD"):
+        raise ValueError("Local commits found; preserve them before updating.")
+    git(PACKAGE, "merge", "--ff-only", "FETCH_HEAD")
 
 
 def targets(home, env, name=NAME, agents=None):
@@ -83,20 +179,45 @@ def remove(home, env, agents=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--remove", action="store_true", help="Remove the links again")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--remove", action="store_true", help="Remove the links again")
+    modes.add_argument(
+        "--check", action="store_true", help="Show the copy each agent loads; read only"
+    )
+    modes.add_argument(
+        "--update", action="store_true", help="Fast-forward a clean main and reinstall"
+    )
     parser.add_argument(
         "--agent", choices=CHOICES, action="append", help="Only this agent (default: both)"
     )
     parser.add_argument("--home", type=Path, default=Path.home(), help=argparse.SUPPRESS)
     args = parser.parse_args()
-    action = remove if args.remove else install
     agents = args.agent and {CHOICES[choice] for choice in args.agent}
+    if args.check:
+        sys.exit(0 if check(args.home, os.environ, agents) else 1)
+    if args.update:
+        try:
+            update()
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            # A Git error may contain a credential-bearing remote URL; keep it out of output.
+            detail = (
+                str(error)
+                if isinstance(error, ValueError)
+                else "Git update failed; inspect locally."
+            )
+            parser.error(detail)
+        # Run the updated installer, not the old code already loaded in this process.
+        argv = [sys.executable, "-B", str(PACKAGE / "scripts/install.py"), "--home", str(args.home)]
+        for agent in args.agent or []:
+            argv += ["--agent", agent]
+        sys.exit(subprocess.call(argv))
+    action = remove if args.remove else install
     results = action(args.home, os.environ, agents)
     for agent, result in results.items():
         print(f"{agent}: {result}")
     if not args.remove and any(r.startswith("installed") for r in results.values()):
         print("Start a new agent session and ask: 'Help me set up Quota Coach.'")
-    if any(r.startswith("failed") for r in results.values()):
+    if not args.remove and not check(args.home, os.environ, agents):
         sys.exit(1)
 
 

@@ -45,10 +45,24 @@ git clone https://github.com/adpablos/quota-coach ~/.quota-coach &&
 This makes Quota Coach available as a skill in every new Codex and Claude Code
 session (add `--agent codex` or `--agent claude` for just one). Your agent may
 ask you to approve running the install script; that is expected. To update, ask
-your agent to update Quota Coach; undo with
+your agent to update Quota Coach, or run
+`python3 -B ~/.quota-coach/scripts/install.py --update`; undo with
 `python3 ~/.quota-coach/scripts/install.py --remove`. Installed it as Top Mode?
-Ask the same; your setup moves to `~/.config/quota-coach` on its own. Leave
+Ask the same; an existing install can keep its old folder name. Your setup moves
+to `~/.config/quota-coach` when a setup or run script next needs it. Leave
 `~/.quota-coach` as it is: to change Quota Coach, clone it somewhere else.
+
+To see which copy each agent will load, run:
+
+```sh
+python3 -B ~/.quota-coach/scripts/install.py --check
+```
+
+The installer also checks this automatically. It shows the package folder,
+exact Git revision, release tag when present, local changes and skill links.
+Updates follow `main`; an untagged revision is a development snapshot. Keep the
+revision when reporting a problem. Existing sessions need to be reopened.
+For an older install, use its actual folder in these commands.
 
 **2. Set up, once.** In a new session, say *"Help me set up Quota Coach."* The
 agent looks at the folders you point it to, proposes your projects and where
@@ -58,6 +72,10 @@ limit, how many sessions may work at once and how long your approval lasts
 (until you revoke it, by default). It shows you the setup in plain words and
 saves it, after your approval, in a private file outside any Git repository. You
 never need to edit JSON.
+
+**Try one small task first.** Follow the [15-minute first run](references/first-run.md):
+one repository, one agent and a clear finish condition. It also explains what to
+record if you want to help improve Quota Coach.
 
 **3. Get told when it's worth it (optional).** Say *"Run the Quota Coach check
 once a day with your cheapest model and only tell me when there is
