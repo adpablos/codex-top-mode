@@ -3,7 +3,12 @@
 Technical reference for agents. People can start with the [README](../README.md);
 the operating workflow is in the [skill](../SKILL.md). Commands below run from
 the package folder; from anywhere else, including a scheduled task, give the
-script's full path (`~/.quota-coach/scripts/` after the one-step install).
+script's full path (`~/.quota-coach/scripts/` after the one-step install;
+existing installs may keep their old folder). `install.py --check` identifies
+that copy and the skill links each agent will load in a new session. It does
+not validate private setup, host permissions or account access.
+`install.py --update` updates only an identified, clean `main`, preserving private state;
+its post-update check must pass before reporting the installation ready.
 
 ## Human profile
 

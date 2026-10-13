@@ -5,6 +5,17 @@ not a tagged release or evidence of live installation.
 
 ## Unreleased
 
+- Installation now reports the package revision and verifies the skills each
+  agent will load; `install.py --check` performs that diagnostic without changes.
+  Missing selected agents, conflicting copies and leftover former skills fail
+  clearly instead of looking like a completed installation.
+- `install.py --update` fast-forwards a clean `main` from the recognized upstream,
+  refuses local changes or commits, and reruns the updated installer and check.
+  Existing installation paths and private setup are preserved.
+- Added a one-project, one-agent first run and a small voluntary pilot protocol.
+  Offline tests exercise installation, updates, task checkpoints and closure
+  without provider accounts; human pilot results remain a separate check.
+
 - Simplified quota parsing: readings are built directly, shared helpers live
   in `common.py`, and the old saved-payload parser is removed. Runs opened
   before the observer was removed retain its recorded renewal stop and saved-reset note.
