@@ -9,7 +9,7 @@ comparison with other plans. Nothing here reads files.
 import statistics
 import time
 
-from usage_monitor import epoch
+from common import epoch
 
 WEEK = 7 * 24 * 3600
 # Readings of one window give its renewal time to within seconds.
@@ -28,6 +28,11 @@ STALE_DAYS = 60
 SOON = 30 * 24 * 3600
 # A cheaper plan is suggested only if every window and week stays below this.
 ROOM = 80
+TIER_CHANGE_ADVICE = (
+    "Conditional: change tiers only if this observed use represents the work you want to keep "
+    "doing. Top Mode use cannot be told apart from ordinary use; hitting a limit does not "
+    "by itself justify upgrading. Check current prices and the five-hour limit too."
+)
 
 
 def day(seconds):
@@ -405,8 +410,9 @@ def advise_plan(readings, now, count=WINDOWS, plans=None):
         "verdict": verdict,
         "plans": compared,
         "parallelReadingsLeftOut": left_out,
-        # Top Mode runs are not recorded yet, so their use cannot be told apart.
+        # Account readings cannot attribute use, even with the run journal's times.
         "includesTopModeRuns": True,
+        "tierChangeAdvice": TIER_CHANGE_ADVICE,
     }
 
 
@@ -450,7 +456,7 @@ def change_lines(compared, windows_count):
     if "verdict" in change:
         text += (
             f" The same use: {outcome(change, windows_count)}. "
-            f"Verdict then: {SHORT_VERDICTS[change['verdict']]}."
+            f"Observed-use verdict then: {SHORT_VERDICTS[change['verdict']]}."
         )
     return [text]
 
@@ -488,7 +494,7 @@ def markdown(advice):
             f"Codex: no closed weekly window on the current plan yet (readings since "
             f"{advice['historySince']}). A verdict needs {MINIMUM}."
         )
-        return "\n".join([text, *change_lines(advice.get("plans"), 0)])
+        return "\n".join([text, *change_lines(advice.get("plans"), 0), TIER_CHANGE_ADVICE])
     compared = advice.get("plans") or {}
     name = ""
     if compared.get("current"):
@@ -521,7 +527,7 @@ def markdown(advice):
             f"week from {most['start']})."
         )
     out += plan_lines(advice.get("plans"), len(recent))
-    out.append("- Includes Top Mode runs: they cannot be told apart from your own use yet.")
+    out.append("- Observed account use includes Top Mode runs; ordinary use is not separated.")
     if advice["parallelReadingsLeftOut"]:
         out.append(
             f"- Left out {advice['parallelReadingsLeftOut']} readings from a second weekly meter "
@@ -541,11 +547,11 @@ def markdown(advice):
         rows = {row["name"]: row for row in compared["comparison"]}
         lower, yours = rows[compared["lowerPlan"]], rows[compared["current"]]
         out.append(
-            f"Verdict: enough, with room to spare. {lower['name']} would have stayed under "
-            f"{ROOM} % every week, even without early renewals, for "
+            f"Observed-use verdict: enough, with room to spare. {lower['name']} would have stayed "
+            f"under {ROOM} % every week, even without early renewals, for "
             f"${yours['usdPerMonth'] - lower['usdPerMonth']} less a month. This judges "
             "the weekly allowance only."
         )
     else:
-        out.append("Verdict: " + VERDICTS[advice["verdict"]])
-    return "\n".join(out)
+        out.append("Observed-use verdict: " + VERDICTS[advice["verdict"]])
+    return "\n".join([*out, TIER_CHANGE_ADVICE])

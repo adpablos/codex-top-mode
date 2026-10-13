@@ -14,8 +14,8 @@ import time
 from pathlib import Path
 
 from capacity_policy import authorization_active, fingerprint, require, validate_profile
+from common import epoch, weekly
 from profile_binding import locate, private_folder, private_path
-from usage_monitor import epoch, weekly
 from usage_report import (
     agent_home,
     claude_tokens,
@@ -139,12 +139,13 @@ def record_task(run: dict, task_id: str, fields: dict, now: float) -> dict:
     index = next((i for i, t in enumerate(run["tasks"]) if t["id"] == task_id), None)
     task = None if index is None else run["tasks"][index]
     status = fields["status"]
-    if "stoppedAt" in run:
+    if "stoppedAt" in run or now >= epoch(run["deadline"]):
         require(
             task is not None
-            and status in (task["status"], "done", "blocked")
+            and status in ("done", "blocked")
             and all(fields.get(k) in (None, "", task.get(k)) for k in TASK_FIELDS),
-            "The run stopped: record only how existing tasks ended, as done or blocked",
+            "The run stopped or reached its deadline: record only how existing tasks ended, "
+            "as done or blocked",
         )
     if task is None:
         require(
@@ -192,7 +193,11 @@ def record_session(run: dict, session_id, agent: str, role: str, ended: bool, no
             if f"{agent}-{role}-{n}" not in taken
         )
     session = next((s for s in run["sessions"] if s["id"] == session_id), None)
-    require(session or "stoppedAt" not in run, "The run stopped: start no new sessions")
+    if "stoppedAt" in run or now >= epoch(run["deadline"]):
+        require(
+            session is not None and ended,
+            "The run stopped or reached its deadline: only end existing sessions",
+        )
     require(
         session is None or (session["agent"], session["role"]) == (agent, role),
         "That ID is another session's: give a different one",
@@ -240,7 +245,7 @@ def status(run: dict, profile, found: dict, now: float) -> dict:
         reasons.append("profile_changed")
     elif not authorization_active(profile, now):
         reasons.append("authorization_ended")
-    # A journal from an older version may hold its renewal observer's final word.
+    # A run opened before #23 may hold its renewal observer's final word; keep it.
     legacy = run.get("usageMonitor") or {}
     if (
         legacy.get("mode") == "normal"
@@ -383,7 +388,7 @@ def report(run: dict, tokens: str) -> str:
     if not any(s["role"] == "coordinator" for s in run["sessions"]):
         sessions = f"{sessions or 'none started'} (plus this coordinator)"
     out.append(f"| Sessions | {sessions} |")
-    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):  # older versions only
+    if (run.get("usageMonitor") or {}).get("bankedResetObserved"):
         out.append("| Saved resets | A new one appeared during the run; it did not extend it. |")
     out += [
         "",

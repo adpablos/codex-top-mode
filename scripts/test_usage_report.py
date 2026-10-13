@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import usage_report
-from usage_monitor import epoch, snapshot
+from common import epoch
 from usage_report import (
     advise,
     agent_home,
@@ -19,6 +19,8 @@ from usage_report import (
     codex_tokens,
     codex_weekly_readings,
     markdown,
+    quota_reading,
+    window,
 )
 
 NOW = epoch("2033-05-18T12:00:00Z")
@@ -498,25 +500,29 @@ class QuotaTests(unittest.TestCase):
         self.assertEqual(suggestion(75, 36, age_hours=6.5), "refresh_or_wait")
 
     def test_expiring_saved_resets_are_suggested(self):
-        payload = {
-            "rateLimitsByLimitId": {
-                "codex": {
-                    "primary": {
-                        "usedPercent": 90,
-                        "windowDurationMins": 10080,
-                        "resetsAt": NOW + 5 * 86400,
-                    }
-                }
-            },
-            "rateLimitResetCredits": {
-                "availableCount": 1,
-                "credits": [{"status": "available", "expiresAt": NOW + 2 * 86400}],
-            },
-        }
-        reading = {"source": "test", **snapshot(payload, "2033-05-18T12:00:00Z")}
-        advice = advise(reading, NOW)
+        week = window("primary", 90, 10080, NOW + 5 * 86400)
+        found = quota_reading("test", "2033-05-18T12:00:00Z", [week], 1, NOW + 2 * 86400)
+        advice = advise(found, NOW)
         self.assertEqual(advice["reasons"], ["saved_resets_expiring_soon"])
         self.assertEqual(advice["suggestion"], "consider_top_mode")
+
+    def test_saved_resets_warn_within_seven_days_and_only_while_available(self):
+        week = window("primary", 90, 10080, NOW + 5 * 86400)
+        for count, expires, warned in (
+            (1, NOW + 7 * 86400, True),
+            (1, NOW + 7 * 86400 + 1, False),
+            (1, NOW - 1, False),
+            (0, NOW + 86400, False),
+            (None, NOW + 86400, False),  # no count: no expiry is kept
+        ):
+            found = quota_reading("test", "2033-05-18T12:00:00Z", [week], count, expires)
+            reasons = advise(found, NOW)["reasons"]
+            self.assertEqual("saved_resets_expiring_soon" in reasons, warned, (count, expires))
+
+    def test_windows_keep_0_and_100_and_drop_impossible_values(self):
+        self.assertTrue(window("primary", 0, 10080, None) and window("primary", 100, 10080, None))
+        for used, minutes in ((-1, 10080), (101, 10080), ("50", 10080), (50, 0), (50, None)):
+            self.assertIsNone(window("primary", used, minutes, None), (used, minutes))
 
     def test_agent_folders_follow_their_environment_overrides(self):
         with patch.dict(os.environ, {"CODEX_HOME": str(self.home)}):

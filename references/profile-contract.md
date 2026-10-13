@@ -241,6 +241,11 @@ revocation remains valid only while the human has not revoked it.
   private ID, which never leaves the journal. Without one, `session` gives an
   ID such as `codex-worker-1` and prints it. An owner that matches a session ID
   shows as that session's agent and role.
+  Use `task <id> --status planned|in_progress|done|blocked`; a new task needs
+  `--project`, `--objective`, `--done-when` and `--owner`. Completion uses
+  `--evidence`; blocking uses `--blocker`, plus `--needs-you` for a user decision.
+  Use `session [id] --agent codex|claude --role coordinator|worker|reviewer`,
+  and repeat with `--ended` when it finishes.
 - `status` prints time left, tasks by status with their objective, owner,
   evidence or blocker, `waitingOnYou` (blocked tasks that wait on the user),
   active sessions, `freeThreads` (the limit minus the
@@ -250,16 +255,24 @@ revocation remains valid only while the human has not revoked it.
   different fingerprint, or a missing or invalid profile) and
   `authorization_ended`. Readings are shown but do not stop a run; a renewal it
   knew at start is already in the deadline.
-- `stop --reason R` records when new assignments stopped and why; `status` then
-  keeps `stopNow`. After it, only checkpoints go in: existing tasks reaching
-  `done` or `blocked` and sessions ending; new tasks, new sessions, moves
-  back to `planned` or `in_progress` and changes to a task's project,
-  objective, done criterion or owner are refused.
+- `task` and `session` refuse new assignments at or after `deadline`, even if
+  `stop` has not been called. Only existing tasks becoming `done` or `blocked`
+  and existing sessions ending are accepted; task scope and owner cannot change.
+- `stop --reason R` records when the coordinator actually stopped assigning work
+  and why; `status` then keeps `stopNow`. The same checkpoint-only restriction
+  applies, even before the deadline.
+  Reasons are `deadline`, `user`, `nothing_ready`, `profile_changed`,
+  `authorization_ended` or `weekly_renewal`. An automatic rejection does not
+  write a stop time: record the coordinator's actual stop, never backdate it.
 - `close` ends the run, records `quotaAfter` and writes the
   [report](#run-report) skeleton to a new file in `~/.config/quota-coach/reports/`.
 
-Nothing renews a deadline, also on resume. Without a quota reading a run has
-only its clock deadline and supervised checkpoints; never invent quota or claim
+Nothing renews a deadline, also on resume. The CLI cannot interrupt running
+agents: the coordinator must stop assignments, collect checkpoints and record
+the actual stop time, even when it is late. Profile changes and revoked approval
+still require the coordinator's check before every assignment.
+Without a quota reading a run has only its clock deadline and supervised
+checkpoints; never invent quota or claim
 reliable weekly stopping. No cloud mailbox, service or account client is needed.
 
 ## Quota readings
@@ -357,10 +370,15 @@ How the history is rebuilt, in [plan_fit.py](../scripts/plan_fit.py):
 The verdict looks at the latest closed windows on the current plan (`--windows`,
 default 8; at least 4): `short` when the limit was reached in more than 1 of 4,
 `enough_thanks_to_early_renewals` when the replay runs out in more than 1 of 4
-weeks, otherwise `enough`; with fewer than 4 windows, `not_enough_history`. Top
-Mode runs are not recorded yet, so their use counts as the user's
-(`includesTopModeRuns`). Compressed logs (`.jsonl.zst`) cannot be read and are
-counted. There is no Claude Code history yet: no Claude reading is kept over time.
+weeks, otherwise `enough`; with fewer than 4 windows, `not_enough_history`.
+These verdicts describe observed account use, including Top Mode
+(`includesTopModeRuns`). The run journal records times and work, but account
+readings cannot distinguish prompted work from ordinary use. `tierChangeAdvice`
+keeps any upgrade or downgrade conditional on whether the user wants to keep
+doing that observed work. Reaching a limit alone does not justify upgrading.
+Never subtract run quota snapshots to invent ordinary-use demand.
+Compressed logs (`.jsonl.zst`) cannot be read and are counted. There is no
+Claude Code history yet: no Claude reading is kept over time.
 
 `plans` compares the same use with every plan in
 [plans.json](plans.json): its monthly price and its size as a multiple of Plus,
@@ -387,7 +405,8 @@ limits:
   and the verdict it would give.
 - `could_go_lower` replaces `enough` when a cheaper plan would have stayed below
   80 % in every window and natural week, with no unknown window. It names
-  `lowerPlan`; the monthly saving follows from the prices.
+  `lowerPlan`; the price difference is a conditional comparison, not a
+  recommendation to change tiers or demonstrated savings.
 - Only the weekly allowance is judged; the 5-hour limit is not. A plan type the
   file does not know, here or in the history, skips the comparison with a
   `note`.

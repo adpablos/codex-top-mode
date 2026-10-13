@@ -1,6 +1,6 @@
 ---
 name: quota-coach
-description: Help the user get the most out of an AI subscription. Check whether spare quota is worth using, set up a private profile, run a bounded Top Mode on the user's priorities, close with a clear report, and judge whether the plan fits. Works with Codex, Claude Code and similar agents.
+description: Help the user get the most out of an AI subscription. Check whether spare quota is worth using, set up a private profile, run a bounded Top Mode on the user's priorities, close with a clear report, and compare Codex plans against observed use. Works with Codex, Claude Code and similar agents.
 ---
 
 # Quota Coach
@@ -28,8 +28,8 @@ the rename, update that folder from `origin`, the only remote you check, and sto
 and ask the user at the first step that fails:
 
 1. It is a plain folder, not a link, and `git -C <folder> remote get-url origin`
-   names the same repository. If it names `adpablos/top-mode`, its former name,
-   set it to `https://github.com/adpablos/quota-coach`.
+   names the same repository. For either former name, `adpablos/top-mode` or
+   `adpablos/codex-top-mode`, set it to `https://github.com/adpablos/quota-coach`.
 2. `git -C <folder> status -s` prints nothing.
 3. After `git -C <folder> fetch origin`, `git -C <folder> switch main` (an
    installed copy stays on `main`; other branches are kept) and
@@ -74,243 +74,146 @@ Quota Coach, or, after an update, that the update applies in new sessions.
 
 ## 1. Set up (first time) or load the saved setup
 
-When the user asks to set up Quota Coach, check or run Top Mode, start with:
+For setup, a quota check or a run, first call `profile_binding.py locate`.
+A request only to review or change this package does not need a private profile.
+Read the [profile contract](references/profile-contract.md#human-profile) and
+[private binding rules](references/profile-contract.md#private-profile-binding).
 
-```sh
-python3 -B <this folder>/scripts/profile_binding.py locate
-```
+- **Found:** read the profile and check it with
+  `capacity_policy.py --profile <path>`; require `authorizationActive: true`.
+  Short run requests inherit it. For `schemaVersion: 1`, offer setup again,
+  carrying over projects, exclusions and limits; never run with it.
+- **Missing:** guide setup below. **Broken or conflicting:** explain and repair
+  that problem with the user; never substitute an example or another profile.
 
-A request that only reviews or changes this package does not need it.
+Ask only what you cannot discover, in two short rounds, at most three questions
+at once, each in plain words:
 
-- **Found:** read that profile and check it with
-  `python3 -B <this folder>/scripts/capacity_policy.py --profile <path>`: it must
-  be valid with `authorizationActive: true`. A short request like "start Top Mode
-  for 2 hours" inherits it.
-- **Old format** (refused as `schemaVersion 1`): offer to set up again, filling
-  in what it already says (projects, exclusions, limits). Never run with it.
-- **Not found:** guided setup. Ask only what you cannot find out yourself:
-  1. Ask which folders hold their projects (default: the current one). Look
-     there: Git repositories, their README, ROADMAP or TODO files, and open
-     issues, pull requests and security alerts when `gh` works. Skip folders the
-     user rules out.
-  2. Propose a short list: each project in one line, where its pending work
-     lives, its three clearest pending items, and the commands that run its
-     checks (tests, lint) when you find them. An item that looks already done
-     (an issue a merged pull request fixed, a roadmap line that exists in the
-     code) is marked so; ask before planning it.
-  3. Ask in two short rounds, never more than three questions at once, each in
-     one plain sentence with what it changes. First: what to leave out and the
-     order of priority. Then propose the rest with its defaults and ask them to
-     confirm or change any: the permission level (careful, balanced or
-     autonomous, as in the [README](README.md#you-stay-in-control); balanced by
-     default), the longest a run may last, how many sessions may work at once
-     (two, counting yours: more finishes sooner but spends quota faster),
-     whether to stop when the weekly allowance renews (yes, so a run never eats
-     into the new week) and how long the approval lasts (until they revoke it).
-     Offer exceptions in their words, such as "merge Dependabot updates once
-     the checks pass": the action goes in `actions` and any narrower limit in
-     that project's `notes`, which you follow.
-  4. Say that their agent answers each command from its own rules, not from
-     the level, and that you will offer to write the level into them once the
-     setup is saved.
-  5. If `codexbar` is not installed, say in one sentence that
-     [CodexBar](https://codexbar.app) would let Quota Coach see Claude's quota
-     and Codex's saved resets, and that installing it is their choice. Without
-     it, Claude quota stays unknown.
-  6. Write the profile from the
-     [fictional example](examples/profile.example.json) (its permissions are
-     not real; the fields are in the
-     [contract](references/profile-contract.md#human-profile)), with
-     `approvedAt` the time they approve it and `source` where they did. Show it
-     as a short plain summary and always get explicit approval, even when they
-     already answered everything; save it owner-only
-     outside Git, then run `profile_binding.py bind --profile <path>`.
-  7. For each agent the runs will use, run
-     `python3 -B <this folder>/scripts/host_rules.py --agent <claude or codex> --folder <F>`,
-     where F is the folder where they start Top Mode, and say in plain words
-     what it would set there: what stops asking, what keeps asking and what is
-     blocked. Write it with `--write` only with their OK; Claude Code keeps
-     their own rules, and Codex gets a file of its own, read when a session
-     starts from a folder they trust in Codex. They apply to sessions started
-     after the write. If F is in a Git repository, the script refuses until Git
-     ignores the rules file: with their OK, list it in that repository's
-     `.git/info/exclude`, which is never shared. Recommend protecting each
-     project's default branch on GitHub (no direct or forced pushes, checks
-     required): rules match a command's words, not its effect. Change GitHub
-     settings only with their OK.
-- **Broken or conflicting:** explain the one problem and fix only that with the
-  user. Never fall back to an example, another profile or memory.
+1. Find the project folders (default: the current one), skipping exclusions.
+   Read repositories, README/ROADMAP/TODO and, when `gh` works, issues, PRs and
+   security alerts. Propose each project's work sources, three clearest pending
+   items and check commands. Mark anything apparently already done and ask
+   before planning it. Ask what to exclude and the order of priority.
+2. Propose balanced permissions, a maximum run length, two simultaneous sessions
+   counting yours, stopping at the known weekly renewal, and approval until
+   revoked. Explain that more sessions spend quota faster. Get confirmation or
+   changes; capture action exceptions and narrower project limits in `notes`.
+3. Explain that the host has its own permission rules. If CodexBar is missing,
+   mention that it supplies Claude quota and Codex saved resets; installation
+   is optional and Claude quota is otherwise unknown.
+4. Prepare the [fictional profile's structure](examples/profile.example.json)
+   using the contract, summarize it plainly and **get explicit approval of the
+   finished setup**, even if all questions were answered. Record the approval's
+   time and source, save owner-only outside Git, then
+   `profile_binding.py bind --profile <path>`.
+5. For each agent, follow the [host rules contract](references/profile-contract.md#host-rules):
+   preview `host_rules.py --agent <claude or codex> --folder <starting folder>`.
+   Explain what stops asking, keeps asking or is blocked; use `--write` only
+   with the user's OK. Keep the rules private; excluding them from Git and
+   changing branch protection need their OK too. Rules take effect in new
+   sessions; recommend protecting each project's default branch.
 
 ## 2. Check whether it's worth it
 
-When the user asks, run:
+Run `check.py --verbose` and explain in one or two sentences: weekly usage,
+renewal and whether a run is worth it. It uses CodexBar first, then Codex logs;
+with no reading say unknown and offer a clock-only run. Follow the
+[quota readings contract](references/profile-contract.md#quota-readings).
 
-```sh
-python3 -B <this folder>/scripts/check.py --verbose
-```
-
-It reads the best quota source on this machine for each agent: CodexBar when it
-is installed, otherwise Codex's local logs. Explain the answer in one or two
-sentences: how much of the weekly allowance is used, when it renews, and
-whether a run is worth it. If there is no reading, say so and offer a run with a
-clock deadline only. Details per source are in
-[quota readings](references/profile-contract.md#quota-readings).
-
-**Proactive check.** When the user wants to be told, schedule a recurring task
-with the host's own scheduler (a Codex automation, or a local Claude Code Desktop
-scheduled task, not a cloud routine, which cannot see this machine). Use the
-cheapest model, once a day. The task runs `check.py` by full path, without
-`--verbose`. Empty output means end quietly; otherwise tell the user those lines
-and offer to start Top Mode. A scheduled check never starts work by itself,
-whatever the news.
+When asked for proactive checks, follow the
+[scheduling contract](references/profile-contract.md#proactive-check): use the
+host's local scheduler, cheapest model, once daily, with `check.py` by full path
+and without `--verbose`. Empty output means end quietly; otherwise relay it and
+offer Top Mode. A scheduled check never starts work.
 
 ## 3. Run
 
-A private journal keeps each run's deadline, quota, tasks and sessions, so
-status and the report come from data. Start with:
+Read the [run contract](references/profile-contract.md#run). First preview
+`host_rules.py` for each agent as above. If `current: false`, explain the mismatch
+with the level and offer to update the rules. Resolve the duration if neither
+this request nor a previously approved default supplies one. Start with:
 
 ```sh
 python3 -B <this folder>/scripts/run.py start --hours <H> --agents <codex and/or claude>
 ```
 
-`--agents` names whose quota the run spends: yours and any agent you delegate
-to. First run `host_rules.py` for those agents as in the setup, without
-`--write`: if it says `current: false`, tell the user their agent may ask for
-things their level allows, or allow things it doesn't, and offer to update the
-rules. If no duration was given and none was approved as default, ask first. It
-refuses when the setup's approval is not active or another run is still open
-(finish that one first, as in [Stop](#4-stop)). It fixes the **deadline**: the
-hours asked, capped by `maximumHours`, `validUntil` and, when the setup says so,
-the weekly renewal; nothing extends it.
+Name every agent whose quota will be spent, including yours. An open run must
+be stopped and closed first. The deadline is frozen, capped by the profile and
+known weekly renewal; nothing extends it, including an interruption or resume.
 
-Then:
-
-1. Read each project's `work` sources, most important project first, and list
-   ready work: objective, benefit, done criteria, owner, blocker. Finish pending
-   work before starting new work. Show the plan in three to five lines and start;
-   the user can change it or stop at any time.
-2. Record each task when you plan it and whenever its state changes:
-   `run.py task <id> --status planned|in_progress|done|blocked`. A new task also
-   takes `--project`, `--objective`, `--done-when` and `--owner`; each change to
-   `done` needs new `--evidence` you checked yourself (tests, diff, file), and
-   each change to `blocked` a new `--blocker`. Add `--needs-you` when it waits on
-   the user (a merge, a login, a choice), with a blocker that asks the question
-   and gives your recommendation and its consequence. When a done task's
-   evidence changes (CI finished, a merge), record `done` again with the new
-   `--evidence`.
-3. Record each session you start or reuse:
-   `run.py session <id> --agent codex|claude --role worker|reviewer`, and again
-   with `--ended` when it finishes. Use the ID your host shows for that session
-   or thread; if it shows none, leave `<id>` out and reuse the `id` run.py
-   prints. A host's ID stays in the private journal. Name every agent a session
-   spends in `start --agents`; others are refused.
-4. Before each assignment, run `run.py status`. Stop when it says `stopNow`
-   (deadline, setup changed, approval ended, weekly allowance renewed). Delegate
-   only while `freeThreads` is above zero (each task in progress takes a thread),
-   and check the action's decision with
-   `python3 -B <this folder>/scripts/capacity_policy.py --profile <path> --project <name> --action <action>`.
+1. Read each project's work sources in priority order. List ready work with its
+   objective, benefit, done criterion, owner and blocker. Prefer closing pending
+   work; show the plan in three to five lines and begin.
+2. Record tasks and sessions with `run.py task` and `run.py session`, using the
+   [contract's fields](references/profile-contract.md#run). Record transitions
+   promptly, fresh evidence for completion and a blocker when blocked. Use
+   `--needs-you` for user decisions, with a recommendation and its consequence;
+   update `done` again when evidence improves. Use host session IDs privately;
+   if none is available, reuse the ID the command gives.
+3. **Before every assignment and after an interruption**, run `run.py status`.
+   Stop at `stopNow` (deadline, changed setup, ended approval or a recorded legacy
+   renewal). The CLI rejects new assignments at the deadline, but cannot
+   interrupt an agent already working. Check the action before doing it:
+   `capacity_policy.py --profile <path> --project <name> --action <action>`.
+4. Delegate bounded, independent work only while `freeThreads` is positive;
+   count outside threads too. Prefer a session that already owns the task.
+   If its availability is unknown, ask or only read and diagnose. Otherwise
+   work serially. Owners are people, "anyone" or visible session roles, never IDs.
 
 While working:
 
-- Prefer continuing a session that already owns the task. Delegate only bounded,
-  independent work, through your host's supported tools; otherwise work serially.
-- An owner is a person, "anyone", or a session you can see, written as its role
-  (`codex worker`), never its ID. If you cannot tell whether the owner is busy (a
-  Codex thread seen from Claude Code, say), ask the user, or only read and
-  diagnose.
-- Commit only on a working branch named `quota-coach/<task>`, never on the
-  default branch, and push it as `git push -u origin quota-coach/<task>`, the
-  form the host rules allow. At `autonomous`, merge only after an independent
-  review and with checks green.
-- Run Git and `gh` from inside the project, as `cd <project> && git ...`, never
-  with `git -C`: the host rules match the command's words, so `git -C` asks for
-  what the level allows and slips past what it blocks.
-- Work outside the run you come across (a broken pull request, a stale branch):
-  report it, don't touch it.
-- Checks are green only when every check the default branch requires has
-  passed on the commit. Compare them with the branch protection or rulesets
-  (`gh api`) before saying so or asking for a merge; a required check that never
-  reported is a blocker ("check X never ran"), not green.
-- `review` includes publishing the review on GitHub. A 403 on Dependabot alerts
-  means "not enabled" only when its message says they are disabled; otherwise
-  `gh` may lack the permission, so report the alerts as unknown. What you could
-  not verify, report as the probable cause, never as a fact.
-- When something starts waiting on the user, tell them right away, with the
-  others already waiting (`status` lists them as `waitingOnYou`), and keep
-  working on other ready work. If only their decisions remain, ask once and wait
-  for the answer until the deadline instead of stopping with `nothing_ready`; act
-  on each answer within the setup's level.
-- Pick models by task shape, using the profile's `models` for your agent when
-  given: an economical model for repeatable, easily checked work; stronger ones
-  for ambiguity or after a failed check. Reasoning effort is the host's default
-  unless the profile's `models` says otherwise; the report says which you used.
+- Commit on `quota-coach/<task>`, never the default branch, and push as
+  `git push -u origin quota-coach/<task>`. Run Git and `gh` inside the project
+  (`cd <project> && git ...`), never `git -C`, so host rules match.
+- Green checks mean **every required check** passed on that commit: compare
+  with branch protection or rulesets (`gh api`). Missing checks are blockers.
+  Autonomous merges still require independent review; `review` includes its
+  publication on GitHub. A 403 on alerts means disabled only if GitHub says so;
+  otherwise access is unknown. Label unverified causes as probable.
+- Tell the user immediately when something needs them, together with the other
+  `waitingOnYou` items. Continue ready work; when only decisions remain, ask
+  once and wait until the deadline, acting on answers within the setup's level.
+- Report out-of-scope work without touching it. Choose models by task shape and
+  the profile, escalating for ambiguity or failed checks; use the host's default
+  effort unless configured otherwise and report actual model/effort.
 
-After an interruption (closed laptop, restarted agent), run `run.py status`
-before anything else: the deadline is frozen in the journal.
-
-Answer "status" from `run.py status`: deadline and time left, what is verified
-done, what is in progress and by whom, blockers, and the latest quota reading
-with its age.
+Answer status from the journal: verified results, work in progress and owners,
+blockers, deadline/time left and quota with its age.
 
 ## 4. Stop
 
-When `status` says so or the user says stop, record it at once, so the journal
-keeps the real time new assignments stopped:
+When `status` says stop or the user asks, immediately record when assignments
+actually stopped with `run.py stop --reason <reason>`; use the real cause from
+the [run contract](references/profile-contract.md#run), even if the stop is late.
+Collect active owners' checkpoints, record existing tasks as done or blocked,
+and end their sessions with `run.py session --ended`. After the deadline or an
+explicit stop, only these checkpoints are accepted.
 
-```sh
-python3 -B <this folder>/scripts/run.py stop --reason <reason>
-```
-
-The reason is one of `deadline`, `user`, `nothing_ready`, `profile_changed`,
-`authorization_ended` or `weekly_renewal`. After it the journal takes no new
-tasks or sessions, only how existing ones ended. Ask
-active owners for a short checkpoint and record each result with `run.py task`
-and `run.py session --ended`. Put each repository back on the branch it was on,
-and delete nothing: the report names the `quota-coach/` branches and the
-worktrees you added, which the user can remove (a worktree removal also deletes
-its ignored files). Then end the run with `run.py close`. Stopping Top Mode does not pause a
-scheduled check; say whether one is still active.
+Restore each repository's original branch and delete nothing. Name added
+branches and worktrees in the report; removing a worktree also deletes ignored
+files. Finish with `run.py close`. Say whether a separate scheduled check is
+still active; stopping a run does not pause it.
 
 ## 5. Report
 
-`close` writes the report's skeleton in the private folder and prints its path:
-the tasks, the run's times, quota before and after, sessions and tokens. Turn it
-into a short report in the user's language, grouped by project, following the
-[run-report contract](references/profile-contract.md#run-report) and the
-[example](examples/report.example.md):
+Rewrite the private skeleton from `close` in the user's language, following the
+[report contract](references/profile-contract.md#run-report) and
+[example](examples/report.example.md). Open with decisions waiting on the user,
+then before/verified after, pending work and next owner per project. Preserve
+the recorded times, quota, sessions and tokens; distinguish tested, reviewed,
+merged and observed in use. Propose setup changes; apply only with approval.
+Say unknown where evidence is missing. Quota is account-wide and tokens cover
+all sessions on this machine in the interval; neither is this run's exact cost.
 
-- **Waiting on you** first: each decision with your recommendation and what
-  happens if they say yes.
-- **Before → after**, and why it matters. Keep attempted or blocked work separate
-  from delivered work; tested, reviewed, merged and used in real life are
-  different levels of evidence.
-- **Pending and next step**, with who acts next.
-- **Setup changes** you noticed (a new project, a finished roadmap, a source
-  that moved): propose them; change the profile only with the user's approval.
-- **The run** facts as the skeleton gives them, plus the models and effort
-  actually used. Tokens count every session on this machine in that interval;
-  say so.
+## 6. Does the Codex plan fit? (when asked)
 
-Write `unknown` with the reason instead of guessing. Quota is account-wide, so
-never present its change as this run's exact cost. Keep reports private.
-
-## 6. Is the plan enough? (when asked)
-
-When the user asks whether their plan is enough, too small or bigger than they
-need, run:
-
-```sh
-python3 -B <this folder>/scripts/usage_report.py plan --markdown
-```
-
-It rebuilds the Codex weekly windows from the local logs and judges the latest
-closed ones on the current plan. It also replays the same use on the other
-plans and warns of a coming change to the user's plan. Answer in a few
-sentences: the verdict, the facts behind it (peak use, how often the limit was
-reached, what early renewals gave), any coming change and what it would mean,
-which plan would fit and at what monthly price, and that Top Mode runs are
-counted as the user's own use for now. Plan sizes are multiples of Plus that
-OpenAI has announced, not exact limits: say so, give the date they were checked,
-never change or cancel a plan for the user, and say there is no Claude Code
-history yet.
-Details are in the [plan history contract](references/profile-contract.md#plan-history).
+Run `usage_report.py plan --markdown` and follow the
+[plan history contract](references/profile-contract.md#plan-history). Explain
+its observed-use verdict, evidence, other plans and any coming size change.
+Top Mode use is included and cannot be separated from ordinary use; hitting
+limits does not by itself justify upgrading. Treat tier changes as conditional
+on the work the user wants to keep doing, never subtract run quota snapshots
+to invent ordinary use. Give the price/size check date and explain that sizes
+are announced multiples of Plus, not exact limits. The five-hour limit is not
+assessed and Claude plan history is unavailable. Never change or cancel a plan
+for the user.
