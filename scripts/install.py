@@ -23,7 +23,7 @@ FORMER = "top-mode"
 
 def git(folder, *args):
     return subprocess.run(
-        ["git", "-C", str(folder), *args],
+        ["git", "--no-optional-locks", "-C", str(folder), *args],
         capture_output=True,
         text=True,
         timeout=60,
