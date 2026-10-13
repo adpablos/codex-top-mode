@@ -9,38 +9,13 @@ Keep changes focused and preserve the [skill](../SKILL.md) and
 sources.
 Keep review, merge, release and deployment authority separate.
 
-## Optional maintainer review
+## Reviews
 
-The [Claude workflow](../.github/workflows/claude.yml) reviews maintenance PRs for
-this repository. It is not a requirement for installing or using Quota Coach.
-Claude can only read files; it cannot run PR code, edit files or write to GitHub.
-Trusted workflow code checks the PR and publishes the result.
-
-A maintainer using this integration needs a personal Claude subscription
-credential. Use Anthropic's [official token setup](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token),
-then have the human owner enter, confirm and submit it directly in the repository's
-**Settings → Secrets and variables → Actions** form, named
-`CLAUDE_CODE_OAUTH_TOKEN`. Never put the value in a chat, issue, source file or
-commit, and never extract an existing credential store. An agent must hand this
-credential-entry step to the human.
-
-Only the repository owner may dispatch or rerun it, from the default branch
-(`main` here). First verify the PR is open, ready for review and non-draft, its
-checks pass, and its head is the exact full 40-character SHA you intend to review.
-Replace both placeholders below:
-
-```sh
-gh workflow run .github/workflows/claude.yml --repo adpablos/quota-coach --ref main \
-  -f pr_number=PR_NUMBER -f head_sha=FULL_HEAD_SHA
-```
-
-Use repository **Actions → Claude final review** to find that dispatch. Accept
-a review only when its run succeeds and `github-actions[bot]` publishes a
-**Claude final review** comment whose `Reviewed head:` is the PR's current head
-and whose verdict is `ready to merge`. A new push invalidates the verdict.
-Merge remains a separate authorized action; the workflow never auto-merges.
-For `changes required`, fix the material findings together and dispatch again
-for the new head. Diagnose failed runs before retrying.
+Every pull request gets an independent review before it merges, by an agent
+other than the one that wrote it (for example `@codex review` on a change
+Claude made). A review covers the commit it names: every later push needs a
+review of what it added, and the PR merges only when the review covers its
+current head and CI is green on it. Merging stays the owner's call.
 
 ## Contributing and security
 
